@@ -8,9 +8,8 @@ use serde::{
 
 pub const DIGEST_LEN: usize = 32;
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]    // Debug is for readability
-pub struct Digest(pub [u8; DIGEST_LEN]);    // a tuple (with one element) whose first element is an array whose len is DIGEST_LEN
-
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Default)] // Debug is for readability
+pub struct Digest(pub [u8; DIGEST_LEN]); // a tuple (with one element) whose first element is an array whose len is DIGEST_LEN
 
 impl fmt::Display for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -27,7 +26,8 @@ impl fmt::Debug for Digest {
 // Ref: https://github.com/slowli/hex-buffer-serde
 
 // special implementation
-impl Serialize for Digest {    // convert an obj to binary array (bin) for storing or transmission
+impl Serialize for Digest {
+    // convert an obj to binary array (bin) for storing or transmission
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -42,7 +42,8 @@ impl Serialize for Digest {    // convert an obj to binary array (bin) for stori
     }
 }
 
-impl<'de> Deserialize<'de> for Digest {    // binary array to obj
+impl<'de> Deserialize<'de> for Digest {
+    // binary array to obj
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -115,7 +116,7 @@ pub fn blake2() -> blake2b_simd::Params {
 }
 
 pub trait Digestible {
-    fn to_digest(&self) -> Digest;    // convert a data (string, int, ...) to a hash digest
+    fn to_digest(&self) -> Digest; // convert a data (string, int, ...) to a hash digest
 }
 
 impl Digestible for [u8] {
@@ -126,7 +127,7 @@ impl Digestible for [u8] {
 
 impl Digestible for str {
     fn to_digest(&self) -> Digest {
-        self.as_bytes().to_digest()    // as_bytes(): convert a string slice to an array of bytes
+        self.as_bytes().to_digest() // as_bytes(): convert a string slice to an array of bytes
     }
 }
 
@@ -151,18 +152,20 @@ impl_digestable_for_numeric!(i8, i16, i32, i64, i128);
 impl_digestable_for_numeric!(u8, u16, u32, u64, u128);
 impl_digestable_for_numeric!(f32, f64);
 
-pub fn concat_digest_ref<'a>(input: impl Iterator<Item = &'a Digest>) -> Digest {    // given a iterator of a reference of a digests vec (usually two digests), return the hash digest of their concatenation
-    let mut state = blake2().to_state();    // put digest to state, then do concatenation
+pub fn concat_digest_ref<'a>(input: impl Iterator<Item = &'a Digest>) -> Digest {
+    // given a iterator of a reference of a digests vec (usually two digests), return the hash digest of their concatenation
+    let mut state = blake2().to_state(); // put digest to state, then do concatenation
     for d in input {
-        state.update(&d.0);    //  &d.0 is an array
+        state.update(&d.0); //  &d.0 is an array
     }
     Digest::from(state.finalize())
 }
 
-pub fn concat_digest(input: impl Iterator<Item = Digest>) -> Digest {    // given a vec of digests (usually two digests), return the hash digest of their concatenation
+pub fn concat_digest(input: impl Iterator<Item = Digest>) -> Digest {
+    // given a vec of digests (usually two digests), return the hash digest of their concatenation
     let mut state = blake2().to_state();
     for d in input {
-        state.update(&d.0);    // 
+        state.update(&d.0); //
     }
     Digest::from(state.finalize())
 }
@@ -173,27 +176,28 @@ mod tests {
 
     #[test]
     fn test_to_digest() {
-        let expect = Digest(*b"\x32\x4d\xcf\x02\x7d\xd4\xa3\x0a\x93\x2c\x44\x1f\x36\x5a\x25\xe8\x6b\x17\x3d\xef\xa4\xb8\xe5\x89\x48\x25\x34\x71\xb8\x1b\x72\xcf");    // *: dereference 解引用, return a string instead of a reference
-        assert_eq!(b"hello"[..].to_digest(), expect); // b"hello" is used to convert a string slice to a byte slice
+        let expect = Digest(*b"\x32\x4d\xcf\x02\x7d\xd4\xa3\x0a\x93\x2c\x44\x1f\x36\x5a\x25\xe8\x6b\x17\x3d\xef\xa4\xb8\xe5\x89\x48\x25\x34\x71\xb8\x1b\x72\xcf"); // *: dereference 解引用, return a string instead of a reference
+        assert_eq!(b"hello"[..].to_digest(), expect); // b"hello" indicates that it is a bytes array
         assert_eq!("hello".to_digest(), expect);
-        assert_eq!("hello".to_owned().to_digest(), expect);    // "hello".to_owned(): return a String using "hello" instead of a reference
+        assert_eq!("hello".to_owned().to_digest(), expect); // "hello".to_owned(): return a String using "hello" instead of a reference
     }
 
     #[test]
     fn test_digest_concat() {
         let input = vec!["hello".to_digest(), "world!".to_digest()];
         let expect = {
-            let mut buf: Vec<u8> = Vec::new();    // create an empty vec
-            buf.extend_from_slice(&input[0].0[..]);    // append the digest of "hello" to the buf vec
-            buf.extend_from_slice(&input[1].0[..]);    // append the digest of "world" to the buf vec
-            buf.as_slice().to_digest()    // hash the concatenation of two digests
+            let mut buf: Vec<u8> = Vec::new(); // create an empty vec
+            buf.extend_from_slice(&input[0].0[..]); // append the digest of "hello" to the buf vec
+            buf.extend_from_slice(&input[1].0[..]); // append the digest of "world" to the buf vec
+            buf.as_slice().to_digest() // hash the concatenation of two digests
         };
         assert_eq!(concat_digest_ref(input.iter()), expect);
         assert_eq!(concat_digest(input.into_iter()), expect);
     }
 
     #[test]
-    fn test_serde() {    // serde: convert string to json or binary format, this test tests serialize and deserialize
+    fn test_serde() {
+        // serde: convert string to json or binary format, this test tests serialize and deserialize
         let digest = "hello".to_digest();
         let json = serde_json::to_string_pretty(&digest).unwrap();
         assert_eq!(
