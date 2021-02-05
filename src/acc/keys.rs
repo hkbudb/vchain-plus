@@ -2,7 +2,7 @@ use super::utils::{FixedBaseCurvePow, FixedBaseScalarPow};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, UniformRand};
 use core::{marker::PhantomData, ops::Mul};
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
