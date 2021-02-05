@@ -1,8 +1,10 @@
 pub mod block;
 pub mod bplus_tree;
+pub mod hash;
 pub mod id_tree;
 pub mod object;
+pub mod range;
 pub mod trie_tree;
-pub mod hash;
+pub mod types;
 
 const MAX_FANOUT: usize = 16;
