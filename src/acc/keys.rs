@@ -212,7 +212,7 @@ impl<E: PairingEngine> AccPublicKey<E> {
 /// Map (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q}) -> [(2q-2)*(2q-2)]
 #[inline]
 fn map_i_j_to_index(i: u64, j: u64, q: u64) -> usize {
-    debug_assert!(i >= 1 && i != q && i <= 2*q - 1);
-    debug_assert!(j >= 1 && j != q && j <= 2*q - 1);
+    debug_assert!(i >= 1 && i != q && i <= 2 * q - 1);
+    debug_assert!(j >= 1 && j != q && j <= 2 * q - 1);
     todo!();
 }
