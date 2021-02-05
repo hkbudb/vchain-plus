@@ -14,6 +14,7 @@ pub enum BPlusTreeNode<K: Num> {
     Leaf(BPlusTreeLeafNode<K>),
     NonLeaf(BPlusTreeNonLeafNode<K>),
 }
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BPlusTreeLeafNode<K: Num> {
     pub id: BPlusTreeNodeId,
@@ -21,6 +22,7 @@ pub struct BPlusTreeLeafNode<K: Num> {
     pub data_set: Set,
     //pub data_set_acc: ***,
 }
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BPlusTreeNonLeafNode<K: Num> {
     pub id: BPlusTreeNodeId,
