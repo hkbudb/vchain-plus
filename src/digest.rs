@@ -1,4 +1,5 @@
-// handles hash digests, including hashing, digest concatenation then hash
+//! handles hash digests, including hashing, digest concatenation then hash
+
 use core::fmt;
 use serde::{
     de::{Deserializer, SeqAccess, Visitor},
