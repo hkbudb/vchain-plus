@@ -19,7 +19,11 @@ impl Set {
     }
 
     pub fn set_intersection(&self, rhs: &Self) -> Self {
-        self.iter().filter(|v| rhs.contains(v)).copied().collect()
+        if self.len() < rhs.len() {
+            self.iter().filter(|v| rhs.contains(v)).copied().collect()
+        }else {
+            rhs.iter().filter(|v| self.contains(v)).copied().collect()
+        }
     }
 
     pub fn set_union(&self, rhs: &Self) -> Self {
