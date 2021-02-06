@@ -8,3 +8,4 @@ pub mod trie_tree;
 pub mod traits;
 
 const MAX_FANOUT: usize = 16;
+const INDEX_NUM: usize = 3;

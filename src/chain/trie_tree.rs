@@ -4,6 +4,7 @@ use super::MAX_FANOUT;
 use smallvec::SmallVec;
 
 create_id_type!(TrieTreeNodeId);
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TrieNode{
     Leaf(TrieLeafNode),
