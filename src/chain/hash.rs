@@ -1,9 +1,10 @@
-use super::{block::BlockId, id_tree::IdTreeObjId, range::Range, traits::Num};
+use super::{block::BlockId, id_tree::IdTreeObjId, object::ObjId, range::Range, traits::Num};
 use crate::{
     acc::acc_values::AccValue,
     digest::{blake2, concat_digest_ref, Digest, Digestible},
 };
 use ark_ec::PairingEngine;
+use std::collections::HashSet;
 
 #[inline]
 pub(crate) fn range_hash<K: Num>(range: &Range<K>) -> Digest {
@@ -88,5 +89,18 @@ pub(crate) fn block_header_hash<'a, E: PairingEngine>(
     state.update(&id_root_dig.0);
     state.update(&concat_digest_ref(ads_root_dig).0);
     //state.update(&data_set_acc.to_digest());
+    Digest::from(state.finalize())
+}
+
+#[inline]
+pub(crate) fn object_hash<'a, K: Num>(
+    id: ObjId,
+    block_id: BlockId,
+    //num_data: impl Iterator<Item = &'a K>,
+    keyword_data: impl Iterator<Item = &'a HashSet<String>>,
+) -> Digest {
+    let mut state = blake2().to_state();
+    state.update(&block_id.to_le_bytes());
+    // todo
     Digest::from(state.finalize())
 }
