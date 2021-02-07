@@ -1,17 +1,21 @@
-use crate::{create_id_type, digest::{Digest, Digestible}, acc::set::Set};
-use serde::{Deserialize, Serialize};
 use super::MAX_FANOUT;
+use crate::{
+    acc::set::Set,
+    create_id_type,
+    digest::{Digest, Digestible},
+};
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 create_id_type!(TrieTreeNodeId);
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum TrieNode{
+pub enum TrieNode {
     Leaf(TrieLeafNode),
     NonLeaf(TrieNonLeafNode),
 }
 
-impl Digestible for TrieNode{
+impl Digestible for TrieNode {
     fn to_digest(&self) -> Digest {
         match self {
             TrieNode::Leaf(n) => n.to_digest(),
@@ -20,7 +24,7 @@ impl Digestible for TrieNode{
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct TrieLeafNode{
+pub struct TrieLeafNode {
     pub id: TrieTreeNodeId,
     pub keyword: String,
     pub data_set: Set,
@@ -35,7 +39,7 @@ impl Digestible for TrieLeafNode {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct TrieNonLeafNode{
+pub struct TrieNonLeafNode {
     pub id: TrieTreeNodeId,
     pub keyword_pre: String,
     pub data_set: Set,

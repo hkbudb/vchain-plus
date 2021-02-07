@@ -1,8 +1,13 @@
-use super::{range::Range, traits::Num, MAX_FANOUT, hash::{bplus_tree_leaf_hash, bplus_tree_non_leaf_hash}};
+use super::{
+    hash::{bplus_tree_leaf_hash, bplus_tree_non_leaf_hash},
+    range::Range,
+    traits::Num,
+    MAX_FANOUT,
+};
 use crate::{
     acc::set::Set,
     create_id_type,
-    digest::{Digest, Digestible}
+    digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
