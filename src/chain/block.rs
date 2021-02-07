@@ -32,7 +32,7 @@ impl Digestible for BlockHeader {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BlockContent<K: Num> {
     pub block_id: BlockId,
-    pub id_tree: IdTreeNode,                                  // id tree root
-    pub bplus_trees: SmallVec<[BPlusTreeNode<K>; INDEX_NUM]>, // bplus tree root
-    pub trie_tree: TrieNode,                                  // trie root
+    pub id_tree: IdTreeNode,                // id tree root
+    pub bplus_trees: Vec<BPlusTreeNode<K>>, // bplus tree root
+    pub trie_tree: TrieNode,                // trie root
 }
