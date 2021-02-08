@@ -24,6 +24,13 @@ impl fmt::Debug for Digest {
     }
 }
 
+impl Digest {
+    #[inline]
+    pub fn as_bytes(&self) -> &'_ [u8] {
+        &self.0
+    }
+}
+
 // Ref: https://github.com/slowli/hex-buffer-serde
 
 // special implementation
@@ -157,7 +164,7 @@ pub fn concat_digest_ref<'a>(input: impl Iterator<Item = &'a Digest>) -> Digest 
     // given a iterator of a reference of a digests vec (usually two digests), return the hash digest of their concatenation
     let mut state = blake2().to_state(); // put digest to state, then do concatenation
     for d in input {
-        state.update(&d.0); //  &d.0 is an array
+        state.update(d.as_bytes()); //  &d.0 is an array
     }
     Digest::from(state.finalize())
 }
@@ -166,7 +173,7 @@ pub fn concat_digest(input: impl Iterator<Item = Digest>) -> Digest {
     // given a vec of digests (usually two digests), return the hash digest of their concatenation
     let mut state = blake2().to_state();
     for d in input {
-        state.update(&d.0); //
+        state.update(d.as_bytes()); //
     }
     Digest::from(state.finalize())
 }
