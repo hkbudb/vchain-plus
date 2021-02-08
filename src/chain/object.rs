@@ -1,5 +1,8 @@
-use super::{block::BlockId, traits::Num, hash::object_hash};
-use crate::{create_id_type, digest::{Digest, Digestible}};
+use super::{block::BlockId, hash::object_hash, traits::Num};
+use crate::{
+    create_id_type,
+    digest::{Digest, Digestible},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -23,14 +26,13 @@ impl<K: Num> Object<K> {
             id,
             block_id,
             num_data,
-            keyword_data
+            keyword_data,
         }
     }
 }
 
-impl<K: Num> Digestible for Object<K>{
+impl<K: Num> Digestible for Object<K> {
     fn to_digest(&self) -> Digest {
-        //object_hash(self.id, self.block_id, &self.num_data.iter(), &self.keyword_data.iter())
-    todo!()
+        object_hash(self.id, self.block_id, &self.num_data, &self.keyword_data)
     }
 }

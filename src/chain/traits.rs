@@ -2,6 +2,7 @@ use super::{
     block::{BlockContent, BlockHeader, BlockId},
     bplus_tree::{BPlusTreeNode, BPlusTreeNodeId},
     id_tree::{IdTreeNode, IdTreeNodeId},
+    object::{ObjId, Object},
     trie_tree::{TrieNode, TrieTreeNodeId},
 };
 use crate::digest::Digestible;
@@ -21,7 +22,7 @@ pub trait ReadInterface {
         bplus_tree_node_id: BPlusTreeNodeId,
     ) -> Result<BPlusTreeNode<K>>;
     fn read_trie_tree_node(&self, trie_node_id: TrieTreeNodeId) -> Result<TrieNode>;
-    // fn read_object
+    fn read_object<K: Num>(&self, id: ObjId) -> Result<Object<K>>;
 }
 
 pub trait WriteInterface {
@@ -30,5 +31,5 @@ pub trait WriteInterface {
     fn write_id_tree_node(&mut self, node: IdTreeNode) -> Result<()>;
     fn write_bplus_tree_node<K: Num>(&mut self, node: BPlusTreeNode<K>) -> Result<()>;
     fn write_trie_tree_node(&self, node: TrieNode) -> Result<()>;
-    // fn write_object
+    fn write_object<K: Num>(&self, obj: Object<K>) -> Result<()>;
 }
