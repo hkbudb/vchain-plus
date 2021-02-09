@@ -40,7 +40,7 @@ pub struct BPlusTreeLeafNode<K: Num> {
 impl<K: Num> Digestible for BPlusTreeLeafNode<K> {
     fn to_digest(&self) -> Digest {
         todo!()
-        // bplus_tree_leaf_hash(&self.num, &self.data_set_acc)
+        //bplus_tree_leaf_hash(self.num, &self.data_set_acc.to_digest())
     }
 }
 
@@ -57,6 +57,6 @@ pub struct BPlusTreeNonLeafNode<K: Num> {
 impl<K: Num> Digestible for BPlusTreeNonLeafNode<K> {
     fn to_digest(&self) -> Digest {
         todo!()
-        // bplus_tree_non_leaf_hash(&self.range, &self.data_set_acc, &self.child_hashes.iter())
+        // bplus_tree_non_leaf_hash(&self.range, &self.data_set_acc.to_digest(), self.child_hashes.iter())
     }
 }

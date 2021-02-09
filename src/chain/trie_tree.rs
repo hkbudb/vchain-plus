@@ -1,4 +1,4 @@
-use super::MAX_FANOUT;
+use super::INLINE_FANOUT;
 use crate::{
     acc::set::Set,
     create_id_type,
@@ -26,7 +26,6 @@ impl Digestible for TrieNode {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TrieLeafNode {
     pub id: TrieTreeNodeId,
-    pub keyword: String,
     pub data_set: Set,
     //pub data_set_acc: ***,
 }
@@ -34,23 +33,23 @@ pub struct TrieLeafNode {
 impl Digestible for TrieLeafNode {
     fn to_digest(&self) -> Digest {
         todo!()
-        // trie_leaf_hash(&self.keyword, &self.data_set_acc)
+        // trie_leaf_hash(self.data_set_acc.to_digest())
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TrieNonLeafNode {
     pub id: TrieTreeNodeId,
-    pub keyword_pre: String,
+    pub nibble: String,
     pub data_set: Set,
     //pub data_set_acc: ***,
-    pub child_hashes: SmallVec<[Digest; MAX_FANOUT]>,
-    pub child_ids: SmallVec<[TrieTreeNodeId; MAX_FANOUT]>,
+    pub child_hashes: SmallVec<[Digest; INLINE_FANOUT]>,
+    pub child_ids: SmallVec<[TrieTreeNodeId; INLINE_FANOUT]>,
 }
 
 impl Digestible for TrieNonLeafNode {
     fn to_digest(&self) -> Digest {
         todo!()
-        // trie_non_leaf_hash(&self.keyword_pre, &self.data_set_acc, &self.child_hashes.iter())
+        // trie_non_leaf_hash(&self.nibble, &self.data_set_acc,to_digest(), self.child_hashes.iter())
     }
 }

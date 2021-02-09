@@ -8,8 +8,8 @@ use std::collections::HashSet;
 #[inline]
 pub(crate) fn range_hash<K: Num>(range: &Range<K>) -> Digest {
     let mut state = blake2().to_state();
-    state.update(&range.get_low().to_digest().0);
-    state.update(&range.get_high().to_digest().0);
+    state.update(range.get_low().to_digest().as_bytes());
+    state.update(range.get_high().to_digest().as_bytes());
     Digest::from(state.finalize())
 }
 
@@ -17,7 +17,7 @@ pub(crate) fn range_hash<K: Num>(range: &Range<K>) -> Digest {
 pub(crate) fn id_tree_leaf_hash(obj_id: IdTreeObjId, obj_hash: &Digest) -> Digest {
     let mut state = blake2().to_state();
     state.update(&obj_id.to_le_bytes());
-    state.update(&obj_hash.0);
+    state.update(obj_hash.as_bytes());
     Digest::from(state.finalize())
 }
 
@@ -27,61 +27,55 @@ pub(crate) fn id_tree_non_leaf_hash<'a>(child_hashes: impl Iterator<Item = &'a D
 }
 
 #[inline]
-pub(crate) fn bplus_tree_leaf_hash<K: Num>(num: &K, data_set_acc: &AccValue) -> Digest {
+pub(crate) fn bplus_tree_leaf_hash<K: Num>(num: K, acc_hash: &Digest) -> Digest {
     let mut state = blake2().to_state();
-    state.update(&num.to_digest().0);
-    //state.update(&data_set_acc.to_digest());
+    state.update(num.to_digest().as_bytes());
+    state.update(acc_hash.as_bytes());
     Digest::from(state.finalize())
 }
 
 #[inline]
 pub(crate) fn bplus_tree_non_leaf_hash<'a, K: Num>(
     range: &Range<K>,
-    data_set_acc: &AccValue,
+    acc_hash: &Digest,
     child_hashes: impl Iterator<Item = &'a Digest>,
 ) -> Digest {
     let mut state = blake2().to_state();
-    state.update(&range.to_digest().0);
-    //state.update(&data_set_acc.to_digest());
-    state.update(&concat_digest_ref(child_hashes).0);
+    state.update(range.to_digest().as_bytes());
+    state.update(acc_hash.as_bytes());
+    state.update(concat_digest_ref(child_hashes).as_bytes());
     Digest::from(state.finalize())
 }
 
 #[inline]
-pub(crate) fn trie_leaf_hash(keyword: &String, data_set_acc: &AccValue) -> Digest {
-    let mut state = blake2().to_state();
-    state.update(keyword.as_bytes());
-    //state.update(&data_set_acc.to_digest());
-    Digest::from(state.finalize())
+pub(crate) fn trie_leaf_hash(acc_hash: Digest) -> Digest {
+    acc_hash
 }
 
 #[inline]
 pub(crate) fn trie_non_leaf_hash<'a>(
-    keyword_pre: &String,
-    data_set_acc: &AccValue,
+    nibble: &str,
+    acc_hash: &Digest,
     child_hashes: impl Iterator<Item = &'a Digest>,
 ) -> Digest {
     let mut state = blake2().to_state();
-    state.update(keyword_pre.as_bytes());
-    //state.update(&data_set_acc.to_digest());
-    state.update(&concat_digest_ref(child_hashes).0);
+    state.update(nibble.to_digest().as_bytes());
+    state.update(acc_hash.as_bytes());
+    state.update(concat_digest_ref(child_hashes).as_bytes());
     Digest::from(state.finalize())
 }
 
 #[inline]
-pub(crate) fn block_header_hash<'a>(
+pub(crate) fn block_head_hash<'a>(
     block_id: BlockId,
     prev_hash: &Digest,
-    id_root_dig: &Digest,
-    ads_root_dig: impl Iterator<Item = &'a Digest>,
-    data_set_acc: &AccValue,
+    id_tree_root_hash: &Digest,
+    ads_hash: &Digest,
 ) -> Digest {
     let mut state = blake2().to_state();
     state.update(&block_id.to_le_bytes());
-    state.update(&prev_hash.0);
-    state.update(&id_root_dig.0);
-    state.update(&concat_digest_ref(ads_root_dig).0);
-    //state.update(&data_set_acc.to_digest());
+    state.update(prev_hash.as_bytes());
+    state.update(&id_tree_root_hash.as_bytes());
     Digest::from(state.finalize())
 }
 
