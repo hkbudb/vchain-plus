@@ -40,7 +40,9 @@ impl<E: PairingEngine> AccSecretKey<E> {
 
 /// Secret key of the accumulators.
 pub struct AccSecretKeyWithPowCache<E: PairingEngine> {
+    #[allow(dead_code)]
     pub(crate) s: E::Fr,
+    #[allow(dead_code)]
     pub(crate) r: E::Fr,
     pub(crate) alpha: E::Fr,
     pub(crate) beta: E::Fr,
@@ -301,15 +303,15 @@ impl<E: PairingEngine> AccPublicKey<E> {
 /// Map i \in [q-1] -> 0..q - 2
 #[inline(always)]
 fn map_i_to_index(i: u64, q: u64) -> usize {
-    debug_assert!(i >= 1 && i <= q - 1);
+    debug_assert!(i >= 1 && i < q);
     (i - 1) as usize
 }
 
 /// Map (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q}) -> 0..(2q-2)*(2q-2)
 #[inline(always)]
 fn map_i_j_to_index(i: u64, j: u64, q: u64) -> usize {
-    debug_assert!(i >= 1 && i != q && i <= 2 * q - 1);
-    debug_assert!(j >= 1 && j != q && j <= 2 * q - 1);
+    debug_assert!(i >= 1 && i != q && i < 2 * q);
+    debug_assert!(j >= 1 && j != q && j < 2 * q);
     let _i = if i > q { i - 2 } else { i - 1 };
     let _j = if j > q { j - 2 } else { j - 1 };
     (_i * (2 * q - 2) + _j) as usize
