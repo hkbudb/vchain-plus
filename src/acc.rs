@@ -8,6 +8,7 @@ pub mod utils;
 
 use ark_bls12_381::Bls12_381;
 pub type AccSecretKey = keys::AccSecretKey<Bls12_381>;
+pub type AccSecretKeyWithPowCache = keys::AccSecretKeyWithPowCache<Bls12_381>;
 pub type AccPublicKey = keys::AccPublicKey<Bls12_381>;
 pub type LeftAccValue = acc_values::LeftAccValue<Bls12_381>;
 pub type RightAccValue = acc_values::RightAccValue<Bls12_381>;
