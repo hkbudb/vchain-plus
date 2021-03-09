@@ -5,7 +5,10 @@ use super::{
 use crate::digest::{concat_digest_ref, Digest, Digestible};
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::Zero;
-use core::marker::PhantomData;
+use core::{
+    marker::PhantomData,
+    ops::{Add, Sub},
+};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +26,28 @@ impl<E: PairingEngine> Digestible for LeftAccValue<E> {
         ark_ff::to_bytes!(self.value)
             .expect("failed to convert acc to bytes")
             .to_digest()
+    }
+}
+
+impl<E: PairingEngine> Add for LeftAccValue<E> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Self {
+            value: self.value + rhs.value,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<E: PairingEngine> Sub for LeftAccValue<E> {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        Self {
+            value: self.value + (-rhs.value),
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -45,7 +70,7 @@ impl<E: PairingEngine> LeftAccValue<E> {
     }
 
     /// Compute accumulative value from set using secret key.
-    pub fn from_set_sk(set: &Set, sk: &AccSecretKeyWithPowCache<E>, _pk: &AccPublicKey<E>) -> Self {
+    pub fn from_set_sk(set: &Set, sk: &AccSecretKeyWithPowCache<E>, _q: u64) -> Self {
         let x = set
             .par_iter()
             .map(|&i| {
@@ -78,6 +103,28 @@ impl<E: PairingEngine> Digestible for RightAccValue<E> {
     }
 }
 
+impl<E: PairingEngine> Add for RightAccValue<E> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Self {
+            value: self.value + rhs.value,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<E: PairingEngine> Sub for RightAccValue<E> {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        Self {
+            value: self.value + (-rhs.value),
+            _marker: PhantomData,
+        }
+    }
+}
+
 impl<E: PairingEngine> RightAccValue<E> {
     /// Compute accumulative value from set using public key.
     pub fn from_set(set: &Set, pk: &AccPublicKey<E>) -> Self {
@@ -99,8 +146,8 @@ impl<E: PairingEngine> RightAccValue<E> {
     }
 
     /// Compute accumulative value from set using secret key.
-    pub fn from_set_sk(set: &Set, sk: &AccSecretKeyWithPowCache<E>, pk: &AccPublicKey<E>) -> Self {
-        let q_fr = E::Fr::from(pk.q);
+    pub fn from_set_sk(set: &Set, sk: &AccSecretKeyWithPowCache<E>, q: u64) -> Self {
+        let q_fr = E::Fr::from(q);
         let x = set
             .par_iter()
             .map(|&i| {
@@ -133,6 +180,28 @@ impl<E: PairingEngine> Digestible for AccValue<E> {
     }
 }
 
+impl<E: PairingEngine> Add for AccValue<E> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Self {
+            left: self.left + rhs.left,
+            right: self.right + rhs.right,
+        }
+    }
+}
+
+impl<E: PairingEngine> Sub for AccValue<E> {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        Self {
+            left: self.left - rhs.left,
+            right: self.right - rhs.right,
+        }
+    }
+}
+
 impl<E: PairingEngine> AccValue<E> {
     /// Compute accumulative value from set using public key.
     pub fn from_set(set: &Set, pk: &AccPublicKey<E>) -> Self {
@@ -143,10 +212,10 @@ impl<E: PairingEngine> AccValue<E> {
     }
 
     /// Compute accumulative value from set using secret key.
-    pub fn from_set_sk(set: &Set, sk: &AccSecretKeyWithPowCache<E>, pk: &AccPublicKey<E>) -> Self {
+    pub fn from_set_sk(set: &Set, sk: &AccSecretKeyWithPowCache<E>, q: u64) -> Self {
         Self {
-            left: LeftAccValue::from_set_sk(set, sk, pk),
-            right: RightAccValue::from_set_sk(set, sk, pk),
+            left: LeftAccValue::from_set_sk(set, sk, q),
+            right: RightAccValue::from_set_sk(set, sk, q),
         }
     }
 
@@ -176,7 +245,20 @@ mod tests {
 
         let s = set! {1, 2, 3};
         let acc1 = AccValue::<Bls12_381>::from_set(&s, &pk);
-        let acc2 = AccValue::<Bls12_381>::from_set_sk(&s, &sk, &pk);
+        let acc2 = AccValue::<Bls12_381>::from_set_sk(&s, &sk, q);
         assert_eq!(acc1, acc2);
+    }
+
+    #[test]
+    fn test_update_acc() {
+        let mut rng = rand::thread_rng();
+        let q = 5;
+        let sk = AccSecretKey::<Bls12_381>::rand(&mut rng).into();
+
+        let acc1 = AccValue::<Bls12_381>::from_set_sk(&set! {1, 2, 3}, &sk, q);
+        let acc2 = AccValue::<Bls12_381>::from_set_sk(&set! {1, 2}, &sk, q);
+        let acc3 = AccValue::<Bls12_381>::from_set_sk(&set! {3}, &sk, q);
+        assert_eq!(acc1, acc2 + acc3);
+        assert_eq!(acc1 - acc2, acc3);
     }
 }
