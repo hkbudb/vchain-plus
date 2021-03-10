@@ -43,8 +43,7 @@ pub struct TrieNonLeafNode {
     pub nibble: String,
     pub data_set: Set,
     //pub data_set_acc: ***,
-    pub child_hashes: SmallVec<[Digest; INLINE_FANOUT]>,
-    pub child_ids: SmallVec<[TrieTreeNodeId; INLINE_FANOUT]>,
+    //pub children: BTreeMap<char, (ID, digest))> // nibble + char + children's rest, use smol_str, ref: https://github.com/rust-analyzer/smol_str
 }
 
 impl Digestible for TrieNonLeafNode {

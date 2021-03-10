@@ -4,6 +4,7 @@ use super::{
     id_tree::{IdTreeNode, IdTreeNodeId},
     object::{ObjId, Object},
     trie_tree::{TrieNode, TrieTreeNodeId},
+    Parameter,
 };
 use crate::digest::Digestible;
 use anyhow::Result;
@@ -14,6 +15,7 @@ pub trait Num: num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestib
 impl<T> Num for T where T: num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible {}
 
 pub trait ReadInterface {
+    fn get_parameter(&self) -> Result<Parameter>;
     fn read_block_header(&self, block_id: BlockId) -> Result<BlockHead>;
     fn read_block_content(&self, block_id: BlockId) -> Result<BlockContent>;
     fn read_id_tree_node(&self, id_tree_node_id: IdTreeNodeId) -> Result<IdTreeNode>;
@@ -26,6 +28,7 @@ pub trait ReadInterface {
 }
 
 pub trait WriteInterface {
+    fn set_parameter(&mut self, param: Parameter) -> Result<()>;
     fn write_block_header(&mut self, block_header: BlockHead) -> Result<()>;
     fn write_block_content(&mut self, block_content: BlockContent) -> Result<()>;
     fn write_id_tree_node(&mut self, node: IdTreeNode) -> Result<()>;

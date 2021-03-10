@@ -4,7 +4,9 @@ use super::{
     hash::block_head_hash,
     id_tree::IdTreeNode,
     id_tree::IdTreeNodeId,
+    object::ObjId,
     trie_tree::{TrieNode, TrieTreeNodeId},
+    MAX_FANOUT,
 };
 use crate::{
     create_id_type,
@@ -13,6 +15,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 create_id_type!(BlockId);
+use smallvec::SmallVec;
 
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct BlockContent {

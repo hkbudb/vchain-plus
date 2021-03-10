@@ -39,5 +39,8 @@ mod tests {
 
         assert_eq!(TestId::next_id(), TestId(0));
         assert_eq!(TestId::next_id(), TestId(1));
+
+        //create_id_type!(BlkId);
+        //assert_eq!(BlkId(2) - BlkId(1), BlkId(1));
     }
 }
