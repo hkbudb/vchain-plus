@@ -74,7 +74,9 @@ impl FromIterator<NonZeroU64> for Set {
 
 impl FromIterator<u64> for Set {
     fn from_iter<T: IntoIterator<Item = u64>>(iter: T) -> Self {
-        iter.into_iter().map(|v| NonZeroU64::new(v).expect("set element cannot be zero.")).collect()
+        iter.into_iter()
+            .map(|v| NonZeroU64::new(v).expect("set element cannot be zero."))
+            .collect()
     }
 }
 
