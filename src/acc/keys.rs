@@ -115,12 +115,12 @@ pub struct AccPublicKey<E: PairingEngine> {
     /// g^{\alpha \cdot s^i} i \in [q-1]
     #[serde(with = "super::serde_impl")]
     pub(crate) g_alpha_s_i: Vec<E::G1Affine>,
-    /// h^{r^i} i \in [q-1]
+    /// g^{r^i} i \in [q-1]
     #[serde(with = "super::serde_impl")]
-    pub(crate) h_r_i: Vec<E::G2Affine>,
-    /// h^{\beta \cdot r^i} i \in [q-1]
+    pub(crate) g_r_i: Vec<E::G1Affine>,
+    /// g^{\beta \cdot r^i} i \in [q-1]
     #[serde(with = "super::serde_impl")]
-    pub(crate) h_beta_r_i: Vec<E::G2Affine>,
+    pub(crate) g_beta_r_i: Vec<E::G1Affine>,
     /// h^{\gamma \cdot r^i \cdot s^{q-i}} i \in [q-1]
     #[serde(with = "super::serde_impl")]
     pub(crate) h_gamma_r_s_i: Vec<E::G2Affine>,
@@ -165,24 +165,24 @@ impl<E: PairingEngine> AccPublicKey<E> {
             })
             .collect_into_vec(&mut g_alpha_s_i);
 
-        let mut h_r_i = Vec::with_capacity(q_usize - 1);
+        let mut g_r_i = Vec::with_capacity(q_usize - 1);
         (1..q_usize)
             .into_par_iter()
             .map(|i| {
                 let r_i = sk.r_pow.apply(&E::Fr::from(i as u64));
-                sk.h_pow.apply(&r_i).into_affine()
+                sk.g_pow.apply(&r_i).into_affine()
             })
-            .collect_into_vec(&mut h_r_i);
+            .collect_into_vec(&mut g_r_i);
 
-        let mut h_beta_r_i = Vec::with_capacity(q_usize - 1);
+        let mut g_beta_r_i = Vec::with_capacity(q_usize - 1);
         (1..q_usize)
             .into_par_iter()
             .map(|i| {
                 let r_i = sk.r_pow.apply(&E::Fr::from(i as u64));
                 let beta_r_i = sk.beta * r_i;
-                sk.h_pow.apply(&beta_r_i).into_affine()
+                sk.g_pow.apply(&beta_r_i).into_affine()
             })
-            .collect_into_vec(&mut h_beta_r_i);
+            .collect_into_vec(&mut g_beta_r_i);
 
         let mut h_gamma_r_s_i = Vec::with_capacity(q_usize - 1);
         (1..q_usize)
@@ -237,8 +237,8 @@ impl<E: PairingEngine> AccPublicKey<E> {
             h_r_q,
             g_s_i,
             g_alpha_s_i,
-            h_r_i,
-            h_beta_r_i,
+            g_r_i,
+            g_beta_r_i,
             h_gamma_r_s_i,
             h_r_i_s_j,
             h_delta_r_i_s_j,
@@ -266,14 +266,14 @@ impl<E: PairingEngine> AccPublicKey<E> {
         self.g_alpha_s_i.get(map_i_to_index(i, self.q)).copied()
     }
 
-    /// Return h^{r^i} i \in [q-1]
-    pub(crate) fn get_h_r_i(&self, i: u64) -> Option<E::G2Affine> {
-        self.h_r_i.get(map_i_to_index(i, self.q)).copied()
+    /// Return g^{r^i} i \in [q-1]
+    pub(crate) fn get_g_r_i(&self, i: u64) -> Option<E::G1Affine> {
+        self.g_r_i.get(map_i_to_index(i, self.q)).copied()
     }
 
-    /// Return h^{\beta \cdot r^i} i \in [q-1]
-    pub(crate) fn get_h_beta_r_i(&self, i: u64) -> Option<E::G2Affine> {
-        self.h_beta_r_i.get(map_i_to_index(i, self.q)).copied()
+    /// Return g^{\beta \cdot r^i} i \in [q-1]
+    pub(crate) fn get_g_beta_r_i(&self, i: u64) -> Option<E::G1Affine> {
+        self.g_beta_r_i.get(map_i_to_index(i, self.q)).copied()
     }
 
     /// Return h^{\gamma \cdot r^i \cdot s^{q-i}} i \in [q-1]
@@ -345,10 +345,10 @@ mod tests {
                 pk.get_g_alpha_s_i(i),
                 Some(g.mul(sk.alpha * s_i).into_affine())
             );
-            assert_eq!(pk.get_h_r_i(i), Some(h.mul(r_i).into_affine()));
+            assert_eq!(pk.get_g_r_i(i), Some(g.mul(r_i).into_affine()));
             assert_eq!(
-                pk.get_h_beta_r_i(i),
-                Some(h.mul(sk.beta * r_i).into_affine())
+                pk.get_g_beta_r_i(i),
+                Some(g.mul(sk.beta * r_i).into_affine())
             );
             assert_eq!(
                 pk.get_h_gamma_r_s_i(i),
