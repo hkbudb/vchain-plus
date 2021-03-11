@@ -1,5 +1,6 @@
 use core::{
     iter::FromIterator,
+    num::NonZeroU64,
     ops::{BitAnd, BitOr, Deref, DerefMut, Div},
 };
 use serde::{Deserialize, Serialize};
@@ -7,7 +8,7 @@ use std::collections::HashSet;
 
 /// A set of elements.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Set(HashSet<u64>);
+pub struct Set(HashSet<NonZeroU64>);
 
 impl Set {
     pub fn new() -> Self {
@@ -40,7 +41,7 @@ impl Set {
 }
 
 impl Deref for Set {
-    type Target = HashSet<u64>;
+    type Target = HashSet<NonZeroU64>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -53,21 +54,27 @@ impl DerefMut for Set {
     }
 }
 
-impl From<HashSet<u64>> for Set {
-    fn from(input: HashSet<u64>) -> Self {
+impl From<HashSet<NonZeroU64>> for Set {
+    fn from(input: HashSet<NonZeroU64>) -> Self {
         Self(input)
     }
 }
 
-impl Into<HashSet<u64>> for Set {
-    fn into(self) -> HashSet<u64> {
+impl Into<HashSet<NonZeroU64>> for Set {
+    fn into(self) -> HashSet<NonZeroU64> {
         self.0
+    }
+}
+
+impl FromIterator<NonZeroU64> for Set {
+    fn from_iter<T: IntoIterator<Item = NonZeroU64>>(iter: T) -> Self {
+        Self(HashSet::from_iter(iter))
     }
 }
 
 impl FromIterator<u64> for Set {
     fn from_iter<T: IntoIterator<Item = u64>>(iter: T) -> Self {
-        Self(HashSet::from_iter(iter))
+        iter.into_iter().map(|v| NonZeroU64::new(v).expect("set element cannot be zero.")).collect()
     }
 }
 
@@ -106,7 +113,8 @@ macro_rules! set {
             let _cap = set!(@count $($key,)*);
             let mut _set = $crate::acc::set::Set::with_capacity(_cap);
             $(
-                _set.insert($key);
+                let _k = core::num::NonZeroU64::new($key).expect("set element cannot be zero.");
+                _set.insert(_k);
             )*
             _set
         }
@@ -120,7 +128,7 @@ mod tests {
         let a = set! {1, 2, 3};
         let b = set! {2, 3, 4, 5};
         let actual = (&a) & (&b);
-        let expect = set! { 2, 3 };
+        let expect = set! {2, 3};
         assert_eq!(actual, expect);
     }
 
@@ -129,7 +137,7 @@ mod tests {
         let a = set! {1, 2, 3};
         let b = set! {2, 3, 4, 5};
         let actual = (&a) | (&b);
-        let expect = set! { 1, 2, 3, 4, 5 };
+        let expect = set! {1, 2, 3, 4, 5};
         assert_eq!(actual, expect);
     }
 
@@ -138,7 +146,7 @@ mod tests {
         let a = set! {1, 2, 3, 6};
         let b = set! {2, 3, 4, 5};
         let actual = (&a) / (&b);
-        let expect = set! { 1, 6 };
+        let expect = set! {1, 6};
         assert_eq!(actual, expect);
     }
 

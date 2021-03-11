@@ -57,7 +57,7 @@ impl<E: PairingEngine> LeftAccValue<E> {
         let value = set
             .par_iter()
             .map(|&i| {
-                pk.get_g_s_i(i)
+                pk.get_g_s_i(i.get())
                     .unwrap_or_else(|| panic!("failed to access get_g_s_i, i = {}", i))
             })
             .fold(E::G1Projective::zero, |a, b| a.add_mixed(&b))
@@ -74,7 +74,7 @@ impl<E: PairingEngine> LeftAccValue<E> {
         let x = set
             .par_iter()
             .map(|&i| {
-                let i_fr = E::Fr::from(i);
+                let i_fr = E::Fr::from(i.get());
                 sk.s_pow.apply(&i_fr)
             })
             .reduce(E::Fr::zero, |a, b| a + b);
@@ -131,6 +131,7 @@ impl<E: PairingEngine> RightAccValue<E> {
         let value = set
             .par_iter()
             .map(|&i| {
+                let i = i.get();
                 let j = pk.q - i;
                 pk.get_h_r_i_s_j(i, j).unwrap_or_else(|| {
                     panic!("failed to access get_h_r_i_s_j, i = {}, j = {}", i, j)
@@ -151,7 +152,7 @@ impl<E: PairingEngine> RightAccValue<E> {
         let x = set
             .par_iter()
             .map(|&i| {
-                let i_fr = E::Fr::from(i);
+                let i_fr = E::Fr::from(i.get());
                 let r_i = sk.r_pow.apply(&i_fr);
                 let s_q_i = sk.s_pow.apply(&(q_fr - i_fr));
                 r_i * s_q_i
