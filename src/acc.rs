@@ -13,3 +13,5 @@ pub type AccPublicKey = keys::AccPublicKey<Bls12_381>;
 pub type LeftAccValue = acc_values::LeftAccValue<Bls12_381>;
 pub type RightAccValue = acc_values::RightAccValue<Bls12_381>;
 pub type AccValue = acc_values::AccValue<Bls12_381>;
+
+pub use set::Set;
