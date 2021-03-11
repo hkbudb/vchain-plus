@@ -245,7 +245,7 @@ fn update_id_hash(
     chain: &mut (impl ReadInterface + WriteInterface),
     cur_id: IdTreeNodeId,
     cur_id_pre: IdTreeNodeId,
-) -> Result<i32> {
+) -> Result<()> {
     // todo, question: can we return Result<> but never use it?
     let mut cur_node: &mut IdTreeNode = &mut chain.read_id_tree_node(cur_id)?;
     let cur_node_pre: &IdTreeNode = &chain.read_id_tree_node(cur_id_pre)?;
@@ -279,7 +279,7 @@ fn update_id_hash(
         }
     }
 
-    Ok(1)
+    Ok(())
 }
 /* step ii pseudo code
 call: update_id_hash(chain, new_root_id, pre_root_id);
