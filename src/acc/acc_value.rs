@@ -3,8 +3,8 @@ use super::{
     set::Set,
 };
 use crate::digest::{Digest, Digestible};
-use ark_ec::{PairingEngine, ProjectiveCurve};
-use ark_ff::Zero;
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{PrimeField, Zero};
 use core::{
     marker::PhantomData,
     ops::{Add, Sub},
@@ -13,40 +13,27 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[inline]
-fn cal_acc_g_pk<E, F>(set: &Set, f: F) -> E::G1Affine
+fn cal_acc_pk<G, F>(set: &Set, f: F) -> G
 where
-    E: PairingEngine,
-    F: Fn(u64) -> E::G1Affine + Sync,
+    G: AffineCurve,
+    F: Fn(u64) -> G + Sync,
 {
     set.par_iter()
         .map(|i| f(i.get()))
-        .fold(E::G1Projective::zero, |a, b| a.add_mixed(&b))
-        .reduce(E::G1Projective::zero, |a, b| a + b)
+        .fold(G::Projective::zero, |a, b| a.add_mixed(&b))
+        .reduce(G::Projective::zero, |a, b| a + b)
         .into_affine()
 }
 
 #[inline]
-fn cal_acc_h_pk<E, F>(set: &Set, f: F) -> E::G2Affine
+fn cal_acc_scalar_sk<Fr, F>(set: &Set, f: F) -> Fr
 where
-    E: PairingEngine,
-    F: Fn(u64) -> E::G2Affine + Sync,
+    Fr: PrimeField,
+    F: Fn(u64) -> Fr + Sync,
 {
     set.par_iter()
         .map(|i| f(i.get()))
-        .fold(E::G2Projective::zero, |a, b| a.add_mixed(&b))
-        .reduce(E::G2Projective::zero, |a, b| a + b)
-        .into_affine()
-}
-
-#[inline]
-fn cal_acc_sk<E, F>(set: &Set, f: F) -> E::Fr
-where
-    E: PairingEngine,
-    F: Fn(u64) -> E::Fr + Sync,
-{
-    set.par_iter()
-        .map(|i| f(i.get()))
-        .reduce(E::Fr::zero, |a, b| a + b)
+        .reduce(Fr::zero, |a, b| a + b)
 }
 
 /// An accumulative value consists of both [`LeftAccValue`] and [`RightAccValue`].
@@ -102,15 +89,15 @@ impl<E: PairingEngine> Sub for AccValue<E> {
 impl<E: PairingEngine> AccValue<E> {
     /// Compute accumulative value from set using public key.
     pub fn from_set(set: &Set, pk: &AccPublicKey<E>) -> Self {
-        let g_s = cal_acc_g_pk::<E, _>(set, |i| {
+        let g_s = cal_acc_pk(set, |i| {
             pk.get_g_s_i(i)
                 .unwrap_or_else(|| panic!("failed to access get_g_s_i, i = {}", i))
         });
-        let g_r = cal_acc_g_pk::<E, _>(set, |i| {
+        let g_r = cal_acc_pk(set, |i| {
             pk.get_g_r_i(i)
                 .unwrap_or_else(|| panic!("failed to access get_g_r_i, i = {}", i))
         });
-        let h_s_r = cal_acc_h_pk::<E, _>(set, |i| {
+        let h_s_r = cal_acc_pk(set, |i| {
             pk.get_h_r_i_s_j(pk.q - i, i).unwrap_or_else(|| {
                 panic!(
                     "failed to access get_h_r_i_s_j, i = {}, j = {}",
@@ -119,7 +106,7 @@ impl<E: PairingEngine> AccValue<E> {
                 )
             })
         });
-        let h_r_s = cal_acc_h_pk::<E, _>(set, |i| {
+        let h_r_s = cal_acc_pk(set, |i| {
             pk.get_h_r_i_s_j(i, pk.q - i).unwrap_or_else(|| {
                 panic!(
                     "failed to access get_h_r_i_s_j, i = {}, j = {}",
@@ -142,15 +129,15 @@ impl<E: PairingEngine> AccValue<E> {
     pub fn from_set_sk(set: &Set, sk: &AccSecretKeyWithPowCache<E>, q: u64) -> Self {
         let q_fr = E::Fr::from(q);
         let g_s = {
-            let x = cal_acc_sk::<E, _>(set, |i| sk.s_pow.apply(&E::Fr::from(i)));
+            let x = cal_acc_scalar_sk(set, |i| sk.s_pow.apply(&E::Fr::from(i)));
             sk.g_pow.apply(&x).into_affine()
         };
         let g_r = {
-            let x = cal_acc_sk::<E, _>(set, |i| sk.r_pow.apply(&E::Fr::from(i)));
+            let x = cal_acc_scalar_sk(set, |i| sk.r_pow.apply(&E::Fr::from(i)));
             sk.g_pow.apply(&x).into_affine()
         };
         let h_s_r = {
-            let x = cal_acc_sk::<E, _>(set, |i| {
+            let x = cal_acc_scalar_sk(set, |i| {
                 let i_fr = E::Fr::from(i);
                 let s_i = sk.s_pow.apply(&i_fr);
                 let r_q_i = sk.r_pow.apply(&(q_fr - i_fr));
@@ -159,7 +146,7 @@ impl<E: PairingEngine> AccValue<E> {
             sk.h_pow.apply(&x).into_affine()
         };
         let h_r_s = {
-            let x = cal_acc_sk::<E, _>(set, |i| {
+            let x = cal_acc_scalar_sk(set, |i| {
                 let i_fr = E::Fr::from(i);
                 let r_i = sk.r_pow.apply(&i_fr);
                 let s_q_i = sk.s_pow.apply(&(q_fr - i_fr));
