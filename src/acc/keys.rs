@@ -129,7 +129,7 @@ pub struct AccPublicKey<E: PairingEngine> {
     /// g^{\gamma \cdot s^i \cdot r^{q-i}} i \in [q-1]
     #[serde(with = "super::serde_impl")]
     pub(crate) g_gamma_s_r_i: Vec<E::G1Affine>,
-    /// g2_prep^{r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
+    /// g^{r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
     #[serde(with = "super::serde_impl")]
     pub(crate) g_r_i_s_j: Vec<E::G1Affine>,
     /// g^{\delta r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
