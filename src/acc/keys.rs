@@ -111,6 +111,9 @@ pub struct AccPublicKey<E: PairingEngine> {
     /// g^{r^i} i \in [q-1]
     #[serde(with = "super::serde_impl")]
     pub(crate) g_r_i: Vec<E::G1Affine>,
+    /// g^{\beta \cdot s^i} i \in [q-1]
+    #[serde(with = "super::serde_impl")]
+    pub(crate) g_beta_s_i: Vec<E::G1Affine>,
     /// g^{\beta \cdot r^i} i \in [q-1]
     #[serde(with = "super::serde_impl")]
     pub(crate) g_beta_r_i: Vec<E::G1Affine>,
@@ -146,41 +149,61 @@ impl<E: PairingEngine> AccPublicKey<E> {
         let h_s_q = sk.h_pow.apply(&sk.s_pow.apply(&q_fr)).into_affine();
         let h_r_q = sk.h_pow.apply(&sk.r_pow.apply(&q_fr)).into_affine();
 
+        let mut s_i_list = Vec::with_capacity(q_usize - 1);
+        (1..q_usize)
+            .into_par_iter()
+            .map(|i| sk.s_pow.apply(&E::Fr::from(i as u64)))
+            .collect_into_vec(&mut s_i_list);
+
+        let mut r_i_list = Vec::with_capacity(q_usize - 1);
+        (1..q_usize)
+            .into_par_iter()
+            .map(|i| sk.r_pow.apply(&E::Fr::from(i as u64)))
+            .collect_into_vec(&mut r_i_list);
+
+        let mut s_q_i_list = Vec::with_capacity(q_usize - 1);
+        (1..q_usize)
+            .into_par_iter()
+            .map(|i| sk.s_pow.apply(&E::Fr::from(q - i as u64)))
+            .collect_into_vec(&mut s_q_i_list);
+
+        let mut r_q_i_list = Vec::with_capacity(q_usize - 1);
+        (1..q_usize)
+            .into_par_iter()
+            .map(|i| sk.r_pow.apply(&E::Fr::from(q - i as u64)))
+            .collect_into_vec(&mut r_q_i_list);
+
         let mut g_s_i = Vec::with_capacity(q_usize - 1);
         (1..q_usize)
             .into_par_iter()
-            .map(|i| {
-                let s_i = sk.s_pow.apply(&E::Fr::from(i as u64));
-                sk.g_pow.apply(&s_i).into_affine()
-            })
+            .map(|i| sk.g_pow.apply(&s_i_list[i - 1]).into_affine())
             .collect_into_vec(&mut g_s_i);
 
         let mut g_r_i = Vec::with_capacity(q_usize - 1);
         (1..q_usize)
             .into_par_iter()
-            .map(|i| {
-                let r_i = sk.r_pow.apply(&E::Fr::from(i as u64));
-                sk.g_pow.apply(&r_i).into_affine()
-            })
+            .map(|i| sk.g_pow.apply(&r_i_list[i - 1]).into_affine())
             .collect_into_vec(&mut g_r_i);
+
+        let mut g_beta_s_i = Vec::with_capacity(q_usize - 1);
+        (1..q_usize)
+            .into_par_iter()
+            .map(|i| sk.g_pow.apply(&(sk.beta * s_i_list[i - 1])).into_affine())
+            .collect_into_vec(&mut g_beta_s_i);
 
         let mut g_beta_r_i = Vec::with_capacity(q_usize - 1);
         (1..q_usize)
             .into_par_iter()
-            .map(|i| {
-                let r_i = sk.r_pow.apply(&E::Fr::from(i as u64));
-                let beta_r_i = sk.beta * r_i;
-                sk.g_pow.apply(&beta_r_i).into_affine()
-            })
+            .map(|i| sk.g_pow.apply(&(sk.beta * r_i_list[i - 1])).into_affine())
             .collect_into_vec(&mut g_beta_r_i);
 
         let mut h_r_s_i = Vec::with_capacity(q_usize - 1);
         (1..q_usize)
             .into_par_iter()
             .map(|i| {
-                let r_i = sk.r_pow.apply(&E::Fr::from(i as u64));
-                let s_q_i = sk.s_pow.apply(&E::Fr::from(q - i as u64));
-                sk.h_pow.apply(&(r_i * s_q_i)).into_affine()
+                sk.h_pow
+                    .apply(&(r_i_list[i - 1] * s_q_i_list[i - 1]))
+                    .into_affine()
             })
             .collect_into_vec(&mut h_r_s_i);
 
@@ -188,9 +211,9 @@ impl<E: PairingEngine> AccPublicKey<E> {
         (1..q_usize)
             .into_par_iter()
             .map(|i| {
-                let s_i = sk.s_pow.apply(&E::Fr::from(i as u64));
-                let r_q_i = sk.r_pow.apply(&E::Fr::from(q - i as u64));
-                sk.h_pow.apply(&(s_i * r_q_i)).into_affine()
+                sk.h_pow
+                    .apply(&(s_i_list[i - 1] * r_q_i_list[i - 1]))
+                    .into_affine()
             })
             .collect_into_vec(&mut h_s_r_i);
 
@@ -198,10 +221,9 @@ impl<E: PairingEngine> AccPublicKey<E> {
         (1..q_usize)
             .into_par_iter()
             .map(|i| {
-                let r_i = sk.r_pow.apply(&E::Fr::from(i as u64));
-                let s_q_i = sk.s_pow.apply(&E::Fr::from(q - i as u64));
-                let gamma_r_s_i = sk.gamma * r_i * s_q_i;
-                sk.g_pow.apply(&gamma_r_s_i).into_affine()
+                sk.g_pow
+                    .apply(&(sk.gamma * r_i_list[i - 1] * s_q_i_list[i - 1]))
+                    .into_affine()
             })
             .collect_into_vec(&mut g_gamma_r_s_i);
 
@@ -213,26 +235,26 @@ impl<E: PairingEngine> AccPublicKey<E> {
             .flat_map(|i| one_dim_indexes.iter().map(move |j| (*i, *j)))
             .collect();
 
-        let mut g_r_i_s_j = Vec::with_capacity((2 * q_usize - 2) * (2 * q_usize - 2));
+        let mut r_i_s_j_list = Vec::with_capacity((2 * q_usize - 2) * (2 * q_usize - 2));
         two_dim_indexes
             .par_iter()
             .map(|(i, j)| {
                 let r_i = sk.r_pow.apply(&E::Fr::from(*i));
                 let s_j = sk.s_pow.apply(&E::Fr::from(*j));
-                let r_i_s_j = r_i * s_j;
-                sk.g_pow.apply(&r_i_s_j).into_affine()
+                r_i * s_j
             })
+            .collect_into_vec(&mut r_i_s_j_list);
+
+        let mut g_r_i_s_j = Vec::with_capacity((2 * q_usize - 2) * (2 * q_usize - 2));
+        r_i_s_j_list
+            .par_iter()
+            .map(|r_i_s_j| sk.g_pow.apply(&r_i_s_j).into_affine())
             .collect_into_vec(&mut g_r_i_s_j);
 
         let mut g_delta_r_i_s_j = Vec::with_capacity((2 * q_usize - 2) * (2 * q_usize - 2));
-        two_dim_indexes
+        r_i_s_j_list
             .par_iter()
-            .map(|(i, j)| {
-                let r_i = sk.r_pow.apply(&E::Fr::from(*i));
-                let s_j = sk.s_pow.apply(&E::Fr::from(*j));
-                let delta_r_i_s_j = sk.delta * r_i * s_j;
-                sk.g_pow.apply(&delta_r_i_s_j).into_affine()
-            })
+            .map(|r_i_s_j| sk.g_pow.apply(&(sk.delta * r_i_s_j)).into_affine())
             .collect_into_vec(&mut g_delta_r_i_s_j);
 
         Self {
@@ -248,6 +270,7 @@ impl<E: PairingEngine> AccPublicKey<E> {
             h_r_q,
             g_s_i,
             g_r_i,
+            g_beta_s_i,
             g_beta_r_i,
             h_r_s_i,
             h_s_r_i,
@@ -278,6 +301,17 @@ impl<E: PairingEngine> AccPublicKey<E> {
     pub(crate) fn get_g_r_i(&self, i: u64) -> E::G1Affine {
         self.try_get_g_r_i(i)
             .unwrap_or_else(|| panic!("failed to access get_g_r_i[i = {}]", i))
+    }
+
+    /// Return g^{\beta \cdot s^i} i \in [q-1]
+    pub(crate) fn try_get_g_beta_s_i(&self, i: u64) -> Option<E::G1Affine> {
+        self.g_beta_s_i.get(map_i_to_index(i, self.q)?).copied()
+    }
+
+    /// Return g^{\beta \cdot s^i} i \in [q-1]
+    pub(crate) fn get_g_beta_s_i(&self, i: u64) -> E::G1Affine {
+        self.try_get_g_beta_s_i(i)
+            .unwrap_or_else(|| panic!("failed to access get_g_s_i[i = {}]", i))
     }
 
     /// Return g^{\beta \cdot r^i} i \in [q-1]
@@ -399,6 +433,10 @@ mod tests {
             let r_q_i = sk.r.pow((q_fr - i_fr).into_repr());
             assert_eq!(pk.try_get_g_s_i(i), Some(g.mul(s_i).into_affine()));
             assert_eq!(pk.try_get_g_r_i(i), Some(g.mul(r_i).into_affine()));
+            assert_eq!(
+                pk.try_get_g_beta_s_i(i),
+                Some(g.mul(sk.beta * s_i).into_affine())
+            );
             assert_eq!(
                 pk.try_get_g_beta_r_i(i),
                 Some(g.mul(sk.beta * r_i).into_affine())
