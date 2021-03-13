@@ -98,22 +98,12 @@ impl<E: PairingEngine> AccValue<E> {
                 .unwrap_or_else(|| panic!("failed to access get_g_r_i, i = {}", i))
         });
         let h_s_r = cal_acc_pk(set, |i| {
-            pk.get_h_r_i_s_j(pk.q - i, i).unwrap_or_else(|| {
-                panic!(
-                    "failed to access get_h_r_i_s_j, i = {}, j = {}",
-                    pk.q - i,
-                    i
-                )
-            })
+            pk.get_h_s_r_i(i)
+                .unwrap_or_else(|| panic!("failed to access get_h_s_r_i, i = {}", i))
         });
         let h_r_s = cal_acc_pk(set, |i| {
-            pk.get_h_r_i_s_j(i, pk.q - i).unwrap_or_else(|| {
-                panic!(
-                    "failed to access get_h_r_i_s_j, i = {}, j = {}",
-                    i,
-                    pk.q - i
-                )
-            })
+            pk.get_h_r_s_i(i)
+                .unwrap_or_else(|| panic!("failed to access get_h_r_s_i, i = {}", i))
         });
 
         Self {
