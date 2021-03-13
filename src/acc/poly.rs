@@ -13,6 +13,7 @@ pub(crate) const S: Variable = 0;
 pub(crate) const R: Variable = 1;
 
 /// Return poly {\sum x^i}
+#[inline]
 pub(crate) fn poly_a<F: Field>(set: &Set, x: Variable) -> Poly<F> {
     let terms: Vec<_> = set
         .iter()
@@ -22,6 +23,7 @@ pub(crate) fn poly_a<F: Field>(set: &Set, x: Variable) -> Poly<F> {
 }
 
 /// Return poly {\sum x^i y^{q-i}}
+#[inline]
 pub(crate) fn poly_b<F: Field>(set: &Set, x: Variable, y: Variable, q: u64) -> Poly<F> {
     let terms: Vec<_> = set
         .iter()
@@ -34,6 +36,18 @@ pub(crate) fn poly_b<F: Field>(set: &Set, x: Variable, y: Variable, q: u64) -> P
         })
         .collect();
     Poly::from_coefficients_vec(2, terms)
+}
+
+/// Return poly {x - 1}
+#[inline]
+pub(crate) fn poly_variable_minus_one<F: Field>(x: Variable) -> Poly<F> {
+    Poly::from_coefficients_vec(
+        2,
+        vec![
+            (F::one(), SparseTerm::new(vec![(x, 1)])),
+            (-F::one(), SparseTerm::new(vec![])),
+        ],
+    )
 }
 
 /// Return poly {lhs * rhs}
@@ -144,13 +158,7 @@ mod tests {
         let s_a: Poly<Fr> = poly_a(&s, S);
         let s_b: Poly<Fr> = poly_b(&s, S, R, q);
         let p1 = &s_a - &s_b;
-        let p2: Poly<Fr> = Poly::from_coefficients_vec(
-            2,
-            vec![
-                (Fr::one(), SparseTerm::new(vec![(R, 1)])),
-                (-Fr::one(), SparseTerm::new(vec![])),
-            ],
-        );
+        let p2 = poly_variable_minus_one(R);
         let (p3, r) = poly_div(&p1, &p2);
         assert!(r.is_zero());
         assert_eq!(poly_mul(&p3, &p2), p1);
