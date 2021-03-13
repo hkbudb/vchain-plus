@@ -8,13 +8,35 @@ pub mod serde_impl;
 pub mod set;
 pub mod utils;
 
-pub use set::Set;
 pub use ops::Op;
+pub use set::Set;
 
-use ark_bls12_381::Bls12_381;
-pub type AccSecretKey = keys::AccSecretKey<Bls12_381>;
-pub type AccSecretKeyWithPowCache = keys::AccSecretKeyWithPowCache<Bls12_381>;
-pub type AccPublicKey = keys::AccPublicKey<Bls12_381>;
-pub type AccValue = acc_value::AccValue<Bls12_381>;
-pub type IntermediateProof = ops::IntermediateProof<Bls12_381>;
-pub type FinalProof = ops::FinalProof<Bls12_381>;
+use ark_bls12_381::Bls12_381 as Curve;
+pub type AccSecretKey = keys::AccSecretKey<Curve>;
+pub type AccSecretKeyWithPowCache = keys::AccSecretKeyWithPowCache<Curve>;
+pub type AccPublicKey = keys::AccPublicKey<Curve>;
+pub type AccValue = acc_value::AccValue<Curve>;
+pub type IntermediateProof = ops::IntermediateProof<Curve>;
+pub type FinalProof = ops::FinalProof<Curve>;
+
+#[inline(always)]
+pub fn compute_set_operation_intermediate(
+    op: Op,
+    lhs_set: &Set,
+    lhs_acc: &AccValue,
+    rhs_set: &Set,
+    rhs_acc: &AccValue,
+    pk: &AccPublicKey,
+) -> (Set, AccValue, IntermediateProof) {
+    ops::compute_set_operation_intermediate(op, lhs_set, lhs_acc, rhs_set, rhs_acc, pk)
+}
+
+#[inline(always)]
+pub fn compute_set_operation_final(
+    op: Op,
+    lhs_set: &Set,
+    rhs_set: &Set,
+    pk: &AccPublicKey,
+) -> (Set, FinalProof) {
+    ops::compute_set_operation_final(op, lhs_set, rhs_set, pk)
+}

@@ -126,6 +126,9 @@ pub struct AccPublicKey<E: PairingEngine> {
     /// g^{\gamma \cdot r^i \cdot s^{q-i}} i \in [q-1]
     #[serde(with = "super::serde_impl")]
     pub(crate) g_gamma_r_s_i: Vec<E::G1Affine>,
+    /// g^{\gamma \cdot s^i \cdot r^{q-i}} i \in [q-1]
+    #[serde(with = "super::serde_impl")]
+    pub(crate) g_gamma_s_r_i: Vec<E::G1Affine>,
     /// g2_prep^{r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
     #[serde(with = "super::serde_impl")]
     pub(crate) g_r_i_s_j: Vec<E::G1Affine>,
@@ -227,6 +230,16 @@ impl<E: PairingEngine> AccPublicKey<E> {
             })
             .collect_into_vec(&mut g_gamma_r_s_i);
 
+        let mut g_gamma_s_r_i = Vec::with_capacity(q_usize - 1);
+        (1..q_usize)
+            .into_par_iter()
+            .map(|i| {
+                sk.g_pow
+                    .apply(&(sk.gamma * s_i_list[i - 1] * r_q_i_list[i - 1]))
+                    .into_affine()
+            })
+            .collect_into_vec(&mut g_gamma_s_r_i);
+
         // [2q-1] \ {q}
         let one_dim_indexes: Vec<u64> = (1..2 * q).filter(|&x| x != q).collect();
         // ([2q-1] \ {q}) \times ([2q-1] \ {q})
@@ -275,6 +288,7 @@ impl<E: PairingEngine> AccPublicKey<E> {
             h_r_s_i,
             h_s_r_i,
             g_gamma_r_s_i,
+            g_gamma_s_r_i,
             g_r_i_s_j,
             g_delta_r_i_s_j,
             _marker: PhantomData,
@@ -311,7 +325,7 @@ impl<E: PairingEngine> AccPublicKey<E> {
     /// Return g^{\beta \cdot s^i} i \in [q-1]
     pub(crate) fn get_g_beta_s_i(&self, i: u64) -> E::G1Affine {
         self.try_get_g_beta_s_i(i)
-            .unwrap_or_else(|| panic!("failed to access get_g_s_i[i = {}]", i))
+            .unwrap_or_else(|| panic!("failed to access get_g_beta_s_i[i = {}]", i))
     }
 
     /// Return g^{\beta \cdot r^i} i \in [q-1]
@@ -322,7 +336,7 @@ impl<E: PairingEngine> AccPublicKey<E> {
     /// Return g^{\beta \cdot r^i} i \in [q-1]
     pub(crate) fn get_g_beta_r_i(&self, i: u64) -> E::G1Affine {
         self.try_get_g_beta_r_i(i)
-            .unwrap_or_else(|| panic!("failed to access get_g_s_i[i = {}]", i))
+            .unwrap_or_else(|| panic!("failed to access get_g_beta_r_i[i = {}]", i))
     }
 
     /// Return h^{r^i \cdot s^{q-i}} i \in [q-1]
@@ -356,6 +370,17 @@ impl<E: PairingEngine> AccPublicKey<E> {
     pub(crate) fn get_g_gamma_r_s_i(&self, i: u64) -> E::G1Affine {
         self.try_get_g_gamma_r_s_i(i)
             .unwrap_or_else(|| panic!("failed to access get_g_gamma_r_s_i[i = {}]", i))
+    }
+
+    /// Return g^{\gamma \cdot s^i \cdot r^{q-i}} i \in [q-1]
+    pub(crate) fn try_get_g_gamma_s_r_i(&self, i: u64) -> Option<E::G1Affine> {
+        self.g_gamma_s_r_i.get(map_i_to_index(i, self.q)?).copied()
+    }
+
+    /// Return g^{\gamma \cdot s^i \cdot r^{q-i}} i \in [q-1]
+    pub(crate) fn get_g_gamma_s_r_i(&self, i: u64) -> E::G1Affine {
+        self.try_get_g_gamma_s_r_i(i)
+            .unwrap_or_else(|| panic!("failed to access get_g_gamma_s_r_i[i = {}]", i))
     }
 
     /// Return g^{r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
@@ -452,6 +477,10 @@ mod tests {
             assert_eq!(
                 pk.try_get_g_gamma_r_s_i(i),
                 Some(g.mul(sk.gamma * r_i * s_q_i).into_affine())
+            );
+            assert_eq!(
+                pk.try_get_g_gamma_s_r_i(i),
+                Some(g.mul(sk.gamma * s_i * r_q_i).into_affine())
             );
         }
 

@@ -91,6 +91,21 @@ impl<E: PairingEngine> Sub for AccValue<E> {
 }
 
 impl<E: PairingEngine> AccValue<E> {
+    pub(crate) fn new(
+        g_s: E::G1Affine,
+        g_r: E::G1Affine,
+        h_s_r: E::G2Affine,
+        h_r_s: E::G2Affine,
+    ) -> Self {
+        Self {
+            g_s,
+            g_r,
+            h_s_r,
+            h_r_s,
+            _marker: PhantomData,
+        }
+    }
+
     /// Compute accumulative value from set using public key.
     pub fn from_set(set: &Set, pk: &AccPublicKey<E>) -> Self {
         let g_s = cal_acc_pk(set, |i| pk.get_g_s_i(i));

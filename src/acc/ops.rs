@@ -9,7 +9,7 @@ use super::{
 };
 use anyhow::{ensure, Context as _, Result};
 use ark_ec::{msm::VariableBaseMSM, PairingEngine, ProjectiveCurve};
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField, Zero};
 use core::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -118,46 +118,13 @@ pub struct IntermediateProof<E: PairingEngine> {
     op: Op,
     inner_proof_r: IntersectionProof<E>,
     inner_proof_s: IntersectionProof<E>,
+    result_acc_s_r_gamma: E::G1Affine,
+    result_acc_r_s_gamma: E::G1Affine,
+    z_s_r: E::G1Affine,
+    z_r_s: E::G1Affine,
 }
 
 impl<E: PairingEngine> IntermediateProof<E> {
-    pub fn new(op: Op, lhs_set: &Set, rhs_set: &Set, pk: &AccPublicKey<E>) -> Self {
-        let intersection_set = lhs_set & rhs_set;
-        let lhs_poly: Poly<E::Fr> = poly_a(lhs_set, S);
-        let rhs_poly: Poly<E::Fr> = poly_b(rhs_set, R, S, pk.q);
-        let q_poly = poly_remove_term(&poly_mul(&lhs_poly, &rhs_poly), S, pk.q);
-        let inner_proof_r = IntersectionProof::new(
-            &intersection_set,
-            &q_poly,
-            R,
-            S,
-            pk.g,
-            |i| pk.get_g_r_i(i),
-            |i| pk.get_g_beta_r_i(i),
-            |i, j| pk.get_g_r_i_s_j(i, j),
-            |i, j| pk.get_g_delta_r_i_s_j(i, j),
-        );
-        let inner_proof_s = IntersectionProof::new(
-            &intersection_set,
-            &q_poly,
-            S,
-            R,
-            pk.g,
-            |i| pk.get_g_s_i(i),
-            |i| pk.get_g_beta_s_i(i),
-            |i, j| pk.get_g_r_i_s_j(i, j),
-            |i, j| pk.get_g_delta_r_i_s_j(i, j),
-        );
-
-        // TODO
-
-        Self {
-            op,
-            inner_proof_r,
-            inner_proof_s,
-        }
-    }
-
     pub fn verify(
         &self,
         lhs_acc: &AccValue<E>,
@@ -188,10 +155,180 @@ impl<E: PairingEngine> IntermediateProof<E> {
             )
             .context("failed to verify the inner_proof_s.")?;
 
-        // TODO
+        match self.op {
+            Op::Intersection => {
+                ensure!(
+                    result_acc.g_s == self.inner_proof_s.g_x,
+                    "acc(set).g_s is invalid."
+                );
+                ensure!(
+                    result_acc.g_r == self.inner_proof_r.g_x,
+                    "acc(set).g_r is invalid."
+                );
+            }
+            Op::Union => {
+                ensure!(
+                    result_acc.g_s == lhs_acc.g_s + rhs_acc.g_s + (-self.inner_proof_s.g_x),
+                    "acc(set).g_s is invalid."
+                );
+                ensure!(
+                    result_acc.g_r == lhs_acc.g_r + rhs_acc.g_r + (-self.inner_proof_r.g_x),
+                    "acc(set).g_r is invalid."
+                );
+            }
+            Op::Difference => {
+                ensure!(
+                    result_acc.g_s == lhs_acc.g_s + (-self.inner_proof_s.g_x),
+                    "acc(set).g_s is invalid."
+                );
+                ensure!(
+                    result_acc.g_r == lhs_acc.g_r + (-self.inner_proof_r.g_x),
+                    "acc(set).g_r is invalid."
+                );
+            }
+        }
+
+        ensure!(
+            E::pairing(pk.g_gamma, result_acc.h_r_s) == E::pairing(self.result_acc_r_s_gamma, pk.h),
+            "e(g^{gamma}, R_{r,s}) != e(R_{r,s,gamma}, h)"
+        );
+        ensure!(
+            E::pairing(pk.g_gamma, result_acc.h_s_r) == E::pairing(self.result_acc_s_r_gamma, pk.h),
+            "e(g^{gamma}, R_{s,r}) != e(R_{s,r,gamma}, h)"
+        );
+
+        ensure!(
+            E::product_of_pairings(&[
+                (result_acc.g_r.into(), pk.h.into()),
+                (pk.g.into(), (-result_acc.h_r_s).into())
+            ]) == E::pairing(self.z_s_r, pk.h_s + (-pk.h)),
+            "e(R_{r}, h) * e(g, 1/R_{r,s}) != e(Z_{s,r}, h^{s-1})"
+        );
+        ensure!(
+            E::product_of_pairings(&[
+                (result_acc.g_s.into(), pk.h.into()),
+                (pk.g.into(), (-result_acc.h_s_r).into())
+            ]) == E::pairing(self.z_r_s, pk.h_r + (-pk.h)),
+            "e(R_{s}, h) * e(g, 1/R_{s,r}) != e(Z_{r,s}, h^{r-1})"
+        );
 
         Ok(())
     }
+}
+
+pub fn compute_set_operation_intermediate<E: PairingEngine>(
+    op: Op,
+    lhs_set: &Set,
+    lhs_acc: &AccValue<E>,
+    rhs_set: &Set,
+    rhs_acc: &AccValue<E>,
+    pk: &AccPublicKey<E>,
+) -> (Set, AccValue<E>, IntermediateProof<E>) {
+    let intersection_set = lhs_set & rhs_set;
+    let lhs_poly: Poly<E::Fr> = poly_a(lhs_set, S);
+    let rhs_poly: Poly<E::Fr> = poly_b(rhs_set, R, S, pk.q);
+    let q_poly = poly_remove_term(&poly_mul(&lhs_poly, &rhs_poly), S, pk.q);
+    let inner_proof_r = IntersectionProof::<E>::new(
+        &intersection_set,
+        &q_poly,
+        R,
+        S,
+        pk.g,
+        |i| pk.get_g_r_i(i),
+        |i| pk.get_g_beta_r_i(i),
+        |i, j| pk.get_g_r_i_s_j(i, j),
+        |i, j| pk.get_g_delta_r_i_s_j(i, j),
+    );
+    let inner_proof_s = IntersectionProof::<E>::new(
+        &intersection_set,
+        &q_poly,
+        S,
+        R,
+        pk.g,
+        |i| pk.get_g_s_i(i),
+        |i| pk.get_g_beta_s_i(i),
+        |i, j| pk.get_g_r_i_s_j(i, j),
+        |i, j| pk.get_g_delta_r_i_s_j(i, j),
+    );
+
+    let result_set = match op {
+        Op::Intersection => intersection_set,
+        Op::Union => lhs_set | rhs_set,
+        Op::Difference => lhs_set / rhs_set,
+    };
+    let result_acc = match op {
+        Op::Intersection => AccValue::<E>::new(
+            inner_proof_s.g_x,
+            inner_proof_r.g_x,
+            cal_acc_pk(&result_set, |i| pk.get_h_s_r_i(i)),
+            cal_acc_pk(&result_set, |i| pk.get_h_r_s_i(i)),
+        ),
+        Op::Union => AccValue::<E>::new(
+            lhs_acc.g_s + rhs_acc.g_s + (-inner_proof_s.g_x),
+            lhs_acc.g_r + rhs_acc.g_r + (-inner_proof_r.g_x),
+            cal_acc_pk(&result_set, |i| pk.get_h_s_r_i(i)),
+            cal_acc_pk(&result_set, |i| pk.get_h_r_s_i(i)),
+        ),
+        Op::Difference => AccValue::<E>::new(
+            lhs_acc.g_s + (-inner_proof_s.g_x),
+            lhs_acc.g_r + (-inner_proof_r.g_x),
+            cal_acc_pk(&result_set, |i| pk.get_h_s_r_i(i)),
+            cal_acc_pk(&result_set, |i| pk.get_h_r_s_i(i)),
+        ),
+    };
+    let result_acc_s_r_gamma = cal_acc_pk(&result_set, |i| pk.get_g_gamma_s_r_i(i));
+    let result_acc_r_s_gamma = cal_acc_pk(&result_set, |i| pk.get_g_gamma_r_s_i(i));
+
+    let result_y_poly = poly_a::<E::Fr>(&result_set, R);
+    let result_x_y_poly = poly_b::<E::Fr>(&result_set, R, S, pk.q);
+    let (z_poly, r_poly) = poly_div::<E::Fr>(
+        &(&result_y_poly - &result_x_y_poly),
+        &poly_variable_minus_one::<E::Fr>(S),
+    );
+    debug_assert!(r_poly.is_zero());
+
+    let mut z_s_r_bases: Vec<_> = Vec::with_capacity(z_poly.terms.len());
+    let mut z_r_s_bases: Vec<_> = Vec::with_capacity(z_poly.terms.len());
+    let mut scalars: Vec<_> = Vec::with_capacity(z_poly.terms.len());
+    for (coeff, term) in &z_poly.terms {
+        scalars.push(coeff.into_repr());
+        let term_map: HashMap<Variable, usize> = term.iter().copied().collect();
+        let i = term_map.get(&R).copied().unwrap_or(0) as u64;
+        let j = term_map.get(&S).copied().unwrap_or(0) as u64;
+        match (i, j) {
+            (0, 0) => {
+                z_s_r_bases.push(pk.g);
+                z_r_s_bases.push(pk.g);
+            }
+            (0, _) => {
+                z_s_r_bases.push(pk.get_g_s_i(j));
+                z_r_s_bases.push(pk.get_g_r_i(j));
+            }
+            (_, 0) => {
+                z_s_r_bases.push(pk.get_g_r_i(i));
+                z_r_s_bases.push(pk.get_g_s_i(i));
+            }
+            (_, _) => {
+                z_s_r_bases.push(pk.get_g_r_i_s_j(i, j));
+                z_r_s_bases.push(pk.get_g_r_i_s_j(j, i));
+            }
+        }
+    }
+
+    let z_s_r = VariableBaseMSM::multi_scalar_mul(&z_s_r_bases[..], &scalars[..]).into_affine();
+    let z_r_s = VariableBaseMSM::multi_scalar_mul(&z_r_s_bases[..], &scalars[..]).into_affine();
+
+    let proof = IntermediateProof {
+        op,
+        inner_proof_r,
+        inner_proof_s,
+        result_acc_s_r_gamma,
+        result_acc_r_s_gamma,
+        z_s_r,
+        z_r_s,
+    };
+
+    (result_set, result_acc, proof)
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -201,24 +338,6 @@ pub struct FinalProof<E: PairingEngine> {
 }
 
 impl<E: PairingEngine> FinalProof<E> {
-    pub fn new(op: Op, lhs_set: &Set, rhs_set: &Set, pk: &AccPublicKey<E>) -> Self {
-        let lhs_poly: Poly<E::Fr> = poly_a(lhs_set, S);
-        let rhs_poly: Poly<E::Fr> = poly_b(rhs_set, R, S, pk.q);
-        let q_poly = poly_remove_term(&poly_mul(&lhs_poly, &rhs_poly), S, pk.q);
-        let inner_proof = IntersectionProof::new(
-            &(lhs_set & rhs_set),
-            &q_poly,
-            R,
-            S,
-            pk.g,
-            |i| pk.get_g_r_i(i),
-            |i| pk.get_g_beta_r_i(i),
-            |i, j| pk.get_g_r_i_s_j(i, j),
-            |i, j| pk.get_g_delta_r_i_s_j(i, j),
-        );
-        Self { op, inner_proof }
-    }
-
     pub fn verify(
         &self,
         lhs_acc: &AccValue<E>,
@@ -246,6 +365,36 @@ impl<E: PairingEngine> FinalProof<E> {
         ensure!(result_acc == expect_acc, "acc(set) is invalid.");
         Ok(())
     }
+}
+
+pub fn compute_set_operation_final<E: PairingEngine>(
+    op: Op,
+    lhs_set: &Set,
+    rhs_set: &Set,
+    pk: &AccPublicKey<E>,
+) -> (Set, FinalProof<E>) {
+    let intersection_set = lhs_set & rhs_set;
+    let lhs_poly: Poly<E::Fr> = poly_a(lhs_set, S);
+    let rhs_poly: Poly<E::Fr> = poly_b(rhs_set, R, S, pk.q);
+    let q_poly = poly_remove_term(&poly_mul(&lhs_poly, &rhs_poly), S, pk.q);
+    let inner_proof = IntersectionProof::new(
+        &intersection_set,
+        &q_poly,
+        R,
+        S,
+        pk.g,
+        |i| pk.get_g_r_i(i),
+        |i| pk.get_g_beta_r_i(i),
+        |i, j| pk.get_g_r_i_s_j(i, j),
+        |i, j| pk.get_g_delta_r_i_s_j(i, j),
+    );
+    let proof = FinalProof { op, inner_proof };
+    let result = match op {
+        Op::Intersection => intersection_set,
+        Op::Union => lhs_set | rhs_set,
+        Op::Difference => lhs_set / rhs_set,
+    };
+    (result, proof)
 }
 
 #[cfg(test)]
@@ -312,17 +461,49 @@ mod tests {
         let union_acc = AccValue::from_set_sk(&set! {1, 2, 3, 5}, &sk, q);
         let difference_acc = AccValue::from_set_sk(&set! {2, 3}, &sk, q);
 
-        let intersection_proof = IntermediateProof::<Bls12_381>::new(Op::Intersection, &s1, &s2, &pk);
+        let (intersection_result_set, intersection_result_acc, intersection_proof) =
+            compute_set_operation_intermediate::<Bls12_381>(
+                Op::Intersection,
+                &s1,
+                &s1_acc,
+                &s2,
+                &s2_acc,
+                &pk,
+            );
+        assert_eq!(intersection_result_set, set! {1});
+        assert_eq!(intersection_result_acc, intersection_acc);
         intersection_proof
-            .verify(&s1_acc, &s2_acc, &intersection_acc, &pk)
+            .verify(&s1_acc, &s2_acc, &intersection_result_acc, &pk)
             .unwrap();
-        let union_proof = IntermediateProof::<Bls12_381>::new(Op::Union, &s1, &s2, &pk);
+
+        let (union_result_set, union_result_acc, union_proof) =
+            compute_set_operation_intermediate::<Bls12_381>(
+                Op::Union,
+                &s1,
+                &s1_acc,
+                &s2,
+                &s2_acc,
+                &pk,
+            );
+        assert_eq!(union_result_set, set! {1, 2, 3, 5});
+        assert_eq!(union_result_acc, union_acc);
         union_proof
-            .verify(&s1_acc, &s2_acc, &union_acc, &pk)
+            .verify(&s1_acc, &s2_acc, &union_result_acc, &pk)
             .unwrap();
-        let diff_proof = IntermediateProof::<Bls12_381>::new(Op::Difference, &s1, &s2, &pk);
+
+        let (diff_result_set, diff_result_acc, diff_proof) =
+            compute_set_operation_intermediate::<Bls12_381>(
+                Op::Difference,
+                &s1,
+                &s1_acc,
+                &s2,
+                &s2_acc,
+                &pk,
+            );
+        assert_eq!(diff_result_set, set! {2, 3});
+        assert_eq!(diff_result_acc, diff_result_acc);
         diff_proof
-            .verify(&s1_acc, &s2_acc, &difference_acc, &pk)
+            .verify(&s1_acc, &s2_acc, &diff_result_acc, &pk)
             .unwrap();
     }
 
@@ -339,17 +520,25 @@ mod tests {
         let s1_acc = AccValue::from_set_sk(&s1, &sk, q);
         let s2_acc = AccValue::from_set_sk(&s2, &sk, q);
 
-        let intersection_proof = FinalProof::<Bls12_381>::new(Op::Intersection, &s1, &s2, &pk);
+        let (intersection_result, intersection_proof) =
+            compute_set_operation_final::<Bls12_381>(Op::Intersection, &s1, &s2, &pk);
+        assert_eq!(intersection_result, set! {1});
         intersection_proof
-            .verify(&s1_acc, &s2_acc, &set! {1}, &pk)
+            .verify(&s1_acc, &s2_acc, &intersection_result, &pk)
             .unwrap();
-        let union_proof = FinalProof::<Bls12_381>::new(Op::Union, &s1, &s2, &pk);
+
+        let (union_result, union_proof) =
+            compute_set_operation_final::<Bls12_381>(Op::Union, &s1, &s2, &pk);
+        assert_eq!(union_result, set! {1, 2, 3, 5});
         union_proof
-            .verify(&s1_acc, &s2_acc, &set! {1, 2, 3, 5}, &pk)
+            .verify(&s1_acc, &s2_acc, &union_result, &pk)
             .unwrap();
-        let diff_proof = FinalProof::<Bls12_381>::new(Op::Difference, &s1, &s2, &pk);
+
+        let (diff_result, diff_proof) =
+            compute_set_operation_final::<Bls12_381>(Op::Difference, &s1, &s2, &pk);
+        assert_eq!(diff_result, set! {2, 3});
         diff_proof
-            .verify(&s1_acc, &s2_acc, &set! {2, 3}, &pk)
+            .verify(&s1_acc, &s2_acc, &diff_result, &pk)
             .unwrap();
     }
 }
