@@ -40,12 +40,16 @@ where
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccValue<E: PairingEngine> {
     /// g^{\sum s^i}
+    #[serde(with = "super::serde_impl")]
     pub(crate) g_s: E::G1Affine,
     /// g^{\sum r^i}
+    #[serde(with = "super::serde_impl")]
     pub(crate) g_r: E::G1Affine,
     /// h^{\sum s^i \cdot r^{q - i}}
+    #[serde(with = "super::serde_impl")]
     pub(crate) h_s_r: E::G2Affine,
     /// h^{\sum r^i \cdot s^{q - i}}
+    #[serde(with = "super::serde_impl")]
     pub(crate) h_r_s: E::G2Affine,
     _marker: PhantomData<E>,
 }
@@ -89,22 +93,10 @@ impl<E: PairingEngine> Sub for AccValue<E> {
 impl<E: PairingEngine> AccValue<E> {
     /// Compute accumulative value from set using public key.
     pub fn from_set(set: &Set, pk: &AccPublicKey<E>) -> Self {
-        let g_s = cal_acc_pk(set, |i| {
-            pk.get_g_s_i(i)
-                .unwrap_or_else(|| panic!("failed to access get_g_s_i, i = {}", i))
-        });
-        let g_r = cal_acc_pk(set, |i| {
-            pk.get_g_r_i(i)
-                .unwrap_or_else(|| panic!("failed to access get_g_r_i, i = {}", i))
-        });
-        let h_s_r = cal_acc_pk(set, |i| {
-            pk.get_h_s_r_i(i)
-                .unwrap_or_else(|| panic!("failed to access get_h_s_r_i, i = {}", i))
-        });
-        let h_r_s = cal_acc_pk(set, |i| {
-            pk.get_h_r_s_i(i)
-                .unwrap_or_else(|| panic!("failed to access get_h_r_s_i, i = {}", i))
-        });
+        let g_s = cal_acc_pk(set, |i| pk.get_g_s_i(i));
+        let g_r = cal_acc_pk(set, |i| pk.get_g_r_i(i));
+        let h_s_r = cal_acc_pk(set, |i| pk.get_h_s_r_i(i));
+        let h_r_s = cal_acc_pk(set, |i| pk.get_h_r_s_i(i));
 
         Self {
             g_s,

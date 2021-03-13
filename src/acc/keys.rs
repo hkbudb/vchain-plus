@@ -37,9 +37,7 @@ impl<E: PairingEngine> AccSecretKey<E> {
 
 /// Secret key of the accumulators.
 pub struct AccSecretKeyWithPowCache<E: PairingEngine> {
-    #[allow(dead_code)]
     pub(crate) s: E::Fr,
-    #[allow(dead_code)]
     pub(crate) r: E::Fr,
     pub(crate) beta: E::Fr,
     pub(crate) gamma: E::Fr,
@@ -95,6 +93,12 @@ pub struct AccPublicKey<E: PairingEngine> {
     /// h^\delta
     #[serde(with = "super::serde_impl")]
     pub(crate) h_delta: E::G2Affine,
+    /// h^s
+    #[serde(with = "super::serde_impl")]
+    pub(crate) h_s: E::G2Affine,
+    /// h^r
+    #[serde(with = "super::serde_impl")]
+    pub(crate) h_r: E::G2Affine,
     /// h^{s^q}
     #[serde(with = "super::serde_impl")]
     pub(crate) h_s_q: E::G2Affine,
@@ -137,6 +141,8 @@ impl<E: PairingEngine> AccPublicKey<E> {
         let g_gamma = sk.g_pow.apply(&sk.gamma).into_affine();
         let h_delta = sk.h_pow.apply(&sk.delta).into_affine();
 
+        let h_s = sk.h_pow.apply(&sk.s).into_affine();
+        let h_r = sk.h_pow.apply(&sk.r).into_affine();
         let h_s_q = sk.h_pow.apply(&sk.s_pow.apply(&q_fr)).into_affine();
         let h_r_q = sk.h_pow.apply(&sk.r_pow.apply(&q_fr)).into_affine();
 
@@ -236,6 +242,8 @@ impl<E: PairingEngine> AccPublicKey<E> {
             h_beta,
             g_gamma,
             h_delta,
+            h_s,
+            h_r,
             h_s_q,
             h_r_q,
             g_s_i,
@@ -250,80 +258,119 @@ impl<E: PairingEngine> AccPublicKey<E> {
         }
     }
 
-    /// Return g
-    pub(crate) fn get_g(&self) -> E::G1Affine {
-        self.g
-    }
-
-    /// Return h
-    pub(crate) fn get_h(&self) -> E::G2Affine {
-        self.h
+    /// Return g^{s^i} i \in [q-1]
+    pub(crate) fn try_get_g_s_i(&self, i: u64) -> Option<E::G1Affine> {
+        self.g_s_i.get(map_i_to_index(i, self.q)?).copied()
     }
 
     /// Return g^{s^i} i \in [q-1]
-    pub(crate) fn get_g_s_i(&self, i: u64) -> Option<E::G1Affine> {
-        self.g_s_i.get(map_i_to_index(i, self.q)).copied()
+    pub(crate) fn get_g_s_i(&self, i: u64) -> E::G1Affine {
+        self.try_get_g_s_i(i)
+            .unwrap_or_else(|| panic!("failed to access get_g_s_i[i = {}]", i))
     }
 
     /// Return g^{r^i} i \in [q-1]
-    pub(crate) fn get_g_r_i(&self, i: u64) -> Option<E::G1Affine> {
-        self.g_r_i.get(map_i_to_index(i, self.q)).copied()
+    pub(crate) fn try_get_g_r_i(&self, i: u64) -> Option<E::G1Affine> {
+        self.g_r_i.get(map_i_to_index(i, self.q)?).copied()
+    }
+
+    /// Return g^{r^i} i \in [q-1]
+    pub(crate) fn get_g_r_i(&self, i: u64) -> E::G1Affine {
+        self.try_get_g_r_i(i)
+            .unwrap_or_else(|| panic!("failed to access get_g_r_i[i = {}]", i))
     }
 
     /// Return g^{\beta \cdot r^i} i \in [q-1]
-    pub(crate) fn get_g_beta_r_i(&self, i: u64) -> Option<E::G1Affine> {
-        self.g_beta_r_i.get(map_i_to_index(i, self.q)).copied()
+    pub(crate) fn try_get_g_beta_r_i(&self, i: u64) -> Option<E::G1Affine> {
+        self.g_beta_r_i.get(map_i_to_index(i, self.q)?).copied()
+    }
+
+    /// Return g^{\beta \cdot r^i} i \in [q-1]
+    pub(crate) fn get_g_beta_r_i(&self, i: u64) -> E::G1Affine {
+        self.try_get_g_beta_r_i(i)
+            .unwrap_or_else(|| panic!("failed to access get_g_s_i[i = {}]", i))
     }
 
     /// Return h^{r^i \cdot s^{q-i}} i \in [q-1]
-    pub(crate) fn get_h_r_s_i(&self, i: u64) -> Option<E::G2Affine> {
-        self.h_r_s_i.get(map_i_to_index(i, self.q)).copied()
+    pub(crate) fn try_get_h_r_s_i(&self, i: u64) -> Option<E::G2Affine> {
+        self.h_r_s_i.get(map_i_to_index(i, self.q)?).copied()
+    }
+
+    /// Return h^{r^i \cdot s^{q-i}} i \in [q-1]
+    pub(crate) fn get_h_r_s_i(&self, i: u64) -> E::G2Affine {
+        self.try_get_h_r_s_i(i)
+            .unwrap_or_else(|| panic!("failed to access get_h_r_s_i[i = {}]", i))
     }
 
     /// Return h^{s^i \cdot r^{q-i}} i \in [q-1]
-    pub(crate) fn get_h_s_r_i(&self, i: u64) -> Option<E::G2Affine> {
-        self.h_s_r_i.get(map_i_to_index(i, self.q)).copied()
+    pub(crate) fn try_get_h_s_r_i(&self, i: u64) -> Option<E::G2Affine> {
+        self.h_s_r_i.get(map_i_to_index(i, self.q)?).copied()
+    }
+
+    /// Return h^{s^i \cdot r^{q-i}} i \in [q-1]
+    pub(crate) fn get_h_s_r_i(&self, i: u64) -> E::G2Affine {
+        self.try_get_h_s_r_i(i)
+            .unwrap_or_else(|| panic!("failed to access get_h_s_r_i[i = {}]", i))
     }
 
     /// Return g^{\gamma \cdot r^i \cdot s^{q-i}} i \in [q-1]
-    pub(crate) fn get_g_gamma_r_s_i(&self, i: u64) -> Option<E::G1Affine> {
-        self.g_gamma_r_s_i.get(map_i_to_index(i, self.q)).copied()
+    pub(crate) fn try_get_g_gamma_r_s_i(&self, i: u64) -> Option<E::G1Affine> {
+        self.g_gamma_r_s_i.get(map_i_to_index(i, self.q)?).copied()
+    }
+
+    /// Return g^{\gamma \cdot r^i \cdot s^{q-i}} i \in [q-1]
+    pub(crate) fn get_g_gamma_r_s_i(&self, i: u64) -> E::G1Affine {
+        self.try_get_g_gamma_r_s_i(i)
+            .unwrap_or_else(|| panic!("failed to access get_g_gamma_r_s_i[i = {}]", i))
     }
 
     /// Return g^{r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
-    pub(crate) fn get_g_r_i_s_j(&self, i: u64, j: u64) -> Option<E::G1Affine> {
-        if i == self.q || j == self.q {
-            return None;
-        }
-        self.g_r_i_s_j.get(map_i_j_to_index(i, j, self.q)).copied()
+    pub(crate) fn try_get_g_r_i_s_j(&self, i: u64, j: u64) -> Option<E::G1Affine> {
+        self.g_r_i_s_j.get(map_i_j_to_index(i, j, self.q)?).copied()
+    }
+
+    /// Return g^{r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
+    pub(crate) fn get_g_r_i_s_j(&self, i: u64, j: u64) -> E::G1Affine {
+        self.try_get_g_r_i_s_j(i, j)
+            .unwrap_or_else(|| panic!("failed to access get_g_r_i_s_j[i = {}, j ={}]", i, j))
     }
 
     /// Return g^{\delta r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
-    pub(crate) fn get_g_delta_r_i_s_j(&self, i: u64, j: u64) -> Option<E::G1Affine> {
-        if i == self.q || j == self.q {
-            return None;
-        }
+    pub(crate) fn try_get_g_delta_r_i_s_j(&self, i: u64, j: u64) -> Option<E::G1Affine> {
         self.g_delta_r_i_s_j
-            .get(map_i_j_to_index(i, j, self.q))
+            .get(map_i_j_to_index(i, j, self.q)?)
             .copied()
+    }
+
+    /// Return g^{\delta r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
+    pub(crate) fn get_g_delta_r_i_s_j(&self, i: u64, j: u64) -> E::G1Affine {
+        self.try_get_g_delta_r_i_s_j(i, j)
+            .unwrap_or_else(|| panic!("failed to access get_g_delta_r_i_s_j[i = {}, j ={}]", i, j))
     }
 }
 
 /// Map i \in [q-1] -> 0..q - 2
 #[inline(always)]
-fn map_i_to_index(i: u64, q: u64) -> usize {
-    debug_assert!(i >= 1 && i < q);
-    (i - 1) as usize
+fn map_i_to_index(i: u64, q: u64) -> Option<usize> {
+    if i >= 1 && i < q {
+        Some((i - 1) as usize)
+    } else {
+        None
+    }
 }
 
 /// Map (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q}) -> 0..(2q-2)*(2q-2)
 #[inline(always)]
-fn map_i_j_to_index(i: u64, j: u64, q: u64) -> usize {
-    debug_assert!(i >= 1 && i != q && i < 2 * q);
-    debug_assert!(j >= 1 && j != q && j < 2 * q);
+fn map_i_j_to_index(i: u64, j: u64, q: u64) -> Option<usize> {
+    if !(i >= 1 && i != q && i < 2 * q) {
+        return None;
+    }
+    if !(j >= 1 && j != q && j < 2 * q) {
+        return None;
+    }
     let _i = if i > q { i - 2 } else { i - 1 };
     let _j = if j > q { j - 2 } else { j - 1 };
-    (_i * (2 * q - 2) + _j) as usize
+    Some((_i * (2 * q - 2) + _j) as usize)
 }
 
 #[cfg(test)]
@@ -340,8 +387,8 @@ mod tests {
         let sk = AccSecretKey::<Bls12_381>::rand(&mut rng).into();
         let pk = AccPublicKey::<Bls12_381>::gen_key(&sk, q);
 
-        let g = pk.get_g();
-        let h = pk.get_h();
+        let g = pk.g;
+        let h = pk.h;
         let q_fr = <Bls12_381 as PairingEngine>::Fr::from(q);
 
         for i in 1..=(q - 1) {
@@ -350,16 +397,22 @@ mod tests {
             let r_i = sk.r.pow(i_fr.into_repr());
             let s_q_i = sk.s.pow((q_fr - i_fr).into_repr());
             let r_q_i = sk.r.pow((q_fr - i_fr).into_repr());
-            assert_eq!(pk.get_g_s_i(i), Some(g.mul(s_i).into_affine()));
-            assert_eq!(pk.get_g_r_i(i), Some(g.mul(r_i).into_affine()));
+            assert_eq!(pk.try_get_g_s_i(i), Some(g.mul(s_i).into_affine()));
+            assert_eq!(pk.try_get_g_r_i(i), Some(g.mul(r_i).into_affine()));
             assert_eq!(
-                pk.get_g_beta_r_i(i),
+                pk.try_get_g_beta_r_i(i),
                 Some(g.mul(sk.beta * r_i).into_affine())
             );
-            assert_eq!(pk.get_h_r_s_i(i), Some(h.mul(r_i * s_q_i).into_affine()));
-            assert_eq!(pk.get_h_s_r_i(i), Some(h.mul(s_i * r_q_i).into_affine()));
             assert_eq!(
-                pk.get_g_gamma_r_s_i(i),
+                pk.try_get_h_r_s_i(i),
+                Some(h.mul(r_i * s_q_i).into_affine())
+            );
+            assert_eq!(
+                pk.try_get_h_s_r_i(i),
+                Some(h.mul(s_i * r_q_i).into_affine())
+            );
+            assert_eq!(
+                pk.try_get_g_gamma_r_s_i(i),
                 Some(g.mul(sk.gamma * r_i * s_q_i).into_affine())
             );
         }
@@ -367,16 +420,19 @@ mod tests {
         for i in 1..=(2 * q - 1) {
             for j in 1..=(2 * q - 1) {
                 if i == q || j == q {
-                    assert!(pk.get_g_r_i_s_j(i, j).is_none());
-                    assert!(pk.get_g_delta_r_i_s_j(i, j).is_none());
+                    assert!(pk.try_get_g_r_i_s_j(i, j).is_none());
+                    assert!(pk.try_get_g_delta_r_i_s_j(i, j).is_none());
                 } else {
                     let i_fr = <Bls12_381 as PairingEngine>::Fr::from(i);
                     let j_fr = <Bls12_381 as PairingEngine>::Fr::from(j);
                     let r_i = sk.r.pow(i_fr.into_repr());
                     let s_j = sk.s.pow(j_fr.into_repr());
-                    assert_eq!(pk.get_g_r_i_s_j(i, j), Some(g.mul(r_i * s_j).into_affine()));
                     assert_eq!(
-                        pk.get_g_delta_r_i_s_j(i, j),
+                        pk.try_get_g_r_i_s_j(i, j),
+                        Some(g.mul(r_i * s_j).into_affine())
+                    );
+                    assert_eq!(
+                        pk.try_get_g_delta_r_i_s_j(i, j),
                         Some(g.mul(sk.delta * r_i * s_j).into_affine())
                     );
                 }
