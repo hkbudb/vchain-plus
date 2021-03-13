@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[inline]
-fn cal_acc_pk<G, F>(set: &Set, f: F) -> G
+pub(crate) fn cal_acc_pk<G, F>(set: &Set, f: F) -> G
 where
     G: AffineCurve,
     F: Fn(u64) -> G + Sync,
@@ -26,7 +26,7 @@ where
 }
 
 #[inline]
-fn cal_acc_scalar_sk<Fr, F>(set: &Set, f: F) -> Fr
+pub(crate) fn cal_acc_scalar_sk<Fr, F>(set: &Set, f: F) -> Fr
 where
     Fr: PrimeField,
     F: Fn(u64) -> Fr + Sync,
