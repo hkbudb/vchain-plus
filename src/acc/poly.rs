@@ -2,7 +2,7 @@ use super::set::Set;
 use ark_ff::{Field, Zero};
 use ark_poly::{
     multivariate::{SparsePolynomial, SparseTerm, Term},
-    MVPolynomial, Polynomial,
+    MVPolynomial,
 };
 use core::cmp;
 use std::collections::HashMap;
