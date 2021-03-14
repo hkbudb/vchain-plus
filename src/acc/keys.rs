@@ -295,6 +295,11 @@ impl<E: PairingEngine> AccPublicKey<E> {
         }
     }
 
+    /// Return q
+    pub fn get_q(&self) -> u64 {
+        self.q
+    }
+
     /// Return g^{s^i} i \in [q-1]
     pub(crate) fn try_get_g_s_i(&self, i: u64) -> Option<E::G1Affine> {
         self.g_s_i.get(map_i_to_index(i, self.q)?).copied()
