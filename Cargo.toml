@@ -28,6 +28,9 @@ smallvec = { version = "1.6", features = ["serde"] }
 tracing = "0.1"
 tracing-subscriber = "0.2"
 
+[dev-dependencies]
+ark-bls12-381 = { path = "./vendor/curves/bls12_381" }
+
 [workspace]
 exclude = [
     "vendor",
