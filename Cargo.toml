@@ -33,6 +33,7 @@ ark-bls12-381 = { path = "./vendor/curves/bls12_381" }
 
 [workspace]
 exclude = [
+    "acc-benchmark",
     "vendor",
 ]
 

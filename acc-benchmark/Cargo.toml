@@ -1,0 +1,38 @@
+[package]
+name = "acc-benchmark"
+version = "0.1.0"
+authors = ["Cheng XU <rust@xuc.me>"]
+edition = "2018"
+publish = false
+
+[[bench]]
+name = "bench"
+harness = false
+
+[dependencies]
+ark-ec = { path = "../vendor/algebra/ec", features = ["parallel"] }
+ark-ff = { path = "../vendor/algebra/ff", features = ["asm", "parallel"] }
+criterion = { version = "0.3", features = ["html_reports"] }
+once_cell = "1.7"
+rand = "0.7"
+vchain-plus = { path = "../" }
+
+ark-bls12-377 = { path = "../vendor/curves/bls12_377" }
+ark-bls12-381 = { path = "../vendor/curves/bls12_381" }
+ark-bn254 = { path = "../vendor/curves/bn254" }
+ark-bw6-761 = { path = "../vendor/curves/bw6_761" }
+ark-cp6-782 = { path = "../vendor/curves/cp6_782" }
+ark-mnt4-298 = { path = "../vendor/curves/mnt4_298" }
+ark-mnt4-753 = { path = "../vendor/curves/mnt4_753" }
+ark-mnt6-298 = { path = "../vendor/curves/mnt6_298" }
+ark-mnt6-753 = { path = "../vendor/curves/mnt6_753" }
+
+[patch.'https://github.com/arkworks-rs/algebra']
+ark-ec = { path = "../vendor/algebra/ec" }
+ark-ff = { path = "../vendor/algebra/ff" }
+ark-ff-asm = { path = "../vendor/algebra/ff-asm" }
+ark-ff-macros = { path = "../vendor/algebra/ff-macros" }
+ark-serialize = { path = "../vendor/algebra/serialize" }
+
+[patch.'https://github.com/arkworks-rs/utils']
+ark-std = { path = "../vendor/utils/std" }
