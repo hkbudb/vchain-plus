@@ -2,8 +2,8 @@ use super::{
     acc_value::{cal_acc_pk, AccValue},
     keys::AccPublicKey,
     poly::{
-        poly_a, poly_b, poly_div, poly_mul, poly_remove_term, poly_variable_minus_one, Poly,
-        Variable, R, S,
+        get_term_power, poly_a, poly_b, poly_div, poly_mul, poly_remove_term,
+        poly_variable_minus_one, Poly, Variable, R, S,
     },
     set::Set,
 };
@@ -12,7 +12,6 @@ use ark_ec::{msm::VariableBaseMSM, PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, Zero};
 use core::marker::PhantomData;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Set operation
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,9 +57,8 @@ impl<E: PairingEngine> IntersectionProof<E> {
         let mut scalars: Vec<_> = Vec::with_capacity(q_poly.terms.len());
         for (coeff, term) in &q_poly.terms {
             scalars.push(coeff.into_repr());
-            let term_map: HashMap<Variable, usize> = term.iter().copied().collect();
-            let i = term_map[&x] as u64;
-            let j = term_map[&y] as u64;
+            let i = get_term_power(term, x) as u64;
+            let j = get_term_power(term, y) as u64;
             bases.push(get_g_x_i_y_j(i, j));
             delta_bases.push(get_g_delta_x_i_y_j(i, j));
         }
@@ -292,9 +290,8 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
     let mut scalars: Vec<_> = Vec::with_capacity(z_poly.terms.len());
     for (coeff, term) in &z_poly.terms {
         scalars.push(coeff.into_repr());
-        let term_map: HashMap<Variable, usize> = term.iter().copied().collect();
-        let i = term_map.get(&R).copied().unwrap_or(0) as u64;
-        let j = term_map.get(&S).copied().unwrap_or(0) as u64;
+        let i = get_term_power(term, R) as u64;
+        let j = get_term_power(term, S) as u64;
         match (i, j) {
             (0, 0) => {
                 z_s_r_bases.push(pk.g);

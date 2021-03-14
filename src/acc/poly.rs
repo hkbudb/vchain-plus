@@ -5,12 +5,17 @@ use ark_poly::{
     MVPolynomial,
 };
 use core::cmp;
-use std::collections::HashMap;
 
 pub(crate) type Poly<F> = SparsePolynomial<F, SparseTerm>;
 pub(crate) type Variable = usize;
 pub(crate) const S: Variable = 0;
 pub(crate) const R: Variable = 1;
+
+/// Return i from term (x^i*y^j*...)
+#[inline]
+pub(crate) fn get_term_power(term: &SparseTerm, x: Variable) -> usize {
+    term.iter().find(|(v, _p)| *v == x).map_or(0, |(_v, p)| *p)
+}
 
 /// Return poly {\sum x^i}
 #[inline]
@@ -77,7 +82,6 @@ pub(crate) fn poly_div<F: Field>(lhs: &Poly<F>, rhs: &Poly<F>) -> (Poly<F>, Poly
         .max_by_key(|(_, term)| term.degree())
         .cloned()
         .expect("failed to find the lead term in rhs.");
-    let rhs_lead_term_map: HashMap<Variable, usize> = rhs_lead_term.iter().copied().collect();
 
     let mut q = Poly::zero();
     let mut r = lhs.clone();
@@ -102,7 +106,7 @@ pub(crate) fn poly_div<F: Field>(lhs: &Poly<F>, rhs: &Poly<F>) -> (Poly<F>, Poly
             let term: Vec<_> = r_lead_term
                 .iter()
                 .map(|(v, p)| {
-                    let l_p = rhs_lead_term_map.get(v).copied().unwrap_or(0);
+                    let l_p = get_term_power(&rhs_lead_term, *v);
                     (*v, *p - l_p)
                 })
                 .collect();
@@ -116,6 +120,7 @@ pub(crate) fn poly_div<F: Field>(lhs: &Poly<F>, rhs: &Poly<F>) -> (Poly<F>, Poly
 }
 
 /// Remove v^q term from the poly
+#[inline]
 pub(crate) fn poly_remove_term<F: Field>(input: &Poly<F>, v: Variable, q: u64) -> Poly<F> {
     let removed_term = (v, q as usize);
     let terms: Vec<_> = input
