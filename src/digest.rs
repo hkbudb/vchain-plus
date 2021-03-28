@@ -26,8 +26,18 @@ impl fmt::Debug for Digest {
 
 impl Digest {
     #[inline]
+    pub const fn zero() -> Self {
+        Self([0; DIGEST_LEN])
+    }
+
+    #[inline]
     pub fn as_bytes(&self) -> &'_ [u8] {
         &self.0
+    }
+
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        *self == Self::zero()
     }
 }
 
