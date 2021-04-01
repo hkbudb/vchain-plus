@@ -1,5 +1,5 @@
 use super::{
-    hash::{bplus_tree_leaf_hash, bplus_tree_non_leaf_hash},
+    //hash::{bplus_tree_leaf_hash, bplus_tree_non_leaf_hash},
     range::Range,
     traits::Num,
     MAX_FANOUT,
@@ -18,6 +18,15 @@ create_id_type!(BPlusTreeNodeId);
 pub enum BPlusTreeNode<K: Num> {
     Leaf(BPlusTreeLeafNode<K>),
     NonLeaf(BPlusTreeNonLeafNode<K>),
+}
+
+impl<K: Num> BPlusTreeNode<K> {
+    pub fn get_node_id(&self) -> BPlusTreeNodeId {
+        match self {
+            BPlusTreeNode::Leaf(n) => n.id,
+            BPlusTreeNode::NonLeaf(n) => n.id,
+        }
+    }
 }
 
 impl<K: Num> Digestible for BPlusTreeNode<K> {

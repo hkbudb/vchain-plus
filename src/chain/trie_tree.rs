@@ -1,11 +1,11 @@
-use super::INLINE_FANOUT;
+//use super::INLINE_FANOUT;
 use crate::{
     acc::set::Set,
     create_id_type,
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
+//use smallvec::SmallVec;
 
 create_id_type!(TrieTreeNodeId);
 
@@ -13,6 +13,15 @@ create_id_type!(TrieTreeNodeId);
 pub enum TrieNode {
     Leaf(TrieLeafNode),
     NonLeaf(TrieNonLeafNode),
+}
+
+impl TrieNode {
+    pub fn get_node_id(&self) -> TrieTreeNodeId {
+        match self {
+            TrieNode::Leaf(n) => n.id,
+            TrieNode::NonLeaf(n) => n.id,
+        }
+    }
 }
 
 impl Digestible for TrieNode {

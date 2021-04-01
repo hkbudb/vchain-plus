@@ -29,6 +29,19 @@ impl Digest {
     pub fn as_bytes(&self) -> &'_ [u8] {
         &self.0
     }
+
+    pub fn zero() -> Self {
+        Self([0; DIGEST_LEN])
+    }
+
+    pub fn is_zero(&self) -> bool {
+        let expect = Digest(*b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00");
+        if *self == expect {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 // Ref: https://github.com/slowli/hex-buffer-serde
@@ -188,6 +201,19 @@ mod tests {
         assert_eq!(b"hello"[..].to_digest(), expect); // b"hello" indicates that it is a bytes array
         assert_eq!("hello".to_digest(), expect);
         assert_eq!("hello".to_owned().to_digest(), expect); // "hello".to_owned(): return a String using "hello" instead of a reference
+    }
+
+    #[test]
+    fn test_zero() {
+        let expect = Digest(*b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00");
+        assert_eq!(Digest::zero(), expect);
+        //dbg!(Digest::zero().0);
+    }
+
+    #[test]
+    fn test_is_zero() {
+        let d = Digest::zero();
+        assert!(d.is_zero());
     }
 
     #[test]

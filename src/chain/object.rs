@@ -16,7 +16,16 @@ pub struct Object<K: Num> {
 }
 
 impl<K: Num> Object<K> {
-    pub fn new(
+    pub fn new(block_id: BlockId, num_data: Vec<K>, keyword_data: HashSet<String>) -> Self {
+        Self {
+            id: ObjId::next_id(),
+            block_id,
+            num_data,
+            keyword_data,
+        }
+    }
+
+    pub fn new_dbg(
         id: ObjId,
         block_id: BlockId,
         num_data: Vec<K>,
