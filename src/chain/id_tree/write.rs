@@ -43,8 +43,6 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         let id = node.id;
         let hash = node.to_digest();
         self.apply.nodes.insert(id, IdTreeNode::from_leaf(node));
-        //===========debug===========
-        //println!("write_leaf is called, the id is: {:?}", id);
         (id, hash)
     }
 
@@ -52,25 +50,16 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         let id = n.id;
         let hash = n.to_digest();
         self.apply.nodes.insert(id, IdTreeNode::from_non_leaf(n));
-        //===========debug===========
-        //println!("write_non_leaf is called, the id is: {:?}", id);
         (id, hash)
     }
 
     fn get_node(&self, id: IdTreeNodeId) -> Result<Option<Cow<IdTreeNode>>> {
-        //===========debug===========
-        //println!("get_node is called, the id is: {:?}", id);
         Ok(match self.apply.nodes.get(&id) {
             Some(n) => {
-                //===========debug===========
-                //println!("I get the node in apply");
                 Some(Cow::Borrowed(n))
             }
             None => {
-                //===========debug===========
-                //println!("I get the node in storage");
                 let res = self.node_loader.load_node(id)?.map(Cow::Owned);
-                //println!("res is: {:?}", res);
                 res
             }
         })
@@ -78,7 +67,6 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
 
     pub fn insert_raw(&mut self, raw_obj_id: ObjId, obj_hash: Digest, n_k: usize) -> Result<()> {
         let obj_id = IdTreeObjId(raw_obj_id.unwrap() % n_k as u64);
-        //let depth = ((n_k as f64).log(MAX_FANOUT as f64).ceil() + (1 as f64)) as usize;
         let depth = (n_k as f64).log(MAX_FANOUT as f64).floor() as usize;
         self.insert(obj_id, obj_hash, depth)
     }
@@ -87,11 +75,6 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         let mut cur_id = self.apply.root_id;
         let mut cur_path_rev = fanout_nary_rev(obj_id.unwrap(), MAX_FANOUT as u64, depth);
 
-        // ==========debug==========
-        //println!("");
-        //println!("obj_id: {:?}", obj_id);
-        //println!("cur_id: {:?}", cur_id);
-        //println!("path: {:?}", cur_path_rev);
         enum TempNode {
             Leaf { id: IdTreeNodeId, hash: Digest },
             NonLeaf { node: IdTreeNonLeafNode, idx: usize },
@@ -106,11 +89,9 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                     match n.to_mut() {
                         IdTreeNode::Leaf(n) => {
                             n.id = IdTreeNodeId::next_id();
-                            //println!("copied node id: {:?}", n.id);
                         }
                         IdTreeNode::NonLeaf(n) => {
                             n.id = IdTreeNodeId::next_id();
-                            //println!("copied node id: {:?}", n.id);
                         }
                     }
                     n
@@ -139,7 +120,6 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
 
             match cur_node.as_ref() {
                 IdTreeNode::Leaf(n) => {
-                    //println!("it is a leaf");
                     let (leaf_id, leaf_hash) = self.write_leaf(obj_id, obj_hash);
                     temp_nodes.push(TempNode::Leaf {
                         id: leaf_id,
@@ -148,7 +128,6 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                     break;
                 }
                 IdTreeNode::NonLeaf(n) => {
-                    //println!("it is a non-leaf");
                     let idx = cur_path_rev.pop().unwrap();
                     temp_nodes.push(TempNode::NonLeaf {
                         node: IdTreeNonLeafNode::new(n.child_hashes.clone(), n.child_ids.clone()),
@@ -169,7 +148,6 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                     new_root_hash = hash;
                 }
                 TempNode::NonLeaf { mut node, idx } => {
-                    //node.child_ids[idx] = new_root_id;
                     *node.get_child_id_mut(idx) = new_root_id;
                     *node.get_child_hash_mut(idx) = new_root_hash;
                     let (id, hash) = self.write_non_leaf(node);
@@ -178,17 +156,11 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                 }
             }
         }
-        //println!("new root id(apply root): {:?}", new_root_id);
         self.apply.root_id = new_root_id;
 
-        // =======debug========
-        //println!("apply before remove: {:?}", self.apply);
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
         }
-        //println!("");
-        //println!("apply after remove: {:?}", self.apply);
-        //println!("");
 
         Ok(())
     }
@@ -212,7 +184,6 @@ mod tests {
     fn test_fanout_nary() {
         use super::fanout_nary_rev;
 
-        //let expect_ten: Vec<usize> = vec![1, 9, 7, 0, 3, 1];
         let expect_ten: Vec<usize> = vec![1, 3, 0, 7, 9, 1];
         let v_ten: Vec<usize> = fanout_nary_rev(197031, 10, 6);
         assert_eq!(v_ten, expect_ten);
@@ -222,7 +193,6 @@ mod tests {
         let v_two: Vec<usize> = fanout_nary_rev(1025, 2, 11);
         assert_eq!(v_two, expect_two);
 
-        //let expect_two_2: Vec<usize> = vec![0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
         let expect_two_2: Vec<usize> = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0];
         let v_two_2: Vec<usize> = fanout_nary_rev(1025, 2, 12);
         assert_eq!(v_two_2, expect_two_2);
