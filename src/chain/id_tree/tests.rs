@@ -112,8 +112,8 @@ fn get_dataset1() -> Vec<Object<i32>> {
     res
 }
 
-const N: usize = 3; //3 2
-const K: usize = 3; //3 1
+const N: usize = 3; // 2
+const K: usize = 3; // 1
 
 fn build_test_id_tree0() -> TestIdTree {
     let mut dataset = get_dataset0();
