@@ -7,11 +7,11 @@ publish = false
 
 [dependencies]
 anyhow = "1.0"
-ark-bls12-381 = { path = "./vendor/curves/bls12_381" }
-ark-ec = { path = "./vendor/algebra/ec", features = ["parallel"] }
-ark-ff = { path = "./vendor/algebra/ff", features = ["asm", "parallel"] }
-ark-poly = { path = "./vendor/algebra/poly", features = ["parallel"] }
-ark-serialize = { path = "./vendor/algebra/serialize" }
+ark-bls12-381 = "0.2"
+ark-ec = { version = "0.2", features = ["parallel"] }
+ark-ff = { version = "0.2", features = ["asm", "parallel"] }
+ark-poly = { version = "0.2", features = ["parallel"] }
+ark-serialize = "0.2"
 bincode = "1.3"
 blake2b_simd = "0.5"
 derive_more = "0.99"
@@ -29,20 +29,9 @@ tracing = "0.1"
 tracing-subscriber = "0.2"
 
 [dev-dependencies]
-ark-bls12-381 = { path = "./vendor/curves/bls12_381" }
+ark-bls12-381 = "0.2"
 
 [workspace]
 exclude = [
     "acc-benchmark",
-    "vendor",
 ]
-
-[patch.'https://github.com/arkworks-rs/algebra']
-ark-ec = { path = "./vendor/algebra/ec" }
-ark-ff = { path = "./vendor/algebra/ff" }
-ark-ff-asm = { path = "./vendor/algebra/ff-asm" }
-ark-ff-macros = { path = "./vendor/algebra/ff-macros" }
-ark-serialize = { path = "./vendor/algebra/serialize" }
-
-[patch.'https://github.com/arkworks-rs/utils']
-ark-std = { path = "./vendor/utils/std" }
