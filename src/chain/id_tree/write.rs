@@ -1,6 +1,6 @@
 use super::{
-    Digest, Digestible, IdTreeLeafNode, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader,
-    IdTreeNonLeafNode, IdTreeObjId,
+    Digest, Digestible, IdTreeLeafNode, IdTreeNode, IdTreeNodeId,
+    IdTreeNodeLoader, IdTreeNonLeafNode, IdTreeObjId,
 };
 use crate::chain::{object::ObjId, MAX_FANOUT};
 use anyhow::Result;
@@ -119,7 +119,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
             };
 
             match cur_node.as_ref() {
-                IdTreeNode::Leaf(n) => {
+                IdTreeNode::Leaf(_n) => {
                     let (leaf_id, leaf_hash) = self.write_leaf(obj_id, obj_hash);
                     temp_nodes.push(TempNode::Leaf {
                         id: leaf_id,
@@ -134,7 +134,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                         idx: idx,
                     });
 
-                    cur_id = n.get_child_id(idx);
+                    cur_id = *n.get_child_id(idx).unwrap();
                 }
             }
         }
@@ -148,8 +148,8 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                     new_root_hash = hash;
                 }
                 TempNode::NonLeaf { mut node, idx } => {
-                    *node.get_child_id_mut(idx) = new_root_id;
-                    *node.get_child_hash_mut(idx) = new_root_hash;
+                    *node.get_child_id_mut(idx).unwrap() = new_root_id;
+                    *node.get_child_hash_mut(idx).unwrap() = new_root_hash;
                     let (id, hash) = self.write_non_leaf(node);
                     new_root_id = id;
                     new_root_hash = hash;
@@ -187,7 +187,7 @@ mod tests {
         let expect_ten: Vec<usize> = vec![1, 3, 0, 7, 9, 1];
         let v_ten: Vec<usize> = fanout_nary_rev(197031, 10, 6);
         assert_eq!(v_ten, expect_ten);
-        //dbg!(v_ten);
+        dbg!(v_ten);
 
         let expect_two: Vec<usize> = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
         let v_two: Vec<usize> = fanout_nary_rev(1025, 2, 11);

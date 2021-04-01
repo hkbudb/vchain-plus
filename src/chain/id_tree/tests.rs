@@ -1,6 +1,7 @@
 use super::{
     write::{Apply, WriteContext},
     IdTreeLeafNode, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader, IdTreeNonLeafNode, IdTreeObjId,
+    read::query_without_proof,
 };
 use crate::{
     chain::{
@@ -332,6 +333,24 @@ fn build_test_id_tree1() -> TestIdTree {
 }
 
 #[test]
+fn test_write1() {
+    let mut dataset = get_dataset1();
+    let mut id_tree = TestIdTree::new();
+    println!("{:?}", id_tree);
+    let mut ctx = WriteContext::new(&id_tree, id_tree.root_id);
+
+    for _i in 0..9 {
+        let obj = dataset.pop().unwrap();
+        let obj_id = obj.id;
+        let obj_hash = obj.to_digest();
+        let _res = ctx.insert_raw(obj_id, obj_hash, N * K);
+    }
+    let changes = ctx.changes();
+    id_tree.apply(changes);
+    assert_eq!(build_test_id_tree1(), id_tree);
+    dbg!(id_tree);
+}
+
 // fn test_write0() {
 //     let mut dataset = get_dataset0();
 //     let mut id_tree = TestIdTree::new();
@@ -350,20 +369,21 @@ fn build_test_id_tree1() -> TestIdTree {
 //     dbg!(id_tree);
 // }
 
-fn test_write1() {
-    let mut dataset = get_dataset1();
-    let mut id_tree = TestIdTree::new();
+#[test]
+fn test_read1() {
+    let id_tree = build_test_id_tree1();
     println!("{:?}", id_tree);
-    let mut ctx = WriteContext::new(&id_tree, id_tree.root_id);
+    let v = query_without_proof(N * K, &id_tree, id_tree.root_id, ObjId(1)).unwrap();
 
-    for _i in 0..9 {
-        let obj = dataset.pop().unwrap();
-        let obj_id = obj.id;
-        let obj_hash = obj.to_digest();
-        let _res = ctx.insert_raw(obj_id, obj_hash, N * K);
-    }
-    let changes = ctx.changes();
-    id_tree.apply(changes);
-    assert_eq!(build_test_id_tree1(), id_tree);
-    dbg!(id_tree);
+    let mut o_keywords: HashSet<String> = HashSet::new();
+    o_keywords.insert("b".to_string());
+    let o: Object<i32> = Object::new_dbg(ObjId(1), BlockId(1), vec![3], o_keywords);
+    let digest = o.to_digest();
+
+    assert_eq!(Some(digest), v);
+    // let v = query_without_proof(N * K, &id_tree, id_tree.root_id, ObjId(1)).unwrap();
+    // assert_eq!(Digest::zero(), v.unwrap());
+    // dbg!(v);
+
+
 }

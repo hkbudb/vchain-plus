@@ -32,4 +32,6 @@ impl Proof {
             None => Digest::zero(),
         }
     }
+
+
 }

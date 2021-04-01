@@ -125,20 +125,21 @@ impl IdTreeNonLeafNode {
         }
     }
 
-    pub fn get_child_id(&self, idx: usize) -> IdTreeNodeId {
-        *unsafe { self.child_ids.get_unchecked(idx) }
+    pub fn get_child_id(&self, idx: usize) -> Option<&IdTreeNodeId> {
+        self.child_ids.get(idx)
+
     }
 
-    pub fn get_child_id_mut(&mut self, idx: usize) -> &mut IdTreeNodeId {
-        unsafe { self.child_ids.get_unchecked_mut(idx) }
+    pub fn get_child_id_mut(&mut self, idx: usize) -> Option<&mut IdTreeNodeId> {
+        self.child_ids.get_mut(idx)
     }
 
-    pub fn get_child_hash(&self, idx: usize) -> Digest {
-        *unsafe { self.child_hashes.get_unchecked(idx) }
+    pub fn get_child_hash(&self, idx: usize) -> Option<&Digest> {
+        self.child_hashes.get(idx)
     }
 
-    pub fn get_child_hash_mut(&mut self, idx: usize) -> &mut Digest {
-        unsafe { self.child_hashes.get_unchecked_mut(idx) }
+    pub fn get_child_hash_mut(&mut self, idx: usize) -> Option<&mut Digest> {
+        self.child_hashes.get_mut(idx)
     }
 }
 
