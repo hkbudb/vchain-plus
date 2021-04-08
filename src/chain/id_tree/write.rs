@@ -1,8 +1,8 @@
 use super::{
-    Digest, Digestible, IdTreeLeafNode, IdTreeNode, IdTreeNodeId,
-    IdTreeNodeLoader, IdTreeNonLeafNode, IdTreeObjId,
+    Digest, Digestible, IdTreeLeafNode, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader,
+    IdTreeNonLeafNode, IdTreeObjId,
 };
-use crate::chain::{object::ObjId, MAX_FANOUT};
+use crate::chain::{object::ObjId, IDTREE_FANOUT};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -55,9 +55,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
 
     fn get_node(&self, id: IdTreeNodeId) -> Result<Option<Cow<IdTreeNode>>> {
         Ok(match self.apply.nodes.get(&id) {
-            Some(n) => {
-                Some(Cow::Borrowed(n))
-            }
+            Some(n) => Some(Cow::Borrowed(n)),
             None => {
                 let res = self.node_loader.load_node(id)?.map(Cow::Owned);
                 res
@@ -65,15 +63,10 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         })
     }
 
-    pub fn insert_raw(&mut self, raw_obj_id: ObjId, obj_hash: Digest, n_k: usize) -> Result<()> {
-        let obj_id = IdTreeObjId(raw_obj_id.unwrap() % n_k as u64);
-        let depth = (n_k as f64).log(MAX_FANOUT as f64).floor() as usize;
-        self.insert(obj_id, obj_hash, depth)
-    }
-
-    pub fn insert(&mut self, obj_id: IdTreeObjId, obj_hash: Digest, depth: usize) -> Result<()> {
+    pub fn insert(&mut self, obj_id: IdTreeObjId, obj_hash: Digest, n_k: usize) -> Result<()> {
         let mut cur_id = self.apply.root_id;
-        let mut cur_path_rev = fanout_nary_rev(obj_id.unwrap(), MAX_FANOUT as u64, depth);
+        let depth = (n_k as f64).log(IDTREE_FANOUT as f64).floor() as usize;
+        let mut cur_path_rev = fanout_nary_rev(obj_id.unwrap(), IDTREE_FANOUT as u64, depth);
 
         enum TempNode {
             Leaf { id: IdTreeNodeId, hash: Digest },

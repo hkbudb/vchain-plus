@@ -6,7 +6,7 @@ use super::{
     id_tree::IdTreeNodeId,
     //object::ObjId,
     //trie_tree::{TrieNode, TrieTreeNodeId},
-    //MAX_FANOUT,
+    //IDTREE_FANOUT,
 };
 use crate::{
     create_id_type,

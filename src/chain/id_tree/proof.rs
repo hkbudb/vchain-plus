@@ -1,4 +1,10 @@
-use crate::digest::{Digest, Digestible};
+use crate::{
+    chain::{
+        id_tree::{write::fanout_nary_rev, IdTreeObjId},
+        IDTREE_FANOUT,
+    },
+    digest::{Digest, Digestible},
+};
 use serde::{Deserialize, Serialize};
 
 pub(crate) mod leaf;
@@ -23,9 +29,14 @@ impl Proof {
     }
 
     pub fn from_root_hash(root_hash: Digest) -> Self {
-        Self::from_subproof(SubProof::from_hash(root_hash))
+        if root_hash == Digest::zero() {
+            Self::default()
+        } else {
+            Self::from_subproof(SubProof::from_hash(root_hash))
+        }
     }
 
+    // return the hash of the root for verification
     pub fn root_hash(&self) -> Digest {
         match self.root.as_ref() {
             Some(root) => root.to_digest(),
@@ -33,5 +44,13 @@ impl Proof {
         }
     }
 
-
+    // return the result leaf node hash (not obj_hash)
+    pub fn value_hash(&self, obj_id: IdTreeObjId, n_k: usize) -> Option<Digest> {
+        let depth = (n_k as f64).log(IDTREE_FANOUT as f64).floor() as usize;
+        let mut cur_path_rev = fanout_nary_rev(obj_id.unwrap(), IDTREE_FANOUT as u64, depth);
+        match self.root.as_ref() {
+            None => Some(Digest::zero()),
+            Some(root) => root.value_hash(obj_id, &mut cur_path_rev),
+        }
+    }
 }

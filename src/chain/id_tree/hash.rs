@@ -16,9 +16,7 @@ pub(crate) fn id_tree_non_leaf_hash<'a>(child_hashes: impl Iterator<Item = &'a D
 
 #[inline]
 pub(crate) fn id_tree_leaf_proof_hash(node_hash: &Digest) -> Digest {
-    let mut state = blake2().to_state();
-    state.update(&node_hash.0);
-    Digest::from(state.finalize())
+    *node_hash
 }
 
 #[inline]

@@ -1,12 +1,10 @@
-use super::MAX_FANOUT;
+use super::IDTREE_FANOUT;
 use crate::{
     create_id_type,
     digest::{Digest, Digestible},
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
-
 create_id_type!(IdTreeNodeId);
 create_id_type!(IdTreeObjId);
 
@@ -87,14 +85,14 @@ impl Digestible for IdTreeLeafNode {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct IdTreeNonLeafNode {
     pub id: IdTreeNodeId,
-    pub child_hashes: SmallVec<[Digest; MAX_FANOUT]>,
-    pub child_ids: SmallVec<[IdTreeNodeId; MAX_FANOUT]>,
+    pub child_hashes: [Digest; IDTREE_FANOUT],
+    pub child_ids: [IdTreeNodeId; IDTREE_FANOUT],
 }
 
 impl IdTreeNonLeafNode {
     pub fn new(
-        child_hashes: SmallVec<[Digest; MAX_FANOUT]>,
-        child_ids: SmallVec<[IdTreeNodeId; MAX_FANOUT]>,
+        child_hashes: [Digest; IDTREE_FANOUT],
+        child_ids: [IdTreeNodeId; IDTREE_FANOUT],
     ) -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
@@ -105,8 +103,8 @@ impl IdTreeNonLeafNode {
 
     pub fn new_dbg(
         id: IdTreeNodeId,
-        child_hashes: SmallVec<[Digest; MAX_FANOUT]>,
-        child_ids: SmallVec<[IdTreeNodeId; MAX_FANOUT]>,
+        child_hashes: [Digest; IDTREE_FANOUT],
+        child_ids: [IdTreeNodeId; IDTREE_FANOUT],
     ) -> Self {
         Self {
             id,
@@ -118,16 +116,13 @@ impl IdTreeNonLeafNode {
     pub fn new_ept() -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
-            //child_hashes: SmallVec::<[Digest; MAX_FANOUT]>::new(),
-            child_hashes: SmallVec::from_vec(vec![Digest::zero(); MAX_FANOUT]),
-            //child_ids: SmallVec::<[IdTreeNodeId; MAX_FANOUT]>::new(),
-            child_ids: SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_FANOUT]),
+            child_hashes: [Digest::zero(); IDTREE_FANOUT],
+            child_ids: [IdTreeNodeId(0); IDTREE_FANOUT],
         }
     }
 
     pub fn get_child_id(&self, idx: usize) -> Option<&IdTreeNodeId> {
         self.child_ids.get(idx)
-
     }
 
     pub fn get_child_id_mut(&mut self, idx: usize) -> Option<&mut IdTreeNodeId> {
@@ -168,15 +163,15 @@ pub fn update_id_tree<K: Num>(
     let pre_root_id: IdTreeNodeId = chain.read_block_content(pre_blk_id)?.id_tree_root_id;
     let mut id_tree_root: IdTreeNode = IdTreeNode::NonLeaf(IdTreeNonLeafNode::new(
         IdTreeNodeId::next_id(),
-        SmallVec::<[Digest; MAX_FANOUT]>::new(),
-        SmallVec::<[IdTreeNodeId; MAX_FANOUT]>::new(),
+        SmallVec::<[Digest; IDTREE_FANOUT]>::new(),
+        SmallVec::<[IdTreeNodeId; IDTREE_FANOUT]>::new(),
     )); // the root of the new id tree
 
     /* step i -- create partial tree */
     for obj_id in obj_ids {
         let mut path: Vec<usize> = Vec::new();
-        let depth: u64 = ((((k * n) as f64).log(MAX_FANOUT as f64)).ceil() + (1 as f64)) as u64;
-        fanout_nary(obj_id.unwrap(), MAX_FANOUT as u64, depth, &mut path);
+        let depth: u64 = ((((k * n) as f64).log(IDTREE_FANOUT as f64)).ceil() + (1 as f64)) as u64;
+        fanout_nary(obj_id.unwrap(), IDTREE_FANOUT as u64, depth, &mut path);
 
         let mut index: usize = 0;
         let mut tmp_node: IdTreeNode;
@@ -194,8 +189,8 @@ pub fn update_id_tree<K: Num>(
                 None => {
                     let node = IdTreeNonLeafNode::new(
                         IdTreeNodeId::next_id(),
-                        SmallVec::<[Digest; MAX_FANOUT]>::new(),
-                        SmallVec::<[IdTreeNodeId; MAX_FANOUT]>::new(),
+                        SmallVec::<[Digest; IDTREE_FANOUT]>::new(),
+                        SmallVec::<[IdTreeNodeId; IDTREE_FANOUT]>::new(),
                     );
 
                     if let IdTreeNode::NonLeaf(n) = cur_node {
@@ -245,7 +240,7 @@ fn update_id_hash<K: Num>(
 ) -> Result<()> {
     let mut cur_node: &mut IdTreeNode = &mut chain.read_id_tree_node(cur_id)?;
     let cur_node_pre: &IdTreeNode = &chain.read_id_tree_node(cur_id_pre)?;
-    for i in 0..MAX_FANOUT {
+    for i in 0..IDTREE_FANOUT {
         match if let IdTreeNode::NonLeaf(n) = cur_node {
             n.child_ids.get(i)
         } else {
@@ -290,7 +285,7 @@ pub fn query_id_tree<K: Num>(
 
     let mut results: Vec<Option<Digest>> = Vec::new();
     let mut sub_proof: SubProof = SubProof::default();
-    let depth: u64 = ((((nk) as f64).log(MAX_FANOUT as f64)).ceil() + (1 as f64)) as u64;
+    let depth: u64 = ((((nk) as f64).log(IDTREE_FANOUT as f64)).ceil() + (1 as f64)) as u64;
 
     let first_res = inner_query_id_tree(depth, obj_ids[0], root_node, chain);
     results.push(first_res.unwrap().0);
@@ -312,7 +307,7 @@ fn inner_query_id_tree<K: Num>(
     chain: &mut (impl ReadInterface<K> + WriteInterface<K>),
 ) -> Result<(Option<Digest>, SubProof)> {
     let mut cur_path: Vec<usize> = Vec::new();
-    fanout_nary(obj_id.unwrap(), MAX_FANOUT as u64, depth, &mut cur_path);
+    fanout_nary(obj_id.unwrap(), IDTREE_FANOUT as u64, depth, &mut cur_path);
     let mut sub_proof: SubProof = SubProof::from_hash(root_node.to_digest());
     let mut obj_hash: Option<Digest>;
 
@@ -396,7 +391,7 @@ fn merge_sub_proof(p1: &SubProof, p2: &SubProof) -> SubProof {
         }
         (SubProof::NonLeaf(n1), SubProof::NonLeaf(n2)) => {
             let mut non_leaf = IdTreeNonLeaf::default();
-            for i in 0..MAX_FANOUT {
+            for i in 0..IDTREE_FANOUT {
                 let a = n1.get_child(i);
                 let b = n2.get_child(i);
                 match (a, b) {

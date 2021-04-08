@@ -13,9 +13,10 @@ pub mod object;
 pub mod range;
 pub mod traits;
 
-pub const MAX_FANOUT: usize = 3; // 3 2
-                                 //const INDEX_NUM: usize = 3;
-                                 //const INLINE_FANOUT: usize = 8;
+pub const IDTREE_FANOUT: usize = 3;
+pub const MAX_FANOUT: usize = 16; // 3 2
+                                  //const INDEX_NUM: usize = 3;
+                                  //const INLINE_FANOUT: usize = 8;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Parameter {
