@@ -1,27 +1,30 @@
-use super::{IdTreeLeaf, IdTreeNonLeaf};
+use super::{IdTreeLeaf, IdTreeNonLeaf, IdTreeSubTree};
 use crate::{
-    chain::id_tree::IdTreeObjId,
+    chain::id_tree::{IdTreeNodeId, IdTreeObjId},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum SubProof {
-    Hash(Digest),
+    Hash(Box<IdTreeSubTree>),
     Leaf(Box<IdTreeLeaf>),
     NonLeaf(Box<IdTreeNonLeaf>),
 }
 
 impl Default for SubProof {
     fn default() -> Self {
-        Self::Hash(Digest::zero())
+        Self::Hash(Box::new(IdTreeSubTree::new(
+            IdTreeNodeId(0),
+            Digest::zero(),
+        )))
     }
 }
 
 impl Digestible for SubProof {
     fn to_digest(&self) -> Digest {
         match self {
-            Self::Hash(n) => *n,
+            Self::Hash(n) => n.get_node_hash(),
             Self::Leaf(n) => n.to_digest(),
             Self::NonLeaf(n) => n.to_digest(),
         }
@@ -29,8 +32,8 @@ impl Digestible for SubProof {
 }
 
 impl SubProof {
-    pub(crate) fn from_hash(h: Digest) -> Self {
-        Self::Hash(h)
+    pub(crate) fn from_hash(node_id: IdTreeNodeId, h: Digest) -> Self {
+        Self::Hash(Box::new(IdTreeSubTree::new(node_id, h)))
     }
 
     pub(crate) fn from_non_leaf(n: IdTreeNonLeaf) -> Self {
@@ -57,19 +60,17 @@ impl SubProof {
         &mut self,
         obj_id: IdTreeObjId,
         cur_path_rev: &'a mut Vec<usize>,
-    ) -> Option<(*mut SubProof, Digest, &'a mut Vec<usize>)>{
+    ) -> Option<(*mut SubProof, IdTreeNodeId, &'a mut Vec<usize>)> {
         match self {
-            Self::Hash(h) => {
-                let hash = *h;
-                Some((self as *mut _, hash, cur_path_rev))
+            Self::Hash(sub_tree) => {
+                let node_id = sub_tree.node_id;
+                Some((self as *mut _, node_id, cur_path_rev))
             }
-            Self::NonLeaf(n) => {
-                n.search_prefix(obj_id, cur_path_rev)
-            }
+            Self::NonLeaf(n) => n.search_prefix(obj_id, cur_path_rev),
             Self::Leaf(n) => {
                 if obj_id == n.obj_id {
-                    let n_hash = n.to_digest();
-                    Some((self as *mut _, n_hash, cur_path_rev))
+                    let node_id = n.node_id;
+                    Some((self as *mut _, node_id, cur_path_rev))
                 } else {
                     None
                 }

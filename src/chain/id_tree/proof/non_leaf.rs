@@ -1,8 +1,12 @@
-use super::sub_proof::SubProof;
-use crate::{chain::id_tree::{hash::id_tree_non_leaf_proof_hash, IdTreeObjId, IDTREE_FANOUT}, create_id_type, digest::{Digest, Digestible}};
+use super::{sub_proof::SubProof, sub_tree::IdTreeSubTree};
+use crate::{
+    chain::id_tree::{hash::id_tree_non_leaf_proof_hash, IdTreeNodeId, IdTreeObjId, IDTREE_FANOUT},
+    digest::{Digest, Digestible},
+};
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct IdTreeNonLeaf {
+    //pub(crate) node_id: IdTreeNodeId,
     pub(crate) children: [Option<Box<SubProof>>; IDTREE_FANOUT],
 }
 
@@ -17,10 +21,16 @@ impl Digestible for IdTreeNonLeaf {
 }
 
 impl IdTreeNonLeaf {
-    pub(crate) fn from_hashes(children: &[Digest; IDTREE_FANOUT]) -> Self {
+    pub(crate) fn from_hashes(
+        children: &[Digest; IDTREE_FANOUT],
+        child_node_ids: &[IdTreeNodeId; IDTREE_FANOUT],
+    ) -> Self {
         let mut node = IdTreeNonLeaf::default();
         for (i, child) in children.iter().enumerate() {
-            node.children[i] = Some(Box::new(SubProof::Hash(*child)));
+            node.children[i] = Some(Box::new(SubProof::Hash(Box::new(IdTreeSubTree::new(
+                child_node_ids[i],
+                *child,
+            )))));
         }
         node
     }
@@ -55,7 +65,7 @@ impl IdTreeNonLeaf {
         &mut self,
         obj_id: IdTreeObjId,
         cur_path_rev: &'a mut Vec<usize>,
-    ) -> Option<(*mut SubProof, Digest, &'a mut Vec<usize>)> {
+    ) -> Option<(*mut SubProof, IdTreeNodeId, &'a mut Vec<usize>)> {
         let child_idx = cur_path_rev.pop().unwrap();
         match self.get_child_mut(child_idx) {
             Some(child) => child.search_prefix(obj_id, cur_path_rev),

@@ -1,12 +1,14 @@
 use crate::{
     chain::{
-        id_tree::{write::fanout_nary_rev, IdTreeObjId},
+        id_tree::{write::fanout_nary_rev, IdTreeNodeId, IdTreeObjId},
         IDTREE_FANOUT,
     },
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
 
+pub(crate) mod sub_tree;
+pub(crate) use sub_tree::*;
 pub(crate) mod leaf;
 pub(crate) use leaf::*;
 pub(crate) mod non_leaf;
@@ -28,11 +30,11 @@ impl Proof {
         Self { root: Some(root) }
     }
 
-    pub fn from_root_hash(root_hash: Digest) -> Self {
+    pub fn from_root_hash(root_id: IdTreeNodeId, root_hash: Digest) -> Self {
         if root_hash == Digest::zero() {
             Self::default()
         } else {
-            Self::from_subproof(SubProof::from_hash(root_hash))
+            Self::from_subproof(SubProof::from_hash(root_id, root_hash))
         }
     }
 

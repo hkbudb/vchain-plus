@@ -2,7 +2,7 @@ use super::{
     Digest, Digestible, IdTreeLeafNode, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader,
     IdTreeNonLeafNode, IdTreeObjId,
 };
-use crate::chain::{object::ObjId, IDTREE_FANOUT};
+use crate::chain::IDTREE_FANOUT;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{
