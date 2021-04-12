@@ -11,19 +11,20 @@ use super::{
     trie_tree::{TrieNode, TrieTreeNodeId},
     Parameter,
 };
+use ark_ec::PairingEngine;
 
 #[derive(Debug, Default)]
-struct FakeChain<K: Num> {
+struct FakeChain<K: Num, E: PairingEngine> {
     param: Option<Parameter>,
     block_head: HashMap<BlockId, BlockHead>,
     block_content: HashMap<BlockId, BlockContent>,
     id_tree_nodes: HashMap<IdTreeNodeId, IdTreeNode>,
-    bplus_tree_nodes: HashMap<BPlusTreeNodeId, BPlusTreeNode<K>>,
+    bplus_tree_nodes: HashMap<BPlusTreeNodeId, BPlusTreeNode<K, E>>,
     trie_tree_nodes: HashMap<TrieTreeNodeId, TrieNode>,
     objects: HashMap<ObjId, Object<K>>,
 }
 
-impl<K: Num> ReadInterface<K> for FakeChain<K> {
+impl<K: Num, E: PairingEngine> ReadInterface<K, E> for FakeChain<K, E> {
     fn get_parameter(&self) -> anyhow::Result<Parameter> {
         self.param.clone().context("failed to get param")
     }
@@ -52,7 +53,7 @@ impl<K: Num> ReadInterface<K> for FakeChain<K> {
     fn read_bplus_tree_node(
         &self,
         bplus_tree_node_id: BPlusTreeNodeId,
-    ) -> anyhow::Result<BPlusTreeNode<K>> {
+    ) -> anyhow::Result<BPlusTreeNode<K, E>> {
         self.bplus_tree_nodes
             .get(&bplus_tree_node_id)
             .cloned()
@@ -74,7 +75,7 @@ impl<K: Num> ReadInterface<K> for FakeChain<K> {
     }
 }
 
-impl<K: Num> WriteInterface<K> for FakeChain<K> {
+impl<K: Num, E: PairingEngine> WriteInterface<K, E> for FakeChain<K, E> {
     fn set_parameter(&mut self, param: Parameter) -> anyhow::Result<()> {
         self.param = Some(param);
         Ok(())
@@ -98,7 +99,7 @@ impl<K: Num> WriteInterface<K> for FakeChain<K> {
         Ok(())
     }
 
-    fn write_bplus_tree_node(&mut self, node: BPlusTreeNode<K>) -> anyhow::Result<()> {
+    fn write_bplus_tree_node(&mut self, node: BPlusTreeNode<K, E>) -> anyhow::Result<()> {
         let id = node.get_node_id();
         self.bplus_tree_nodes.insert(id, node);
         Ok(())

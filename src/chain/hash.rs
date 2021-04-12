@@ -11,27 +11,6 @@ pub(crate) fn range_hash<K: Num>(range: &Range<K>) -> Digest {
 }
 
 // #[inline]
-// pub(crate) fn bplus_tree_leaf_hash<K: Num>(num: K, acc_hash: &Digest) -> Digest {
-//     let mut state = blake2().to_state();
-//     state.update(num.to_digest().as_bytes());
-//     state.update(acc_hash.as_bytes());
-//     Digest::from(state.finalize())
-// }
-
-// #[inline]
-// pub(crate) fn bplus_tree_non_leaf_hash<'a, K: Num>(
-//     range: &Range<K>,
-//     acc_hash: &Digest,
-//     child_hashes: impl Iterator<Item = &'a Digest>,
-// ) -> Digest {
-//     let mut state = blake2().to_state();
-//     state.update(range.to_digest().as_bytes());
-//     state.update(acc_hash.as_bytes());
-//     state.update(concat_digest_ref(child_hashes).as_bytes());
-//     Digest::from(state.finalize())
-// }
-
-// #[inline]
 // pub(crate) fn trie_leaf_hash(acc_hash: Digest) -> Digest {
 //     acc_hash
 // }
