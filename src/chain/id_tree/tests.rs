@@ -1,3 +1,4 @@
+#![allow(unused)]
 use super::{
     read::{query_id_tree, query_without_proof, ReadContext},
     write::{Apply, WriteContext},
@@ -135,7 +136,7 @@ fn build_test_id_tree0() -> TestIdTree {
 
     let obj2 = dataset.pop().unwrap();
     let leaf2 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(6),
+        IdTreeNodeId(5),
         IdTreeObjId(obj2.id.unwrap() % (N * K) as u64),
         obj2.to_digest(),
     );
@@ -145,7 +146,7 @@ fn build_test_id_tree0() -> TestIdTree {
 
     let obj3 = dataset.pop().unwrap();
     let leaf3 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(10), // todo
+        IdTreeNodeId(8),
         IdTreeObjId(obj3.id.unwrap() % (N * K) as u64),
         obj3.to_digest(),
     );
@@ -162,7 +163,7 @@ fn build_test_id_tree0() -> TestIdTree {
     non_leaf1_child_hashes[1] = leaf2_hash;
     non_leaf1_child_hashes[2] = leaf3_hash;
     let non_leaf1 =
-        IdTreeNonLeafNode::new_dbg(IdTreeNodeId(9), non_leaf1_child_hashes, non_leaf1_child_ids);
+        IdTreeNonLeafNode::new_dbg(IdTreeNodeId(7), non_leaf1_child_hashes, non_leaf1_child_ids);
     let non_leaf1_id = non_leaf1.id;
     id_tree
         .nodes
@@ -178,7 +179,7 @@ fn build_test_id_tree1() -> TestIdTree {
 
     let obj1 = dataset.pop().unwrap();
     let leaf1 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(15),
+        IdTreeNodeId(13),
         IdTreeObjId(obj1.id.unwrap() % (N * K) as u64),
         obj1.to_digest(),
     );
@@ -188,7 +189,7 @@ fn build_test_id_tree1() -> TestIdTree {
 
     let obj2 = dataset.pop().unwrap();
     let leaf2 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(21),
+        IdTreeNodeId(17),
         IdTreeObjId(obj2.id.unwrap() % (N * K) as u64),
         obj2.to_digest(),
     );
@@ -198,7 +199,7 @@ fn build_test_id_tree1() -> TestIdTree {
 
     let obj3 = dataset.pop().unwrap();
     let leaf3 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(27),
+        IdTreeNodeId(21),
         IdTreeObjId(obj3.id.unwrap() % (N * K) as u64),
         obj3.to_digest(),
     );
@@ -215,7 +216,7 @@ fn build_test_id_tree1() -> TestIdTree {
     non_leaf1_child_hashes[1] = leaf2_hash;
     non_leaf1_child_hashes[2] = leaf3_hash;
     let non_leaf1 = IdTreeNonLeafNode::new_dbg(
-        IdTreeNodeId(26),
+        IdTreeNodeId(20),
         non_leaf1_child_hashes,
         non_leaf1_child_ids,
     );
@@ -227,7 +228,7 @@ fn build_test_id_tree1() -> TestIdTree {
 
     let obj4 = dataset.pop().unwrap();
     let leaf4 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(32),
+        IdTreeNodeId(25),
         IdTreeObjId(obj4.id.unwrap() % (N * K) as u64),
         obj4.to_digest(),
     );
@@ -237,7 +238,7 @@ fn build_test_id_tree1() -> TestIdTree {
 
     let obj5 = dataset.pop().unwrap();
     let leaf5 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(38),
+        IdTreeNodeId(29),
         IdTreeObjId(obj5.id.unwrap() % (N * K) as u64),
         obj5.to_digest(),
     );
@@ -247,7 +248,7 @@ fn build_test_id_tree1() -> TestIdTree {
 
     let obj6 = dataset.pop().unwrap();
     let leaf6 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(44),
+        IdTreeNodeId(33),
         IdTreeObjId(obj6.id.unwrap() % (N * K) as u64),
         obj6.to_digest(),
     );
@@ -264,7 +265,7 @@ fn build_test_id_tree1() -> TestIdTree {
     non_leaf2_child_hashes[1] = leaf5_hash;
     non_leaf2_child_hashes[2] = leaf6_hash;
     let non_leaf2 = IdTreeNonLeafNode::new_dbg(
-        IdTreeNodeId(43),
+        IdTreeNodeId(32),
         non_leaf2_child_hashes,
         non_leaf2_child_ids,
     );
@@ -276,7 +277,7 @@ fn build_test_id_tree1() -> TestIdTree {
 
     let obj7 = dataset.pop().unwrap();
     let leaf7 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(49),
+        IdTreeNodeId(37),
         IdTreeObjId(obj7.id.unwrap() % (N * K) as u64),
         obj7.to_digest(),
     );
@@ -286,7 +287,7 @@ fn build_test_id_tree1() -> TestIdTree {
 
     let obj8 = dataset.pop().unwrap();
     let leaf8 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(55),
+        IdTreeNodeId(41),
         IdTreeObjId(obj8.id.unwrap() % (N * K) as u64),
         obj8.to_digest(),
     );
@@ -296,7 +297,7 @@ fn build_test_id_tree1() -> TestIdTree {
 
     let obj9 = dataset.pop().unwrap();
     let leaf9 = IdTreeLeafNode::new_dbg(
-        IdTreeNodeId(61),
+        IdTreeNodeId(45),
         IdTreeObjId(obj9.id.unwrap() % (N * K) as u64),
         obj9.to_digest(),
     );
@@ -313,7 +314,7 @@ fn build_test_id_tree1() -> TestIdTree {
     non_leaf3_child_hashes[1] = leaf8_hash;
     non_leaf3_child_hashes[2] = leaf9_hash;
     let non_leaf3 = IdTreeNonLeafNode::new_dbg(
-        IdTreeNodeId(60),
+        IdTreeNodeId(44),
         non_leaf3_child_hashes,
         non_leaf3_child_ids,
     );
@@ -332,7 +333,7 @@ fn build_test_id_tree1() -> TestIdTree {
     non_leaf4_child_hashes[1] = non_leaf2_hash;
     non_leaf4_child_hashes[2] = non_leaf3_hash;
     let non_leaf4 = IdTreeNonLeafNode::new_dbg(
-        IdTreeNodeId(58),
+        IdTreeNodeId(43),
         non_leaf4_child_hashes,
         non_leaf4_child_ids,
     );

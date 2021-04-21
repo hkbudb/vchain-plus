@@ -1,3 +1,4 @@
+#![allow(unused)]
 use super::IDTREE_FANOUT;
 use crate::{
     create_id_type,

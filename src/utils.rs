@@ -49,3 +49,15 @@ mod tests {
         assert_eq!(TestId::next_id(), TestId(4));
     }
 }
+
+/*
+#[inline]
+pub fn cal_acc_val(set: &Set) -> AccValue<E> {
+    let mut rng = rand::thread_rng();
+    let q = 5;
+    let sk = AccSecretKey::<Bls12_381>::rand(&mut rng).into();
+    let pk = AccPublicKey::<Bls12_381>::gen_key(&sk, q);
+    let acc = AccValue::<Bls12_381>::from_set_sk(s, &sk, q);
+    acc
+}
+*/

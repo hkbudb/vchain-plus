@@ -78,17 +78,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         loop {
             self.outdated.insert(cur_id);
             let cur_node = match self.get_node(cur_id)? {
-                Some(mut n) => {
-                    match n.to_mut() {
-                        IdTreeNode::Leaf(n) => {
-                            n.id = IdTreeNodeId::next_id();
-                        }
-                        IdTreeNode::NonLeaf(n) => {
-                            n.id = IdTreeNodeId::next_id();
-                        }
-                    }
-                    n
-                }
+                Some(mut n) => n,
                 None => {
                     loop {
                         if cur_path_rev.len() == 0 {

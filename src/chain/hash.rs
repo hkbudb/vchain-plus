@@ -1,3 +1,4 @@
+#![allow(unused)]
 use super::{block::BlockId, /*id_tree::IdTreeObjId, */ object::ObjId, range::Range, traits::Num,};
 use crate::digest::{blake2, concat_digest, /*concat_digest_ref,*/ Digest, Digestible};
 use std::collections::HashSet;

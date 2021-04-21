@@ -141,6 +141,12 @@ mod tests {
         let actual = (&a) | (&b);
         let expect = set! {1, 2, 3, 4, 5};
         assert_eq!(actual, expect);
+        let mut c = set! {};
+        let d = set! {1};
+        let e = set! {2};
+        let c = &c | &d;
+        let c = &c | &e;
+        assert_eq!(set! {1, 2}, c);
     }
 
     #[test]
