@@ -27,22 +27,8 @@ impl<K: Num> Range<K> {
     }
 
     pub fn is_in_range(&self, v: K) -> bool {
-        self.0 <= v && v < self.1
+        self.0 <= v && v <= self.1
     }
-
-    // pub fn combine(&self, another: &Self) -> Self {
-    //     let l = if self.0 < another.0 {
-    //         self.0
-    //     } else {
-    //         another.0
-    //     };
-    //     let r = if self.0 > another.0 {
-    //         self.0
-    //     } else {
-    //         another.0
-    //     };
-    //     Self(l, r)
-    // }
 }
 
 impl<K: Num> Digestible for Range<K> {
