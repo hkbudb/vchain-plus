@@ -6,7 +6,6 @@ use crate::{
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct IdTreeNonLeaf {
-    //pub(crate) node_id: IdTreeNodeId,
     pub(crate) children: [Option<Box<SubProof>>; IDTREE_FANOUT],
 }
 

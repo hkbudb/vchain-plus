@@ -1,5 +1,5 @@
 use super::{
-    proof::{Proof, SubProof},
+    proof::{sub_proof::SubProof, Proof},
     write::fanout_nary_rev,
     Digest, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader, IdTreeObjId,
 };

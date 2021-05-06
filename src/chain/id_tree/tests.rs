@@ -352,7 +352,7 @@ fn test_write0() {
     let k = 3;
     let mut dataset = get_dataset0();
     let mut id_tree = TestIdTree::new();
-    println!("{:?}", id_tree);
+    // println!("{:?}", id_tree);
     let mut ctx = WriteContext::new(&id_tree, id_tree.root_id);
 
     for _i in 0..3 {
@@ -371,7 +371,6 @@ fn test_write0() {
 fn test_write1() {
     let mut dataset = get_dataset1();
     let mut id_tree = TestIdTree::new();
-    println!("{:?}", id_tree);
     let mut ctx = WriteContext::new(&id_tree, id_tree.root_id);
 
     for _i in 0..9 {
@@ -474,7 +473,6 @@ fn test_read1() {
 #[test]
 fn test_read_ctx1() {
     let id_tree = build_test_id_tree1();
-    //println!("{:?}", id_tree);
     let mut ctx1 = ReadContext::new(&id_tree, id_tree.root_id);
 
     let mut o1_keywords: HashSet<String> = HashSet::new();
@@ -494,13 +492,13 @@ fn test_read_ctx1() {
     assert_eq!(None, v);
     let v = ctx1.query(N * K, IdTreeObjId(0)).unwrap();
     assert_eq!(Some(o1_digest), v);
-    println!("{:?}", ctx1.get_proof());
+    //println!("{:?}", ctx1.get_proof());
     let v = ctx1.query(N * K, IdTreeObjId(1)).unwrap();
     assert_eq!(Some(o2_digest), v);
     let v = ctx1.query(N * K, IdTreeObjId(2)).unwrap();
     assert_eq!(Some(o3_digest), v);
     let p = ctx1.into_proof();
-    println!("ctx proof after querying 0: {:?}", p);
+    //println!("ctx proof after querying 0: {:?}", p);
     assert_eq!(
         id_tree
             .load_node(id_tree.root_id)

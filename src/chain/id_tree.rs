@@ -10,16 +10,10 @@ use serde::{Deserialize, Serialize};
 create_id_type!(IdTreeNodeId);
 create_id_type!(IdTreeObjId);
 
-pub mod read;
-//pub use read::*;
-pub mod write;
-//pub use write::*;
-pub mod proof;
-//pub use proof::*;
 pub mod hash;
-//pub use hash::*;
-pub mod tests;
-//use tests::*;
+pub mod proof;
+pub mod read;
+pub mod write;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum IdTreeNode {
@@ -149,3 +143,6 @@ impl Digestible for IdTreeNonLeafNode {
 pub trait IdTreeNodeLoader {
     fn load_node(&self, id: IdTreeNodeId) -> Result<Option<IdTreeNode>>;
 }
+
+#[cfg(test)]
+mod tests;

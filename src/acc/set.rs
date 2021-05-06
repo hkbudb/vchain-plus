@@ -38,6 +38,10 @@ impl Set {
     pub fn is_subset_of(&self, rhs: &Self) -> bool {
         self.iter().all(|v| rhs.contains(v))
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl Deref for Set {
@@ -141,7 +145,7 @@ mod tests {
         let actual = (&a) | (&b);
         let expect = set! {1, 2, 3, 4, 5};
         assert_eq!(actual, expect);
-        let mut c = set! {};
+        let c = set! {};
         let d = set! {1};
         let e = set! {2};
         let c = &c | &d;

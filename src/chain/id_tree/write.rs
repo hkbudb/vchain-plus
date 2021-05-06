@@ -81,7 +81,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                 Some(mut n) => n,
                 None => {
                     loop {
-                        if cur_path_rev.len() == 0 {
+                        if cur_path_rev.is_empty() {
                             let (leaf_id, leaf_hash) = self.write_leaf(obj_id, obj_hash);
                             temp_nodes.push(TempNode::Leaf {
                                 id: leaf_id,
@@ -113,7 +113,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                 IdTreeNode::NonLeaf(n) => {
                     let idx = cur_path_rev.pop().unwrap();
                     temp_nodes.push(TempNode::NonLeaf {
-                        node: IdTreeNonLeafNode::new(n.child_hashes.clone(), n.child_ids.clone()),
+                        node: IdTreeNonLeafNode::new(n.child_hashes, n.child_ids.clone()),
                         idx: idx,
                     });
 
@@ -170,7 +170,7 @@ mod tests {
         let expect_ten: Vec<usize> = vec![1, 3, 0, 7, 9, 1];
         let v_ten: Vec<usize> = fanout_nary_rev(197031, 10, 6);
         assert_eq!(v_ten, expect_ten);
-        dbg!(v_ten);
+        //dbg!(v_ten);
 
         let expect_two: Vec<usize> = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
         let v_two: Vec<usize> = fanout_nary_rev(1025, 2, 11);

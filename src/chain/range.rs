@@ -29,6 +29,26 @@ impl<K: Num> Range<K> {
     pub fn is_in_range(&self, v: K) -> bool {
         self.0 <= v && v <= self.1
     }
+
+    pub fn is_num(&self) -> bool {
+        self.0 == self.1
+    }
+
+    pub fn can_cover(&self, another: Self) -> bool {
+        self.0 <= another.0 && self.1 >= another.1
+    }
+
+    pub fn is_covered(&self, another: Self) -> bool {
+        another.0 <= self.0 && another.1 >= self.1
+    }
+
+    pub fn intersects(&self, another: Self) -> bool {
+        (self.0 <= another.0 && self.1 >= another.0) || (another.0 <= self.0 && another.1 >= self.0)
+    }
+
+    pub fn has_no_intersection(&self, another: Self) -> bool {
+        self.1 < another.0 || another.1 < self.0
+    }
 }
 
 impl<K: Num> Digestible for Range<K> {

@@ -49,4 +49,3 @@ mod tests {
         assert_eq!(TestId::next_id(), TestId(4));
     }
 }
-

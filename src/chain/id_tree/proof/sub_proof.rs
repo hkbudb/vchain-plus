@@ -1,4 +1,4 @@
-use super::{IdTreeLeaf, IdTreeNonLeaf, IdTreeSubTree};
+use super::{leaf::IdTreeLeaf, non_leaf::IdTreeNonLeaf, sub_tree::IdTreeSubTree};
 use crate::{
     chain::id_tree::{IdTreeNodeId, IdTreeObjId},
     digest::{Digest, Digestible},

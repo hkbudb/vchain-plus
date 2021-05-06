@@ -1,6 +1,7 @@
 use super::{range::Range, traits::Num, MAX_FANOUT};
 use crate::{
     acc::{set::Set, AccValue},
+    chain::PUB_KEY,
     create_id_type,
     digest::{Digest, Digestible},
 };
@@ -8,15 +9,12 @@ use anyhow::Result;
 use hash::{bplus_tree_leaf_hash, bplus_tree_non_leaf_hash};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use utils::cal_acc_val;
 
 create_id_type!(BPlusTreeNodeId);
 
 pub mod hash;
 pub mod proof;
 pub mod read;
-#[cfg(test)]
-pub mod tests;
 pub mod utils;
 pub mod write;
 
@@ -41,6 +39,13 @@ impl<K: Num> BPlusTreeNode<K> {
         }
     }
 
+    pub fn get_node_acc(&self) -> AccValue {
+        match self {
+            BPlusTreeNode::Leaf(n) => n.data_set_acc,
+            BPlusTreeNode::NonLeaf(n) => n.data_set_acc,
+        }
+    }
+
     pub fn from_leaf(l: BPlusTreeLeafNode<K>) -> Self {
         Self::Leaf(l)
     }
@@ -60,6 +65,20 @@ impl<K: Num> BPlusTreeNode<K> {
         match self {
             BPlusTreeNode::Leaf(n) => Range::new(n.num, n.num),
             BPlusTreeNode::NonLeaf(n) => n.range,
+        }
+    }
+
+    pub fn get_range_low(&self) -> K {
+        match self {
+            BPlusTreeNode::Leaf(n) => n.num,
+            BPlusTreeNode::NonLeaf(n) => n.range.get_low(),
+        }
+    }
+
+    pub fn get_range_high(&self) -> K {
+        match self {
+            BPlusTreeNode::Leaf(n) => n.num,
+            BPlusTreeNode::NonLeaf(n) => n.range.get_high(),
         }
     }
 }
@@ -83,23 +102,22 @@ pub struct BPlusTreeLeafNode<K: Num> {
 
 impl<K: Num> Digestible for BPlusTreeLeafNode<K> {
     fn to_digest(&self) -> Digest {
-        bplus_tree_leaf_hash(self.num , &self.data_set_acc.to_digest())
+        bplus_tree_leaf_hash(self.num, &self.data_set_acc.to_digest())
     }
 }
 
 impl<K: Num> BPlusTreeLeafNode<K> {
-    fn new(num: K, data_set: Set) -> Self {
-        let acc_val = cal_acc_val(&data_set);
+    fn new(num: K, data_set: Set, acc: AccValue) -> Self {
         Self {
             id: BPlusTreeNodeId::next_id(),
             num,
             data_set,
-            data_set_acc: acc_val,
+            data_set_acc: acc,
         }
     }
 
     fn new_dbg(id: BPlusTreeNodeId, num: K, data_set: Set) -> Self {
-        let acc_val = cal_acc_val(&data_set);
+        let acc_val = AccValue::from_set(&data_set, &PUB_KEY);
         Self {
             id,
             num,
@@ -123,15 +141,15 @@ impl<K: Num> BPlusTreeNonLeafNode<K> {
     pub fn new(
         range: Range<K>,
         data_set: Set,
+        data_set_acc: AccValue,
         child_hashes: SmallVec<[Digest; MAX_FANOUT]>,
         child_ids: SmallVec<[BPlusTreeNodeId; MAX_FANOUT]>,
     ) -> Self {
-        let acc_val = cal_acc_val(&data_set);
         Self {
             id: BPlusTreeNodeId::next_id(),
             range,
             data_set,
-            data_set_acc: acc_val,
+            data_set_acc,
             child_hashes,
             child_ids,
         }
@@ -141,15 +159,15 @@ impl<K: Num> BPlusTreeNonLeafNode<K> {
         id: BPlusTreeNodeId,
         range: Range<K>,
         data_set: Set,
+        data_set_acc: AccValue,
         child_hashes: SmallVec<[Digest; MAX_FANOUT]>,
         child_ids: SmallVec<[BPlusTreeNodeId; MAX_FANOUT]>,
     ) -> Self {
-        let acc_val = cal_acc_val(&data_set);
         Self {
             id: id,
             range,
             data_set,
-            data_set_acc: acc_val,
+            data_set_acc,
             child_hashes,
             child_ids,
         }
@@ -185,3 +203,6 @@ impl<K: Num> Digestible for BPlusTreeNonLeafNode<K> {
 pub trait BPlusTreeNodeLoader<K: Num> {
     fn load_node(&self, id: BPlusTreeNodeId) -> Result<Option<BPlusTreeNode<K>>>;
 }
+
+#[cfg(test)]
+mod tests;
