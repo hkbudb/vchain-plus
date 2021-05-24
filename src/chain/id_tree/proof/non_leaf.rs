@@ -1,12 +1,16 @@
 use super::{sub_proof::SubProof, sub_tree::IdTreeSubTree};
 use crate::{
-    chain::id_tree::{hash::id_tree_non_leaf_proof_hash, IdTreeNodeId, IdTreeObjId, IDTREE_FANOUT},
+    chain::id_tree::{
+        hash::id_tree_non_leaf_proof_hash, IdTreeNodeId, IdTreeObjId, MAX_INLINE_FANOUT,
+    },
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+use smallvec::SmallVec;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct IdTreeNonLeaf {
-    pub(crate) children: [Option<Box<SubProof>>; IDTREE_FANOUT],
+    pub(crate) children: SmallVec<[Option<Box<SubProof>>; MAX_INLINE_FANOUT]>,
 }
 
 impl Digestible for IdTreeNonLeaf {
@@ -19,10 +23,24 @@ impl Digestible for IdTreeNonLeaf {
     }
 }
 
+impl Default for IdTreeNonLeaf {
+    fn default() -> Self {
+        Self {
+            children: SmallVec::from_vec(vec![
+                Some(Box::new(SubProof::from_hash(
+                    IdTreeNodeId(0),
+                    Digest::zero()
+                )));
+                MAX_INLINE_FANOUT
+            ]),
+        }
+    }
+}
+
 impl IdTreeNonLeaf {
     pub(crate) fn from_hashes(
-        children: &[Digest; IDTREE_FANOUT],
-        child_node_ids: &[IdTreeNodeId; IDTREE_FANOUT],
+        children: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
+        child_node_ids: SmallVec<[IdTreeNodeId; MAX_INLINE_FANOUT]>,
     ) -> Self {
         let mut node = IdTreeNonLeaf::default();
         for (i, child) in children.iter().enumerate() {
@@ -44,16 +62,15 @@ impl IdTreeNonLeaf {
         unsafe { self.children.get_unchecked_mut(index) }
     }
 
-    pub(crate) fn set_child(&mut self, index: usize, child: SubProof) {
-        self.children[index] = Some(Box::new(child));
-    }
-
     pub(crate) fn value_hash(
         &self,
         obj_id: IdTreeObjId,
         cur_path_rev: &mut Vec<usize>,
     ) -> Option<Digest> {
-        let child_idx = cur_path_rev.pop().unwrap();
+        let child_idx = match cur_path_rev.pop() {
+            Some(idx) => idx,
+            None => return None,
+        };
         match self.get_child(child_idx) {
             None => Some(Digest::zero()),
             Some(child) => child.value_hash(obj_id, cur_path_rev),
@@ -65,7 +82,10 @@ impl IdTreeNonLeaf {
         obj_id: IdTreeObjId,
         cur_path_rev: &'a mut Vec<usize>,
     ) -> Option<(*mut SubProof, IdTreeNodeId, &'a mut Vec<usize>)> {
-        let child_idx = cur_path_rev.pop().unwrap();
+        let child_idx = match cur_path_rev.pop() {
+            Some(idx) => idx,
+            None => return None,
+        };
         match self.get_child_mut(child_idx) {
             Some(child) => child.search_prefix(obj_id, cur_path_rev),
             None => None,

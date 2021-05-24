@@ -2,8 +2,7 @@ use super::{
     Digest, Digestible, IdTreeLeafNode, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader,
     IdTreeNonLeafNode, IdTreeObjId,
 };
-use crate::chain::IDTREE_FANOUT;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -27,7 +26,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         Self {
             node_loader,
             apply: Apply {
-                root_id: root_id,
+                root_id,
                 nodes: HashMap::new(),
             },
             outdated: HashSet::new(),
@@ -56,17 +55,20 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
     fn get_node(&self, id: IdTreeNodeId) -> Result<Option<Cow<IdTreeNode>>> {
         Ok(match self.apply.nodes.get(&id) {
             Some(n) => Some(Cow::Borrowed(n)),
-            None => {
-                let res = self.node_loader.load_node(id)?.map(Cow::Owned);
-                res
-            }
+            None => self.node_loader.load_node(id)?.map(Cow::Owned),
         })
     }
 
-    pub fn insert(&mut self, obj_id: IdTreeObjId, obj_hash: Digest, n_k: usize) -> Result<()> {
+    pub fn insert(
+        &mut self,
+        obj_id: IdTreeObjId,
+        obj_hash: Digest,
+        n_k: usize,
+        fanout: usize,
+    ) -> Result<()> {
         let mut cur_id = self.apply.root_id;
-        let depth = (n_k as f64).log(IDTREE_FANOUT as f64).floor() as usize;
-        let mut cur_path_rev = fanout_nary_rev(obj_id.unwrap(), IDTREE_FANOUT as u64, depth);
+        let depth = (n_k as f64).log(fanout as f64).floor() as usize;
+        let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
 
         enum TempNode {
             Leaf { id: IdTreeNodeId, hash: Digest },
@@ -78,7 +80,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         loop {
             self.outdated.insert(cur_id);
             let cur_node = match self.get_node(cur_id)? {
-                Some(mut n) => n,
+                Some(n) => n,
                 None => {
                     loop {
                         if cur_path_rev.is_empty() {
@@ -89,11 +91,13 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                             });
                             break;
                         } else {
-                            let idx = cur_path_rev.pop().unwrap();
+                            let idx = cur_path_rev
+                                .pop()
+                                .ok_or_else(|| anyhow!("Path is empty!"))?;
                             let non_leaf = IdTreeNonLeafNode::new_ept();
                             temp_nodes.push(TempNode::NonLeaf {
                                 node: non_leaf,
-                                idx: idx,
+                                idx,
                             });
                         }
                     }
@@ -111,13 +115,17 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                     break;
                 }
                 IdTreeNode::NonLeaf(n) => {
-                    let idx = cur_path_rev.pop().unwrap();
+                    let idx = cur_path_rev
+                        .pop()
+                        .ok_or_else(|| anyhow!("Path is empty!"))?;
                     temp_nodes.push(TempNode::NonLeaf {
-                        node: IdTreeNonLeafNode::new(n.child_hashes, n.child_ids.clone()),
-                        idx: idx,
+                        node: IdTreeNonLeafNode::new(n.child_hashes.clone(), n.child_ids.clone()),
+                        idx,
                     });
 
-                    cur_id = *n.get_child_id(idx).unwrap();
+                    cur_id = *n
+                        .get_child_id(idx)
+                        .ok_or_else(|| anyhow!("Cannot find child id!"))?;
                 }
             }
         }
@@ -131,8 +139,12 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                     new_root_hash = hash;
                 }
                 TempNode::NonLeaf { mut node, idx } => {
-                    *node.get_child_id_mut(idx).unwrap() = new_root_id;
-                    *node.get_child_hash_mut(idx).unwrap() = new_root_hash;
+                    *node
+                        .get_child_id_mut(idx)
+                        .ok_or_else(|| anyhow!("Cannot find child id!"))? = new_root_id;
+                    *node
+                        .get_child_hash_mut(idx)
+                        .ok_or_else(|| anyhow!("Cannot find child hash!"))? = new_root_hash;
                     let (id, hash) = self.write_non_leaf(node);
                     new_root_id = id;
                     new_root_hash = hash;

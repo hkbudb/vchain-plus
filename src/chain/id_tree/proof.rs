@@ -1,8 +1,5 @@
 use crate::{
-    chain::{
-        id_tree::{write::fanout_nary_rev, IdTreeNodeId, IdTreeObjId},
-        IDTREE_FANOUT,
-    },
+    chain::id_tree::{write::fanout_nary_rev, IdTreeNodeId, IdTreeObjId},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
@@ -35,7 +32,6 @@ impl Proof {
         }
     }
 
-    // return the hash of the root for verification
     pub fn root_hash(&self) -> Digest {
         match self.root.as_ref() {
             Some(root) => root.to_digest(),
@@ -43,10 +39,9 @@ impl Proof {
         }
     }
 
-    // return the result leaf node hash (not obj_hash)
-    pub fn value_hash(&self, obj_id: IdTreeObjId, n_k: usize) -> Option<Digest> {
-        let depth = (n_k as f64).log(IDTREE_FANOUT as f64).floor() as usize;
-        let mut cur_path_rev = fanout_nary_rev(obj_id.unwrap(), IDTREE_FANOUT as u64, depth);
+    pub fn value_hash(&self, obj_id: IdTreeObjId, n_k: usize, fanout: usize) -> Option<Digest> {
+        let depth = (n_k as f64).log(fanout as f64).floor() as usize;
+        let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
         match self.root.as_ref() {
             None => Some(Digest::zero()),
             Some(root) => root.value_hash(obj_id, &mut cur_path_rev),

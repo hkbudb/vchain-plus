@@ -1,5 +1,4 @@
-#![allow(unused)]
-use super::IDTREE_FANOUT;
+use super::MAX_INLINE_FANOUT;
 use crate::{
     create_id_type,
     digest::{Digest, Digestible},
@@ -7,6 +6,7 @@ use crate::{
 use anyhow::Result;
 use hash::{id_tree_leaf_hash, id_tree_non_leaf_hash};
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 create_id_type!(IdTreeNodeId);
 create_id_type!(IdTreeObjId);
 
@@ -62,14 +62,6 @@ impl IdTreeLeafNode {
             obj_hash,
         }
     }
-
-    fn new_dbg(id: IdTreeNodeId, obj_id: IdTreeObjId, obj_hash: Digest) -> Self {
-        Self {
-            id,
-            obj_id,
-            obj_hash,
-        }
-    }
 }
 
 impl Digestible for IdTreeLeafNode {
@@ -81,29 +73,17 @@ impl Digestible for IdTreeLeafNode {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct IdTreeNonLeafNode {
     pub id: IdTreeNodeId,
-    pub child_hashes: [Digest; IDTREE_FANOUT],
-    pub child_ids: [IdTreeNodeId; IDTREE_FANOUT],
+    pub child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
+    pub child_ids: SmallVec<[IdTreeNodeId; MAX_INLINE_FANOUT]>,
 }
 
 impl IdTreeNonLeafNode {
     pub fn new(
-        child_hashes: [Digest; IDTREE_FANOUT],
-        child_ids: [IdTreeNodeId; IDTREE_FANOUT],
+        child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
+        child_ids: SmallVec<[IdTreeNodeId; MAX_INLINE_FANOUT]>,
     ) -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
-            child_hashes,
-            child_ids,
-        }
-    }
-
-    pub fn new_dbg(
-        id: IdTreeNodeId,
-        child_hashes: [Digest; IDTREE_FANOUT],
-        child_ids: [IdTreeNodeId; IDTREE_FANOUT],
-    ) -> Self {
-        Self {
-            id,
             child_hashes,
             child_ids,
         }
@@ -112,8 +92,8 @@ impl IdTreeNonLeafNode {
     pub fn new_ept() -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
-            child_hashes: [Digest::zero(); IDTREE_FANOUT],
-            child_ids: [IdTreeNodeId(0); IDTREE_FANOUT],
+            child_hashes: SmallVec::from_vec(vec![Digest::zero(); MAX_INLINE_FANOUT]),
+            child_ids: SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_INLINE_FANOUT]),
         }
     }
 
