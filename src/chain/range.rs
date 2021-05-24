@@ -1,7 +1,7 @@
 use super::{hash::range_hash, traits::Num};
 use crate::digest::{Digest, Digestible};
 use serde::{Deserialize, Serialize};
-/// range is [l, h)
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Range<K: Num>(K, K);
 
@@ -43,7 +43,7 @@ impl<K: Num> Range<K> {
     }
 
     pub fn intersects(&self, another: Self) -> bool {
-        (self.0 <= another.0 && self.1 >= another.0) || (another.0 <= self.0 && another.1 >= self.0)
+        self.0 <= another.1 && another.0 <= self.1
     }
 
     pub fn has_no_intersection(&self, another: Self) -> bool {
