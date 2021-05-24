@@ -27,7 +27,7 @@ macro_rules! create_id_type {
                 static ID_CNT: AtomicU64 = AtomicU64::new(0);
                 Self(ID_CNT.fetch_add(1, Ordering::SeqCst))
             }
-            pub fn unwrap(&self) -> u64 {
+            pub fn get_num(&self) -> u64 {
                 match self {
                     $name(n) => *n,
                 }
@@ -43,8 +43,8 @@ mod tests {
         create_id_type!(TestId);
         assert_eq!(TestId::next_id(), TestId(0));
         assert_eq!(TestId::next_id(), TestId(1));
-        assert_eq!(TestId::next_id().unwrap(), 2);
-        assert_eq!(TestId::next_id().unwrap(), 3);
+        assert_eq!(TestId::next_id().get_num(), 2);
+        assert_eq!(TestId::next_id().get_num(), 3);
         assert_eq!(TestId(2), TestId(2));
         assert_eq!(TestId::next_id(), TestId(4));
     }
