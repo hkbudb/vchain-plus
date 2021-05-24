@@ -3,8 +3,8 @@ use super::{
     TrieNode, TrieNodeId, TrieNodeLoader,
 };
 use crate::{
-    acc::{AccValue, Set},
-    chain::{trie_tree::split_at_common_prefix2, PUB_KEY},
+    acc::{AccValue, Set, AccPublicKey},
+    chain::{trie_tree::split_at_common_prefix2},
     digest::{Digest, Digestible},
 };
 use anyhow::{anyhow, Result};
@@ -14,11 +14,12 @@ pub fn query_trie(
     node_loader: &impl TrieNodeLoader,
     root_id: TrieNodeId,
     keyword: String,
+    pk: &AccPublicKey
 ) -> Result<(Set, AccValue, Proof)> {
     let root_node = node_loader
         .load_node(root_id)?
         .ok_or_else(|| anyhow!("Cannot find Node!"))?;
-    let (res, acc, p) = inner_query_trie(node_loader, root_id, root_node, keyword)?;
+    let (res, acc, p) = inner_query_trie(node_loader, root_id, root_node, keyword, pk)?;
     Ok((res, acc, Proof::from_subproof(p)))
 }
 
@@ -27,6 +28,7 @@ fn inner_query_trie(
     root_id: TrieNodeId,
     root_node: TrieNode,
     keyword: String,
+    pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, SubProof)> {
     use super::proof::{leaf::TrieLeaf, non_leaf::TrieNonLeaf};
 
@@ -53,7 +55,7 @@ fn inner_query_trie(
                     }
                 } else {
                     query_val = Set::new();
-                    res_acc = AccValue::from_set(&query_val, &PUB_KEY);
+                    res_acc = AccValue::from_set(&query_val, pk);
                     unsafe {
                         *cur_proof = SubProof::from_hash(n.id, n.rest.clone(), n.to_digest());
                     }
@@ -104,7 +106,7 @@ fn inner_query_trie(
                     }
                     None => {
                         query_val = Set::new();
-                        res_acc = AccValue::from_set(&query_val, &PUB_KEY);
+                        res_acc = AccValue::from_set(&query_val, pk);
                         unsafe {
                             *cur_proof = SubProof::from_hash(n.id, n.nibble.clone(), n.to_digest());
                         }
@@ -153,7 +155,7 @@ impl<L: TrieNodeLoader> ReadContext<L> {
         self.proof
     }
 
-    pub fn query(&mut self, keyword: String) -> Result<(Set, AccValue)> {
+    pub fn query(&mut self, keyword: String, pk: &AccPublicKey) -> Result<(Set, AccValue)> {
         let query_val: Set;
         let res_acc: AccValue;
         match self.proof.root.as_mut() {
@@ -164,7 +166,7 @@ impl<L: TrieNodeLoader> ReadContext<L> {
                         .load_node(sub_root_id)?
                         .ok_or_else(|| anyhow!("Cannot find node!"))?;
                     let (v, a, p) =
-                        inner_query_trie(&self.node_loader, sub_root_id, sub_root_node, cur_key)?;
+                        inner_query_trie(&self.node_loader, sub_root_id, sub_root_node, cur_key, pk)?;
                     unsafe {
                         *sub_proof = p;
                     }
@@ -173,11 +175,11 @@ impl<L: TrieNodeLoader> ReadContext<L> {
                 }
                 None => {
                     query_val = Set::new();
-                    res_acc = AccValue::from_set(&query_val, &PUB_KEY);
+                    res_acc = AccValue::from_set(&query_val, pk);
                 }
             },
             None => {
-                let (v, a, p) = query_trie(&self.node_loader, self.root_id, keyword)?;
+                let (v, a, p) = query_trie(&self.node_loader, self.root_id, keyword, pk)?;
                 self.proof = p;
                 query_val = v;
                 res_acc = a;

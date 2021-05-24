@@ -3,8 +3,8 @@ use super::{
     Digest, Digestible,
 };
 use crate::{
-    acc::{AccValue, Set},
-    chain::{id_tree::IdTreeObjId, range::Range, traits::Num, MAX_INLINE_FANOUT, PUB_KEY},
+    acc::{AccPublicKey, AccValue, Set},
+    chain::{id_tree::IdTreeObjId, range::Range, traits::Num, MAX_INLINE_FANOUT},
     set,
 };
 use anyhow::{anyhow, Result};
@@ -70,13 +70,19 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
         })
     }
 
-    pub fn insert(&mut self, key: K, obj_id: IdTreeObjId, fanout: usize) -> Result<()> {
+    pub fn insert(
+        &mut self,
+        key: K,
+        obj_id: IdTreeObjId,
+        fanout: usize,
+        pk: &AccPublicKey,
+    ) -> Result<()> {
         let set = match obj_id {
             IdTreeObjId(id) => {
                 set! {id}
             }
         };
-        let new_acc = AccValue::from_set(&set, &PUB_KEY);
+        let new_acc = AccValue::from_set(&set, pk);
 
         let mut cur_id = self.apply.root_id;
         let mut insert_flag = false;
@@ -434,13 +440,19 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
         Ok(())
     }
 
-    pub fn delete(&mut self, key: K, obj_id: IdTreeObjId, fanout: usize) -> Result<()> {
+    pub fn delete(
+        &mut self,
+        key: K,
+        obj_id: IdTreeObjId,
+        fanout: usize,
+        pk: &AccPublicKey,
+    ) -> Result<()> {
         let set = match obj_id {
             IdTreeObjId(id) => {
                 set! {id}
             }
         };
-        let delta_acc = AccValue::from_set(&set, &PUB_KEY);
+        let delta_acc = AccValue::from_set(&set, pk);
         let mut cur_id = self.apply.root_id;
 
         #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

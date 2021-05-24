@@ -6,10 +6,11 @@ use super::{
 };
 use crate::{
     acc::{AccValue, Set},
-    chain::{id_tree::IdTreeObjId, range::Range, traits::Num, MAX_INLINE_FANOUT, PUB_KEY},
+    chain::{id_tree::IdTreeObjId, range::Range, traits::Num, MAX_INLINE_FANOUT},
     digest::{Digest, Digestible},
     set,
 };
+use super::super::tests::PUB_KEY;
 
 use anyhow::Result;
 use smallvec::SmallVec;
@@ -143,14 +144,14 @@ fn test_read() {
     let ids: Vec<u64> = get_dataset().1;
 
     for i in 0..30 {
-        ctx.insert(keys[i], IdTreeObjId(ids[i]), FANOUT).unwrap();
+        ctx.insert(keys[i], IdTreeObjId(ids[i]), FANOUT, &PUB_KEY).unwrap();
     }
 
     let changes = ctx.changes();
     test_b_tree.apply(changes);
 
     let query_range = Range::new(1, 4);
-    let (_v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range).unwrap();
+    let (_v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range, &PUB_KEY).unwrap();
 
     p.verify(
         test_b_tree
@@ -160,11 +161,12 @@ fn test_read() {
             .to_digest(),
         query_range,
         acc,
+        &PUB_KEY
     )
     .unwrap();
 
     let query_range = Range::new(3, 10);
-    let (_v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range).unwrap();
+    let (_v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range, &PUB_KEY).unwrap();
     p.verify(
         test_b_tree
             .load_node(test_b_tree.root_id)
@@ -173,11 +175,12 @@ fn test_read() {
             .to_digest(),
         query_range,
         acc,
+        &PUB_KEY
     )
     .unwrap();
 
     let query_range = Range::new(5, 30);
-    let (_v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range).unwrap();
+    let (_v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range, &PUB_KEY).unwrap();
     p.verify(
         test_b_tree
             .load_node(test_b_tree.root_id)
@@ -186,6 +189,7 @@ fn test_read() {
             .to_digest(),
         query_range,
         acc,
+        &PUB_KEY,
     )
     .unwrap();
 
@@ -255,7 +259,7 @@ fn test_write() {
     let mut test_b_tree0 = TestBPlusTree::<u32>::new();
     let mut ctx0 = WriteContext::new(&test_b_tree0, test_b_tree0.root_id);
     for i in 0..1 {
-        ctx0.insert(keys[i], IdTreeObjId(ids[i]), FANOUT).unwrap();
+        ctx0.insert(keys[i], IdTreeObjId(ids[i]), FANOUT, &PUB_KEY).unwrap();
     }
     let changes0 = ctx0.changes();
     test_b_tree0.apply(changes0);
@@ -264,7 +268,7 @@ fn test_write() {
     let mut test_b_tree1 = TestBPlusTree::<u32>::new();
     let mut ctx1 = WriteContext::new(&test_b_tree1, test_b_tree1.root_id);
     for i in 0..2 {
-        ctx1.insert(keys[i], IdTreeObjId(ids[i]), FANOUT).unwrap();
+        ctx1.insert(keys[i], IdTreeObjId(ids[i]), FANOUT, &PUB_KEY).unwrap();
     }
     let changes1 = ctx1.changes();
     test_b_tree1.apply(changes1);
@@ -295,7 +299,7 @@ fn test_rich() {
     let mut ctx = WriteContext::new(&test_b_tree, test_b_tree.root_id);
     let upper_bound = 10000;
     for i in 0..upper_bound {
-        ctx.insert(i, IdTreeObjId(i as u64), FANOUT).unwrap();
+        ctx.insert(i, IdTreeObjId(i as u64), FANOUT, &PUB_KEY).unwrap();
     }
     let changes = ctx.changes();
     test_b_tree.apply(changes);

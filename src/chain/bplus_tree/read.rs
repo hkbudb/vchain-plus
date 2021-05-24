@@ -3,8 +3,8 @@ use super::{
     BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader,
 };
 use crate::{
-    acc::{AccValue, Set},
-    chain::{range::Range, traits::Num, MAX_INLINE_FANOUT, PUB_KEY},
+    acc::{AccValue, Set, AccPublicKey},
+    chain::{range::Range, traits::Num, MAX_INLINE_FANOUT},
     digest::{Digest, Digestible},
 };
 use anyhow::{anyhow, Result};
@@ -15,8 +15,9 @@ pub fn range_query<K: Num>(
     node_loader: impl BPlusTreeNodeLoader<K>,
     root_id: BPlusTreeNodeId,
     range: Range<K>,
+    pk: &AccPublicKey
 ) -> Result<(Set, AccValue, Proof<K>)> {
-    let (res, acc, p) = inner_range_query(node_loader, root_id, range)?;
+    let (res, acc, p) = inner_range_query(node_loader, root_id, range, pk)?;
     Ok((res, acc, Proof::from_subproof(p)))
 }
 
@@ -24,13 +25,14 @@ fn inner_range_query<K: Num>(
     node_loader: impl BPlusTreeNodeLoader<K>,
     root_id: BPlusTreeNodeId,
     range: Range<K>,
+    pk: &AccPublicKey
 ) -> Result<(Set, AccValue, SubProof<K>)> {
     use super::proof::{
         leaf::BPlusTreeLeaf, non_leaf::BPlusTreeNonLeaf, res_sub_tree::BPlusTreeResSubTree,
     };
 
     let mut query_res = Set::new();
-    let mut res_acc_val: AccValue = AccValue::from_set(&query_res, &PUB_KEY);
+    let mut res_acc_val: AccValue = AccValue::from_set(&query_res, pk);
     let mut query_proof = SubProof::from_hash(range, Digest::zero());
 
     let root_node = node_loader

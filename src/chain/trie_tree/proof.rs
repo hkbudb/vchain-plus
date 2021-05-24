@@ -1,7 +1,6 @@
 use super::TrieNodeId;
 use crate::{
-    acc::{AccValue, Set},
-    chain::PUB_KEY,
+    acc::{AccValue, Set, AccPublicKey},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
@@ -34,7 +33,6 @@ impl Proof {
         }
     }
 
-    // return the hash of the root for verification
     pub fn root_hash(&self) -> Digest {
         match self.root.as_ref() {
             Some(root) => root.to_digest(),
@@ -42,13 +40,12 @@ impl Proof {
         }
     }
 
-    // return the acc of the result set based on keyword
-    pub fn value_acc(&self, keyword: String) -> AccValue {
+    pub fn value_acc(&self, keyword: String, pk: &AccPublicKey) -> AccValue {
         match self.root.as_ref() {
-            Some(root) => root.value_acc(keyword),
+            Some(root) => root.value_acc(keyword, pk),
             None => {
                 let empty_set = Set::new();
-                AccValue::from_set(&empty_set, &PUB_KEY)
+                AccValue::from_set(&empty_set, pk)
             }
         }
     }

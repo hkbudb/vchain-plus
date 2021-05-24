@@ -3,8 +3,9 @@ use super::{
     TrieNodeLoader, TrieNonLeafNode,
 };
 use crate::{
-    chain::{id_tree::IdTreeObjId, PUB_KEY},
+    chain::{id_tree::IdTreeObjId},
     set,
+    acc::AccPublicKey,
 };
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -69,13 +70,13 @@ impl<L: TrieNodeLoader> WriteContext<L> {
         })
     }
 
-    pub fn insert(&mut self, key: String, obj_id: IdTreeObjId) -> Result<()> {
+    pub fn insert(&mut self, key: String, obj_id: IdTreeObjId, pk: &AccPublicKey) -> Result<()> {
         let set = match obj_id {
             IdTreeObjId(id) => {
                 set! {id}
             }
         };
-        let new_acc = AccValue::from_set(&set, &PUB_KEY);
+        let new_acc = AccValue::from_set(&set, pk);
         let mut cur_id = self.apply.root_id;
         let mut cur_key = key;
 
@@ -105,7 +106,7 @@ impl<L: TrieNodeLoader> WriteContext<L> {
                         let leaf_set = &set | &n.data_set;
                         let sets_inter = (&set) & (&n.data_set);
                         let leaf_acc =
-                            new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, &PUB_KEY);
+                            new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
                         let (leaf_id, leaf_hash) = self.write_leaf(cur_key, leaf_set, leaf_acc);
                         temp_nodes.push(TempNode::Leaf {
                             id: leaf_id,
@@ -118,7 +119,7 @@ impl<L: TrieNodeLoader> WriteContext<L> {
                         let non_leaf_set = &set | &n.data_set;
                         let sets_inter = (&set) & (&n.data_set);
                         let non_leaf_acc =
-                            new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, &PUB_KEY);
+                            new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
                         let node_data_set = n.data_set.clone();
                         let node_acc = n.data_set_acc;
                         let (node_leaf_id, node_leaf_hash) =
@@ -147,7 +148,7 @@ impl<L: TrieNodeLoader> WriteContext<L> {
                     let non_leaf_set = &set | &n.data_set;
                     let sets_inter = (&set) & (&n.data_set);
                     let non_leaf_acc =
-                        new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, &PUB_KEY);
+                        new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
                     if common_key == n.nibble {
                         match n.children.get(&cur_idx) {
                             Some((id, _digest)) => {
@@ -241,13 +242,13 @@ impl<L: TrieNodeLoader> WriteContext<L> {
         Ok(())
     }
 
-    pub fn delete(&mut self, key: String, obj_id: IdTreeObjId) -> Result<()> {
+    pub fn delete(&mut self, key: String, obj_id: IdTreeObjId, pk: &AccPublicKey) -> Result<()> {
         let set = match obj_id {
             IdTreeObjId(id) => {
                 set! {id}
             }
         };
-        let delta_acc = AccValue::from_set(&set, &PUB_KEY);
+        let delta_acc = AccValue::from_set(&set, pk);
         let mut cur_id = self.apply.root_id;
         let mut cur_key = key;
 

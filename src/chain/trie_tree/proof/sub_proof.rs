@@ -1,7 +1,6 @@
 use super::{super::TrieNodeId, leaf::TrieLeaf, non_leaf::TrieNonLeaf, sub_tree::TrieSubTree};
 use crate::{
-    acc::{AccValue, Set},
-    chain::PUB_KEY,
+    acc::{AccValue, Set, AccPublicKey},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
@@ -46,14 +45,14 @@ impl SubProof {
         Self::Leaf(Box::new(l))
     }
 
-    pub(crate) fn value_acc(&self, cur_key: String) -> AccValue {
+    pub(crate) fn value_acc(&self, cur_key: String, pk: &AccPublicKey) -> AccValue {
         match self {
             SubProof::Hash(_) => {
                 let empty_set = Set::new();
-                AccValue::from_set(&empty_set, &PUB_KEY)
+                AccValue::from_set(&empty_set, pk)
             }
-            SubProof::Leaf(n) => n.value_acc(cur_key),
-            SubProof::NonLeaf(n) => n.value_acc(cur_key),
+            SubProof::Leaf(n) => n.value_acc(cur_key, pk),
+            SubProof::NonLeaf(n) => n.value_acc(cur_key, pk),
         }
     }
 

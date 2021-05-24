@@ -8,23 +8,33 @@ use super::{
     id_tree::{IdTreeNode, IdTreeNodeId},
     object::{ObjId, Object},
     traits::{Num, ReadInterface, WriteInterface},
-    trie_tree::{TrieNode, TrieTreeNodeId},
+    trie_tree::{TrieNode, TrieNodeId},
     Parameter,
 };
-//use ark_ec::PairingEngine;
+use crate::acc::{AccPublicKey, AccSecretKey, AccSecretKeyWithPowCache};
+use once_cell::sync::Lazy;
+use rand::{prelude::*, rngs::StdRng};
+
+const Q: u64 = 50; // to be modified
+static SEC_KEY: Lazy<AccSecretKeyWithPowCache> = Lazy::new(|| {
+    let mut rng = StdRng::seed_from_u64(123_456_789u64);
+    let sk = AccSecretKey::rand(&mut rng);
+    sk.into()
+});
+pub(crate) static PUB_KEY: Lazy<AccPublicKey> = Lazy::new(|| AccPublicKey::gen_key(&(*SEC_KEY), Q));
 
 #[derive(Debug, Default)]
-struct FakeChain<K: Num /*, E: PairingEngine*/> {
+struct FakeChain<K: Num> {
     param: Option<Parameter>,
     block_head: HashMap<BlockId, BlockHead>,
     block_content: HashMap<BlockId, BlockContent>,
     id_tree_nodes: HashMap<IdTreeNodeId, IdTreeNode>,
-    bplus_tree_nodes: HashMap<BPlusTreeNodeId, BPlusTreeNode<K /*, E*/>>,
-    trie_tree_nodes: HashMap<TrieTreeNodeId, TrieNode>,
+    bplus_tree_nodes: HashMap<BPlusTreeNodeId, BPlusTreeNode<K>>,
+    trie_tree_nodes: HashMap<TrieNodeId, TrieNode>,
     objects: HashMap<ObjId, Object<K>>,
 }
 
-impl<K: Num /*, E: PairingEngine*/> ReadInterface<K /*, E*/> for FakeChain<K /*, E*/> {
+impl<K: Num> ReadInterface<K> for FakeChain<K> {
     fn get_parameter(&self) -> anyhow::Result<Parameter> {
         self.param.clone().context("failed to get param")
     }
@@ -53,14 +63,14 @@ impl<K: Num /*, E: PairingEngine*/> ReadInterface<K /*, E*/> for FakeChain<K /*,
     fn read_bplus_tree_node(
         &self,
         bplus_tree_node_id: BPlusTreeNodeId,
-    ) -> anyhow::Result<BPlusTreeNode<K /*, E*/>> {
+    ) -> anyhow::Result<BPlusTreeNode<K>> {
         self.bplus_tree_nodes
             .get(&bplus_tree_node_id)
             .cloned()
             .context("failed to read bplus tree node")
     }
 
-    fn read_trie_tree_node(&self, trie_node_id: TrieTreeNodeId) -> anyhow::Result<TrieNode> {
+    fn read_trie_tree_node(&self, trie_node_id: TrieNodeId) -> anyhow::Result<TrieNode> {
         self.trie_tree_nodes
             .get(&trie_node_id)
             .cloned()
@@ -75,7 +85,7 @@ impl<K: Num /*, E: PairingEngine*/> ReadInterface<K /*, E*/> for FakeChain<K /*,
     }
 }
 
-impl<K: Num /*, E: PairingEngine*/> WriteInterface<K /*, E*/> for FakeChain<K /*, E*/> {
+impl<K: Num> WriteInterface<K> for FakeChain<K> {
     fn set_parameter(&mut self, param: Parameter) -> anyhow::Result<()> {
         self.param = Some(param);
         Ok(())
