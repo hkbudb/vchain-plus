@@ -1,4 +1,3 @@
-#![allow(unused)]
 use super::{
     proof::sub_proof::SubProof,
     read::range_query,
@@ -7,7 +6,7 @@ use super::{
 };
 use crate::{
     acc::{AccValue, Set},
-    chain::{id_tree::IdTreeObjId, range::Range, traits::Num, MAX_FANOUT, PUB_KEY},
+    chain::{id_tree::IdTreeObjId, range::Range, traits::Num, MAX_INLINE_FANOUT, PUB_KEY},
     digest::{Digest, Digestible},
     set,
 };
@@ -17,6 +16,37 @@ use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 
+fn create_bplus_tree_leaf<K: Num>(
+    id: BPlusTreeNodeId,
+    num: K,
+    data_set: Set,
+) -> BPlusTreeLeafNode<K> {
+    let acc_val = AccValue::from_set(&data_set, &PUB_KEY);
+    BPlusTreeLeafNode {
+        id,
+        num,
+        data_set,
+        data_set_acc: acc_val,
+    }
+}
+
+fn create_bplus_tree_non_leaf<K: Num>(
+    id: BPlusTreeNodeId,
+    range: Range<K>,
+    data_set: Set,
+    data_set_acc: AccValue,
+    child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
+    child_ids: SmallVec<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>,
+) -> BPlusTreeNonLeafNode<K> {
+    BPlusTreeNonLeafNode {
+        id,
+        range,
+        data_set,
+        data_set_acc,
+        child_hashes,
+        child_ids,
+    }
+}
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct TestBPlusTree<K: Num> {
     root_id: BPlusTreeNodeId,
@@ -66,7 +96,7 @@ impl<K: Num> TestBPlusTree<K> {
                         println!("key is {:?}, but the node has val {:?}", key, n.num);
                     }
                 }
-                BPlusTreeNode::NonLeaf(n) => {
+                BPlusTreeNode::NonLeaf(_n) => {
                     continue;
                 }
             }
@@ -75,6 +105,8 @@ impl<K: Num> TestBPlusTree<K> {
         res
     }
 }
+
+const FANOUT: usize = 4;
 
 fn get_dataset() -> (Vec<u32>, Vec<u64>) {
     // 25 unique int from 1 to 25
@@ -111,21 +143,15 @@ fn test_read() {
     let ids: Vec<u64> = get_dataset().1;
 
     for i in 0..30 {
-        let _res = ctx.insert(keys[i], IdTreeObjId(ids[i]));
+        ctx.insert(keys[i], IdTreeObjId(ids[i]), FANOUT).unwrap();
     }
-    // let _res = ctx.delete(14, IdTreeObjId(25), MAX_FANOUT);
-    // let _res = ctx.delete(13, IdTreeObjId(4), MAX_FANOUT);
-    // let _res = ctx.delete(9, IdTreeObjId(1), MAX_FANOUT);
-    // let _res = ctx.delete(6, IdTreeObjId(23), MAX_FANOUT);
-    // let _res = ctx.delete(10, IdTreeObjId(9), MAX_FANOUT);
-    // let _res = ctx.delete(9, IdTreeObjId(1), MAX_FANOUT);
-    // let _res = ctx.delete(8, IdTreeObjId(16), MAX_FANOUT);
 
     let changes = ctx.changes();
     test_b_tree.apply(changes);
 
     let query_range = Range::new(1, 4);
-    let (v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range).unwrap();
+    let (_v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range).unwrap();
+
     p.verify(
         test_b_tree
             .load_node(test_b_tree.root_id)
@@ -134,10 +160,11 @@ fn test_read() {
             .to_digest(),
         query_range,
         acc,
-    );
+    )
+    .unwrap();
 
     let query_range = Range::new(3, 10);
-    let (v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range).unwrap();
+    let (_v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range).unwrap();
     p.verify(
         test_b_tree
             .load_node(test_b_tree.root_id)
@@ -146,10 +173,11 @@ fn test_read() {
             .to_digest(),
         query_range,
         acc,
-    );
+    )
+    .unwrap();
 
     let query_range = Range::new(5, 30);
-    let (v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range).unwrap();
+    let (_v, acc, p) = range_query(&test_b_tree, test_b_tree.root_id, query_range).unwrap();
     p.verify(
         test_b_tree
             .load_node(test_b_tree.root_id)
@@ -158,14 +186,15 @@ fn test_read() {
             .to_digest(),
         query_range,
         acc,
-    );
+    )
+    .unwrap();
 
     assert_eq!(1, 1);
 }
 
 fn build_test_bplus_tree0() -> TestBPlusTree<u32> {
     let mut bplus_tree: TestBPlusTree<u32> = TestBPlusTree::default();
-    let leaf1 = BPlusTreeLeafNode::new_dbg(BPlusTreeNodeId(3), 9 as u32, set! {1});
+    let leaf1 = create_bplus_tree_leaf(BPlusTreeNodeId(3), 9 as u32, set! {1});
     let leaf1_id = leaf1.id;
     bplus_tree
         .nodes
@@ -176,29 +205,29 @@ fn build_test_bplus_tree0() -> TestBPlusTree<u32> {
 
 fn build_test_bplus_tree1() -> TestBPlusTree<u32> {
     let mut bplus_tree: TestBPlusTree<u32> = TestBPlusTree::default();
-    let leaf1 = BPlusTreeLeafNode::new_dbg(BPlusTreeNodeId(11), 9 as u32, set! {1});
+    let leaf1 = create_bplus_tree_leaf(BPlusTreeNodeId(11), 9 as u32, set! {1});
     let leaf1_id = leaf1.id;
     let leaf1_hash = leaf1.to_digest();
     bplus_tree
         .nodes
         .insert(leaf1_id, BPlusTreeNode::Leaf(leaf1));
 
-    let leaf2 = BPlusTreeLeafNode::new_dbg(BPlusTreeNodeId(12), 11 as u32, set! {2});
+    let leaf2 = create_bplus_tree_leaf(BPlusTreeNodeId(12), 11 as u32, set! {2});
     let leaf2_id = leaf2.id;
     let leaf2_hash = leaf2.to_digest();
     bplus_tree
         .nodes
         .insert(leaf2_id, BPlusTreeNode::Leaf(leaf2));
 
-    let mut non_leaf1_child_ids = SmallVec::<[BPlusTreeNodeId; MAX_FANOUT]>::new();
+    let mut non_leaf1_child_ids = SmallVec::<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>::new();
     non_leaf1_child_ids.push(leaf1_id);
     non_leaf1_child_ids.push(leaf2_id);
-    let mut non_leaf1_child_hashes = SmallVec::<[Digest; MAX_FANOUT]>::new();
+    let mut non_leaf1_child_hashes = SmallVec::<[Digest; MAX_INLINE_FANOUT]>::new();
     non_leaf1_child_hashes.push(leaf1_hash);
     non_leaf1_child_hashes.push(leaf2_hash);
     let non_leaf1_set = set! {1, 2};
     let non_leaf1_set_acc = AccValue::from_set(&non_leaf1_set, &PUB_KEY);
-    let non_leaf1 = BPlusTreeNonLeafNode::new_dbg(
+    let non_leaf1 = create_bplus_tree_non_leaf(
         BPlusTreeNodeId(10),
         Range::new(9, 11),
         non_leaf1_set,
@@ -226,7 +255,7 @@ fn test_write() {
     let mut test_b_tree0 = TestBPlusTree::<u32>::new();
     let mut ctx0 = WriteContext::new(&test_b_tree0, test_b_tree0.root_id);
     for i in 0..1 {
-        let _res = ctx0.insert(keys[i], IdTreeObjId(ids[i]));
+        ctx0.insert(keys[i], IdTreeObjId(ids[i]), FANOUT).unwrap();
     }
     let changes0 = ctx0.changes();
     test_b_tree0.apply(changes0);
@@ -235,7 +264,7 @@ fn test_write() {
     let mut test_b_tree1 = TestBPlusTree::<u32>::new();
     let mut ctx1 = WriteContext::new(&test_b_tree1, test_b_tree1.root_id);
     for i in 0..2 {
-        let _res = ctx1.insert(keys[i], IdTreeObjId(ids[i]));
+        ctx1.insert(keys[i], IdTreeObjId(ids[i]), FANOUT).unwrap();
     }
     let changes1 = ctx1.changes();
     test_b_tree1.apply(changes1);
@@ -266,12 +295,10 @@ fn test_rich() {
     let mut ctx = WriteContext::new(&test_b_tree, test_b_tree.root_id);
     let upper_bound = 10000;
     for i in 0..upper_bound {
-        let _res = ctx.insert(i, IdTreeObjId(i as u64));
+        ctx.insert(i, IdTreeObjId(i as u64), FANOUT).unwrap();
     }
     let changes = ctx.changes();
     test_b_tree.apply(changes);
-
-    println!("{:#?}", test_b_tree);
 
     for i in 0..upper_bound {
         res = res && test_b_tree.search(i);

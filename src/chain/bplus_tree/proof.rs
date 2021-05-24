@@ -10,7 +10,7 @@ pub(crate) mod non_leaf;
 pub(crate) mod res_sub_tree;
 pub(crate) mod sub_proof;
 pub(crate) mod sub_tree;
-use anyhow::Result;
+use anyhow::{anyhow, bail, ensure, Result};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Proof<K: Num> {
@@ -35,17 +35,16 @@ impl<K: Num> Proof<K> {
         query_range: Range<K>,
         acc_val: AccValue,
     ) -> Result<()> {
-        if self.root_hash() != tree_root_hash {
-            panic!("Root hash not matched");
-        }
+        ensure!(self.root_hash() == tree_root_hash, "Root hash not matched!");
+
         if self
             .root
             .as_ref()
-            .unwrap()
-            .value_acc_completeness(query_range)
+            .ok_or_else(|| anyhow!("Cannot find subproof!"))?
+            .value_acc_completeness(query_range)?
             != acc_val
         {
-            panic!("Acc value not matched");
+            bail!("Acc value not matched");
         }
         Ok(())
     }

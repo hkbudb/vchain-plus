@@ -4,10 +4,10 @@ use super::{
 };
 use crate::{
     acc::{AccValue, Set},
-    chain::{range::Range, traits::Num, MAX_FANOUT, PUB_KEY},
+    chain::{range::Range, traits::Num, MAX_INLINE_FANOUT, PUB_KEY},
     digest::{Digest, Digestible},
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use smallvec::SmallVec;
 use std::collections::VecDeque;
 
@@ -33,7 +33,9 @@ fn inner_range_query<K: Num>(
     let mut res_acc_val: AccValue = AccValue::from_set(&query_res, &PUB_KEY);
     let mut query_proof = SubProof::from_hash(range, Digest::zero());
 
-    let root_node = node_loader.load_node(root_id)?.unwrap();
+    let root_node = node_loader
+        .load_node(root_id)?
+        .ok_or_else(|| anyhow!("Cannot find node"))?;
     let cur_proof = &mut query_proof as *mut _;
 
     let mut queue: VecDeque<(BPlusTreeNode<K>, *mut SubProof<K>)> = VecDeque::new();
@@ -78,10 +80,12 @@ fn inner_range_query<K: Num>(
                 } else if n.range.intersects(range) {
                     // non_leaf
                     let mut cur_proof_children =
-                        SmallVec::<[Option<Box<SubProof<K>>>; MAX_FANOUT]>::new();
+                        SmallVec::<[Option<Box<SubProof<K>>>; MAX_INLINE_FANOUT]>::new();
 
                     for child_id in &n.child_ids {
-                        let child_node = node_loader.load_node(*child_id)?.unwrap();
+                        let child_node = node_loader
+                            .load_node(*child_id)?
+                            .ok_or_else(|| anyhow!("Cannot find node"))?;
                         let mut sub_proof = match &child_node {
                             BPlusTreeNode::Leaf(n) => Box::new(SubProof::from_hash(
                                 Range::new(n.num, n.num),
@@ -104,7 +108,6 @@ fn inner_range_query<K: Num>(
                         ));
                     }
                 } else {
-                    println!("range not correct");
                 }
             }
         }

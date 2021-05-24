@@ -1,7 +1,6 @@
-use super::{range::Range, traits::Num, MAX_FANOUT};
+use super::{range::Range, traits::Num, MAX_INLINE_FANOUT};
 use crate::{
     acc::{set::Set, AccValue},
-    chain::PUB_KEY,
     create_id_type,
     digest::{Digest, Digestible},
 };
@@ -15,7 +14,6 @@ create_id_type!(BPlusTreeNodeId);
 pub mod hash;
 pub mod proof;
 pub mod read;
-pub mod utils;
 pub mod write;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -115,16 +113,6 @@ impl<K: Num> BPlusTreeLeafNode<K> {
             data_set_acc: acc,
         }
     }
-
-    fn new_dbg(id: BPlusTreeNodeId, num: K, data_set: Set) -> Self {
-        let acc_val = AccValue::from_set(&data_set, &PUB_KEY);
-        Self {
-            id,
-            num,
-            data_set,
-            data_set_acc: acc_val,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -133,8 +121,8 @@ pub struct BPlusTreeNonLeafNode<K: Num> {
     pub range: Range<K>,
     pub data_set: Set,
     pub data_set_acc: AccValue,
-    pub child_hashes: SmallVec<[Digest; MAX_FANOUT]>,
-    pub child_ids: SmallVec<[BPlusTreeNodeId; MAX_FANOUT]>,
+    pub child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
+    pub child_ids: SmallVec<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>,
 }
 
 impl<K: Num> BPlusTreeNonLeafNode<K> {
@@ -142,29 +130,11 @@ impl<K: Num> BPlusTreeNonLeafNode<K> {
         range: Range<K>,
         data_set: Set,
         data_set_acc: AccValue,
-        child_hashes: SmallVec<[Digest; MAX_FANOUT]>,
-        child_ids: SmallVec<[BPlusTreeNodeId; MAX_FANOUT]>,
+        child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
+        child_ids: SmallVec<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>,
     ) -> Self {
         Self {
             id: BPlusTreeNodeId::next_id(),
-            range,
-            data_set,
-            data_set_acc,
-            child_hashes,
-            child_ids,
-        }
-    }
-
-    pub fn new_dbg(
-        id: BPlusTreeNodeId,
-        range: Range<K>,
-        data_set: Set,
-        data_set_acc: AccValue,
-        child_hashes: SmallVec<[Digest; MAX_FANOUT]>,
-        child_ids: SmallVec<[BPlusTreeNodeId; MAX_FANOUT]>,
-    ) -> Self {
-        Self {
-            id: id,
             range,
             data_set,
             data_set_acc,

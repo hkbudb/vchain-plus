@@ -31,7 +31,7 @@ pub(crate) fn bplus_tree_non_leaf_hash<'a, K: Num>(
 }
 
 #[inline]
-pub(crate) fn bplus_tree_non_leaf_proof_hash<'a, K: Num>(
+pub(crate) fn bplus_tree_non_leaf_proof_hash<K: Num>(
     range: &Range<K>,
     acc_hash: &Digest,
     children: impl Iterator<Item = Option<Digest>>,

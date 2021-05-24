@@ -7,6 +7,7 @@ use crate::{
     chain::{range::Range, traits::Num, PUB_KEY},
     digest::{Digest, Digestible},
 };
+use anyhow::{anyhow, ensure, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -46,7 +47,7 @@ impl<K: Num> SubProof<K> {
         Self::ResSubTree(Box::new(n))
     }
 
-    pub fn value_acc_completeness(&self, range: Range<K>) -> AccValue {
+    pub(crate) fn value_acc_completeness(&self, range: Range<K>) -> Result<AccValue> {
         let mut res_acc_val: AccValue = AccValue::from_set(&Set::new(), &PUB_KEY);
         let mut completeness = true;
         let mut cur_proof = Box::new(self.clone());
@@ -57,7 +58,7 @@ impl<K: Num> SubProof<K> {
             if queue.is_empty() {
                 break;
             } else {
-                cur_proof = queue.pop_front().unwrap();
+                cur_proof = queue.pop_front().ok_or_else(|| anyhow!("Queue is empty"))?;
             }
 
             match *cur_proof {
@@ -74,7 +75,7 @@ impl<K: Num> SubProof<K> {
                 }
                 SubProof::NonLeaf(n) => {
                     for child in n.children {
-                        queue.push_back(child.unwrap());
+                        queue.push_back(child.ok_or_else(|| anyhow!("Subproof is None"))?);
                     }
                 }
                 SubProof::ResSubTree(n) => {
@@ -85,10 +86,9 @@ impl<K: Num> SubProof<K> {
                 }
             }
         }
-        if !completeness {
-            panic!("Completeness not satisfied");
-        }
 
-        res_acc_val
+        ensure!(completeness, "Completeness not satisfied");
+
+        Ok(res_acc_val)
     }
 }

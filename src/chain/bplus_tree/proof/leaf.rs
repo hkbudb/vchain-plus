@@ -22,12 +22,4 @@ impl<K: Num> BPlusTreeLeaf<K> {
     pub(crate) fn new(num: K, acc_val: AccValue) -> Self {
         Self { num, acc_val }
     }
-
-    // pub(crate) fn value_hash(&self, range: Range<K>) -> Option<AccValue> {
-    //     if range.is_in_range(self.num) {
-    //         Some(self.acc_hash)
-    //     } else {
-    //         None
-    //     }
-    // }
 }
