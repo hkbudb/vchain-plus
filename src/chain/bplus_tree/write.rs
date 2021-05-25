@@ -7,7 +7,7 @@ use crate::{
     chain::{id_tree::IdTreeObjId, range::Range, traits::Num, MAX_INLINE_FANOUT},
     set,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{
@@ -17,7 +17,7 @@ use std::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Apply<K: Num> {
-    pub root_id: BPlusTreeNodeId,
+    pub root_id: Option<BPlusTreeNodeId>,
     pub nodes: HashMap<BPlusTreeNodeId, BPlusTreeNode<K>>,
 }
 
@@ -28,7 +28,7 @@ pub struct WriteContext<K: Num, L: BPlusTreeNodeLoader<K>> {
 }
 
 impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
-    pub fn new(node_loader: L, root_id: BPlusTreeNodeId) -> Self {
+    pub fn new(node_loader: L, root_id: Option<BPlusTreeNodeId>) -> Self {
         Self {
             node_loader,
             apply: Apply {
@@ -63,10 +63,10 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
         (id, hash)
     }
 
-    fn get_node(&self, id: BPlusTreeNodeId) -> Result<Option<Cow<BPlusTreeNode<K>>>> {
+    fn get_node(&self, id: BPlusTreeNodeId) -> Result<Cow<BPlusTreeNode<K>>> {
         Ok(match self.apply.nodes.get(&id) {
-            Some(n) => Some(Cow::Borrowed(n)),
-            None => self.node_loader.load_node(id)?.map(Cow::Owned),
+            Some(n) => Cow::Borrowed(n),
+            None => Cow::Owned(self.node_loader.load_node(id)?),
         })
     }
 
@@ -84,7 +84,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
         };
         let new_acc = AccValue::from_set(&set, pk);
 
-        let mut cur_id = self.apply.root_id;
+        let mut cur_id_opt = self.apply.root_id;
         let mut insert_flag = false;
         let mut update_flag = false;
 
@@ -101,10 +101,196 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
         }
         let mut temp_nodes: Vec<TempNode<K>> = Vec::new();
         let mut c_id: BPlusTreeNodeId = BPlusTreeNodeId::next_id();
+
         'outer: loop {
-            self.outdated.insert(cur_id);
-            let cur_node = match self.get_node(cur_id)? {
-                Some(n) => n,
+            match cur_id_opt {
+                Some(id) => {
+                    self.outdated.insert(id);
+                    let cur_node = self.get_node(id)?;
+                    match cur_node.as_ref() {
+                        BPlusTreeNode::Leaf(n) => {
+                            let old_num = n.num;
+                            let old_data_set = n.data_set.clone();
+                            let old_acc = n.data_set_acc;
+
+                            let new_range: Range<K>;
+                            let set_union = &n.data_set | &set;
+
+                            if old_num == key {
+                                let (id, hash) = self.write_leaf(key, set_union, old_acc + new_acc);
+                                temp_nodes.push(TempNode::Leaf { id, hash });
+                                break;
+                            }
+                            if old_num < key {
+                                new_range = Range::new(old_num, key);
+                            } else {
+                                new_range = Range::new(key, old_num);
+                            }
+
+                            let non_leaf = BPlusTreeNonLeafNode::new(
+                                new_range,
+                                set_union,
+                                old_acc + new_acc,
+                                SmallVec::<[Digest; MAX_INLINE_FANOUT]>::new(),
+                                SmallVec::<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>::new(),
+                            );
+                            temp_nodes.push(TempNode::NonLeaf {
+                                node: non_leaf,
+                                idx: 0,
+                            });
+                            let (old_leaf_id, old_leaf_hash) =
+                                self.write_leaf(old_num, old_data_set, old_acc);
+                            let (new_leaf_id, new_leaf_hash) = self.write_leaf(key, set, new_acc);
+                            if old_num < key {
+                                temp_nodes.push(TempNode::Leaf {
+                                    id: old_leaf_id,
+                                    hash: old_leaf_hash,
+                                });
+                                temp_nodes.push(TempNode::Leaf {
+                                    id: new_leaf_id,
+                                    hash: new_leaf_hash,
+                                });
+                            } else {
+                                temp_nodes.push(TempNode::Leaf {
+                                    id: new_leaf_id,
+                                    hash: new_leaf_hash,
+                                });
+                                temp_nodes.push(TempNode::Leaf {
+                                    id: old_leaf_id,
+                                    hash: old_leaf_hash,
+                                });
+                            }
+                            break;
+                        }
+                        BPlusTreeNode::NonLeaf(n) => {
+                            let set_union = &n.data_set | &set;
+                            let child_ids = n.child_ids.clone();
+                            let child_hashes = n.child_hashes.clone();
+                            let old_acc = n.data_set_acc;
+
+                            let mut right_flag = false;
+                            let new_range: Range<K>;
+                            if n.range.is_in_range(key) {
+                                new_range = n.range;
+                            } else if key < n.range.get_low() {
+                                new_range = Range::new(key, n.range.get_high());
+                            } else {
+                                new_range = Range::new(n.range.get_low(), key);
+                                right_flag = true;
+                            }
+
+                            let idx: usize;
+                            let child_len: usize = child_ids.len();
+
+                            for (cur_child_idx, child) in child_ids.clone().into_iter().enumerate()
+                            {
+                                if right_flag {
+                                    idx = child_len - 1;
+                                    let child_node = self.get_node(child)?;
+                                    //.ok_or_else(|| anyhow!("Cannot find node"))?;
+                                    match child_node.as_ref() {
+                                        BPlusTreeNode::Leaf(_node) => {
+                                            temp_nodes.push(TempNode::NonLeaf {
+                                                node: BPlusTreeNonLeafNode::new(
+                                                    new_range,
+                                                    set_union,
+                                                    old_acc + new_acc,
+                                                    child_hashes,
+                                                    child_ids,
+                                                ),
+                                                idx: idx + 1,
+                                            });
+                                            let (new_leaf_id, new_leaf_hash) =
+                                                self.write_leaf(key, set, new_acc);
+                                            temp_nodes.push(TempNode::Leaf {
+                                                id: new_leaf_id,
+                                                hash: new_leaf_hash,
+                                            });
+                                            break 'outer;
+                                        }
+                                        BPlusTreeNode::NonLeaf(_node) => {
+                                            temp_nodes.push(TempNode::NonLeaf {
+                                                node: BPlusTreeNonLeafNode::new(
+                                                    new_range,
+                                                    set_union,
+                                                    old_acc + new_acc,
+                                                    child_hashes,
+                                                    child_ids,
+                                                ),
+                                                idx,
+                                            });
+                                            let cur_id = *n
+                                                .get_child_id(idx)
+                                                .ok_or_else(|| anyhow!("Cannot find child node"))?;
+                                            cur_id_opt = Some(cur_id);
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                let child_id = child;
+                                let child_node = self.get_node(child)?;
+                                //.ok_or_else(|| anyhow!("Cannot find node"))?;
+                                match child_node.as_ref() {
+                                    BPlusTreeNode::Leaf(child_n) => {
+                                        if key <= child_n.num {
+                                            idx = cur_child_idx;
+                                            let (new_leaf_id, new_leaf_hash) = if key == child_n.num
+                                            {
+                                                c_id = child_id;
+                                                update_flag = true;
+                                                let leaf_set_union = &child_n.data_set | &set;
+                                                let old_leaf_acc = child_n.data_set_acc;
+                                                self.write_leaf(
+                                                    key,
+                                                    leaf_set_union,
+                                                    old_leaf_acc + new_acc,
+                                                )
+                                            } else {
+                                                self.write_leaf(key, set, new_acc)
+                                            };
+                                            temp_nodes.push(TempNode::NonLeaf {
+                                                node: BPlusTreeNonLeafNode::new(
+                                                    new_range,
+                                                    set_union,
+                                                    old_acc + new_acc,
+                                                    child_hashes,
+                                                    child_ids,
+                                                ),
+                                                idx,
+                                            });
+                                            temp_nodes.push(TempNode::Leaf {
+                                                id: new_leaf_id,
+                                                hash: new_leaf_hash,
+                                            });
+                                            break 'outer;
+                                        }
+                                    }
+                                    BPlusTreeNode::NonLeaf(child_n) => {
+                                        if key <= child_n.range.get_high() {
+                                            idx = cur_child_idx;
+                                            temp_nodes.push(TempNode::NonLeaf {
+                                                node: BPlusTreeNonLeafNode::new(
+                                                    new_range,
+                                                    set_union,
+                                                    old_acc + new_acc,
+                                                    child_hashes,
+                                                    child_ids,
+                                                ),
+                                                idx,
+                                            });
+                                            let cur_id = *n
+                                                .get_child_id(idx)
+                                                .ok_or_else(|| anyhow!("Cannot find child node"))?;
+                                            cur_id_opt = Some(cur_id);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 None => {
                     let (leaf_id, leaf_hash) = self.write_leaf(key, set, new_acc);
                     temp_nodes.push(TempNode::Leaf {
@@ -112,184 +298,6 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                         hash: leaf_hash,
                     });
                     break 'outer;
-                }
-            };
-
-            match cur_node.as_ref() {
-                BPlusTreeNode::Leaf(n) => {
-                    let old_num = n.num;
-                    let old_data_set = n.data_set.clone();
-                    let old_acc = n.data_set_acc;
-
-                    let new_range: Range<K>;
-                    let set_union = &n.data_set | &set;
-
-                    if old_num == key {
-                        let (id, hash) = self.write_leaf(key, set_union, old_acc + new_acc);
-                        temp_nodes.push(TempNode::Leaf { id, hash });
-                        break;
-                    }
-                    if old_num < key {
-                        new_range = Range::new(old_num, key);
-                    } else {
-                        new_range = Range::new(key, old_num);
-                    }
-
-                    let non_leaf = BPlusTreeNonLeafNode::new(
-                        new_range,
-                        set_union,
-                        old_acc + new_acc,
-                        SmallVec::<[Digest; MAX_INLINE_FANOUT]>::new(),
-                        SmallVec::<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>::new(),
-                    );
-                    temp_nodes.push(TempNode::NonLeaf {
-                        node: non_leaf,
-                        idx: 0,
-                    });
-                    let (old_leaf_id, old_leaf_hash) =
-                        self.write_leaf(old_num, old_data_set, old_acc);
-                    let (new_leaf_id, new_leaf_hash) = self.write_leaf(key, set, new_acc);
-                    if old_num < key {
-                        temp_nodes.push(TempNode::Leaf {
-                            id: old_leaf_id,
-                            hash: old_leaf_hash,
-                        });
-                        temp_nodes.push(TempNode::Leaf {
-                            id: new_leaf_id,
-                            hash: new_leaf_hash,
-                        });
-                    } else {
-                        temp_nodes.push(TempNode::Leaf {
-                            id: new_leaf_id,
-                            hash: new_leaf_hash,
-                        });
-                        temp_nodes.push(TempNode::Leaf {
-                            id: old_leaf_id,
-                            hash: old_leaf_hash,
-                        });
-                    }
-                    break;
-                }
-                BPlusTreeNode::NonLeaf(n) => {
-                    let set_union = &n.data_set | &set;
-                    let child_ids = n.child_ids.clone();
-                    let child_hashes = n.child_hashes.clone();
-                    let old_acc = n.data_set_acc;
-
-                    let mut right_flag = false;
-                    let new_range: Range<K>;
-                    if n.range.is_in_range(key) {
-                        new_range = n.range;
-                    } else if key < n.range.get_low() {
-                        new_range = Range::new(key, n.range.get_high());
-                    } else {
-                        new_range = Range::new(n.range.get_low(), key);
-                        right_flag = true;
-                    }
-
-                    let idx: usize;
-                    let child_len: usize = child_ids.len();
-
-                    for (cur_child_idx, child) in child_ids.clone().into_iter().enumerate() {
-                        if right_flag {
-                            idx = child_len - 1;
-                            let child_node = self
-                                .get_node(child)?
-                                .ok_or_else(|| anyhow!("Cannot find node"))?;
-                            match child_node.as_ref() {
-                                BPlusTreeNode::Leaf(_node) => {
-                                    temp_nodes.push(TempNode::NonLeaf {
-                                        node: BPlusTreeNonLeafNode::new(
-                                            new_range,
-                                            set_union,
-                                            old_acc + new_acc,
-                                            child_hashes,
-                                            child_ids,
-                                        ),
-                                        idx: idx + 1,
-                                    });
-                                    let (new_leaf_id, new_leaf_hash) =
-                                        self.write_leaf(key, set, new_acc);
-                                    temp_nodes.push(TempNode::Leaf {
-                                        id: new_leaf_id,
-                                        hash: new_leaf_hash,
-                                    });
-                                    break 'outer;
-                                }
-                                BPlusTreeNode::NonLeaf(_node) => {
-                                    temp_nodes.push(TempNode::NonLeaf {
-                                        node: BPlusTreeNonLeafNode::new(
-                                            new_range,
-                                            set_union,
-                                            old_acc + new_acc,
-                                            child_hashes,
-                                            child_ids,
-                                        ),
-                                        idx,
-                                    });
-                                    cur_id = *n
-                                        .get_child_id(idx)
-                                        .ok_or_else(|| anyhow!("Cannot find child node"))?;
-                                    break;
-                                }
-                            }
-                        }
-
-                        let child_id = child;
-                        let child_node = self
-                            .get_node(child)?
-                            .ok_or_else(|| anyhow!("Cannot find node"))?;
-                        match child_node.as_ref() {
-                            BPlusTreeNode::Leaf(child_n) => {
-                                if key <= child_n.num {
-                                    idx = cur_child_idx;
-                                    let (new_leaf_id, new_leaf_hash) = if key == child_n.num {
-                                        c_id = child_id;
-                                        update_flag = true;
-                                        let leaf_set_union = &child_n.data_set | &set;
-                                        let old_leaf_acc = child_n.data_set_acc;
-                                        self.write_leaf(key, leaf_set_union, old_leaf_acc + new_acc)
-                                    } else {
-                                        self.write_leaf(key, set, new_acc)
-                                    };
-                                    temp_nodes.push(TempNode::NonLeaf {
-                                        node: BPlusTreeNonLeafNode::new(
-                                            new_range,
-                                            set_union,
-                                            old_acc + new_acc,
-                                            child_hashes,
-                                            child_ids,
-                                        ),
-                                        idx,
-                                    });
-                                    temp_nodes.push(TempNode::Leaf {
-                                        id: new_leaf_id,
-                                        hash: new_leaf_hash,
-                                    });
-                                    break 'outer;
-                                }
-                            }
-                            BPlusTreeNode::NonLeaf(child_n) => {
-                                if key <= child_n.range.get_high() {
-                                    idx = cur_child_idx;
-                                    temp_nodes.push(TempNode::NonLeaf {
-                                        node: BPlusTreeNonLeafNode::new(
-                                            new_range,
-                                            set_union,
-                                            old_acc + new_acc,
-                                            child_hashes,
-                                            child_ids,
-                                        ),
-                                        idx,
-                                    });
-                                    cur_id = *n
-                                        .get_child_id(idx)
-                                        .ok_or_else(|| anyhow!("Cannot find child node"))?;
-                                    break;
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -365,9 +373,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                         let ids = node.child_ids.clone();
                         for i in 0..ids.len() {
                             let n_id = ids[i];
-                            let nd = self
-                                .get_node(n_id)?
-                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                            let nd = self.get_node(n_id)?;
 
                             if i <= mid {
                                 old_set = &old_set | &nd.get_set();
@@ -431,7 +437,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
             cur_tmp_len -= 1;
         }
 
-        self.apply.root_id = new_root_id;
+        self.apply.root_id = Some(new_root_id);
         self.outdated.insert(c_id);
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
@@ -453,7 +459,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
             }
         };
         let delta_acc = AccValue::from_set(&set, pk);
-        let mut cur_id = self.apply.root_id;
+        let mut cur_id_opt = self.apply.root_id;
 
         #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
         enum TempNode<N: Num> {
@@ -470,86 +476,89 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
         let mut temp_nodes: Vec<TempNode<K>> = Vec::new();
 
         loop {
-            self.outdated.insert(cur_id);
-            let cur_node = self
-                .get_node(cur_id)?
-                .ok_or_else(|| anyhow!("Cannot find node"))?;
-
-            match cur_node.as_ref() {
-                BPlusTreeNode::Leaf(n) => {
-                    let set_dif = (&n.data_set) / (&set);
-                    let old_acc = n.data_set_acc;
-                    if n.num == key {
-                        let mut is_empty = false;
-                        if set_dif.is_empty() {
-                            is_empty = true;
-                        }
-
-                        let (id, hash) = self.write_leaf(key, set_dif, old_acc - delta_acc);
-                        if is_empty {
-                            self.outdated.insert(id);
-                        }
-                        temp_nodes.push(TempNode::Leaf { id, hash, is_empty });
-                        break;
-                    } else {
-                        return Err(anyhow!("Key not found"));
-                    }
-                }
-                BPlusTreeNode::NonLeaf(n) => {
-                    if n.range.is_in_range(key) {
-                        let set_dif = (&n.data_set) / (&set);
-                        let old_acc = n.data_set_acc;
-                        let child_ids = n.child_ids.clone();
-                        let child_hashes = n.child_hashes.clone();
-
-                        let child_ids_len = &child_ids.len();
-                        for i in 0..*child_ids_len {
-                            let child_id = child_ids[i];
-                            let child_node = self
-                                .get_node(child_id)?
-                                .ok_or_else(|| anyhow!("Cannot find node"))?;
-                            match child_node.as_ref() {
-                                BPlusTreeNode::Leaf(node) => {
-                                    if node.num == key {
-                                        temp_nodes.push(TempNode::NonLeaf {
-                                            node: BPlusTreeNonLeafNode::new(
-                                                n.range,
-                                                set_dif,
-                                                old_acc - delta_acc,
-                                                child_hashes,
-                                                child_ids,
-                                            ),
-                                            idx: i,
-                                        });
-                                        cur_id = child_id;
-                                        break;
-                                    } else {
-                                        continue;
-                                    }
+            match cur_id_opt {
+                Some(id) => {
+                    self.outdated.insert(id);
+                    let cur_node = self.get_node(id)?;
+                    match cur_node.as_ref() {
+                        BPlusTreeNode::Leaf(n) => {
+                            let set_dif = (&n.data_set) / (&set);
+                            let old_acc = n.data_set_acc;
+                            if n.num == key {
+                                let mut is_empty = false;
+                                if set_dif.is_empty() {
+                                    is_empty = true;
                                 }
-                                BPlusTreeNode::NonLeaf(node) => {
-                                    if node.range.is_in_range(key) {
-                                        temp_nodes.push(TempNode::NonLeaf {
-                                            node: BPlusTreeNonLeafNode::new(
-                                                n.range,
-                                                set_dif,
-                                                old_acc - delta_acc,
-                                                child_hashes,
-                                                child_ids,
-                                            ),
-                                            idx: i,
-                                        });
-                                        cur_id = child_id;
-                                        break;
-                                    } else {
-                                        continue;
-                                    }
+
+                                let (id, hash) = self.write_leaf(key, set_dif, old_acc - delta_acc);
+                                if is_empty {
+                                    self.outdated.insert(id);
                                 }
+                                temp_nodes.push(TempNode::Leaf { id, hash, is_empty });
+                                break;
+                            } else {
+                                return Err(anyhow!("Key not found"));
                             }
                         }
-                    } else {
-                        return Err(anyhow!("Key not found"));
+                        BPlusTreeNode::NonLeaf(n) => {
+                            if n.range.is_in_range(key) {
+                                let set_dif = (&n.data_set) / (&set);
+                                let old_acc = n.data_set_acc;
+                                let child_ids = n.child_ids.clone();
+                                let child_hashes = n.child_hashes.clone();
+
+                                let child_ids_len = &child_ids.len();
+                                for i in 0..*child_ids_len {
+                                    let child_id = child_ids[i];
+                                    let child_node = self.get_node(child_id)?;
+                                    //.ok_or_else(|| anyhow!("Cannot find node"))?;
+                                    match child_node.as_ref() {
+                                        BPlusTreeNode::Leaf(node) => {
+                                            if node.num == key {
+                                                temp_nodes.push(TempNode::NonLeaf {
+                                                    node: BPlusTreeNonLeafNode::new(
+                                                        n.range,
+                                                        set_dif,
+                                                        old_acc - delta_acc,
+                                                        child_hashes,
+                                                        child_ids,
+                                                    ),
+                                                    idx: i,
+                                                });
+                                                cur_id_opt = Some(child_id);
+                                                break;
+                                            } else {
+                                                continue;
+                                            }
+                                        }
+                                        BPlusTreeNode::NonLeaf(node) => {
+                                            if node.range.is_in_range(key) {
+                                                temp_nodes.push(TempNode::NonLeaf {
+                                                    node: BPlusTreeNonLeafNode::new(
+                                                        n.range,
+                                                        set_dif,
+                                                        old_acc - delta_acc,
+                                                        child_hashes,
+                                                        child_ids,
+                                                    ),
+                                                    idx: i,
+                                                });
+                                                cur_id_opt = Some(child_id);
+                                                break;
+                                            } else {
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                return Err(anyhow!("Key not found"));
+                            }
+                        }
                     }
+                }
+                None => {
+                    bail!("Cannot find node");
                 }
             }
         }
@@ -575,9 +584,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                     if merge_flag {
                         match node.child_ids.get(idx + 1) {
                             Some(id) => {
-                                let r_sib = self
-                                    .get_node(*id)?
-                                    .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                let r_sib = self.get_node(*id)?;
                                 match r_sib.as_ref() {
                                     BPlusTreeNode::Leaf(_r_n) => {}
                                     BPlusTreeNode::NonLeaf(r_n) => {
@@ -589,14 +596,10 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
 
                                             let r_n_higher = r_n.range.get_high();
                                             let r_n_c0_id = r_n.child_ids[0];
-                                            let r_n_c0 = self
-                                                .get_node(r_n_c0_id)?
-                                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                            let r_n_c0 = self.get_node(r_n_c0_id)?;
                                             let r_n_c0_acc = r_n_c0.as_ref().get_node_acc();
                                             let r_n_c1_id = r_n.child_ids[1];
-                                            let r_n_c1 = self
-                                                .get_node(r_n_c1_id)?
-                                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                            let r_n_c1 = self.get_node(r_n_c1_id)?;
                                             let new_n_range_higher =
                                                 r_n_c0.as_ref().get_range_high();
 
@@ -611,18 +614,13 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                             let new_r_n_acc = r_n.data_set_acc - r_n_c0_acc;
 
                                             let n_id = new_root_id;
-                                            let n = self
-                                                .get_node(n_id)?
-                                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                            let n = self.get_node(n_id)?;
 
                                             match n.as_ref() {
                                                 BPlusTreeNode::Leaf(_n) => {}
                                                 BPlusTreeNode::NonLeaf(n) => {
                                                     let n_l_c_id = n.child_ids[0];
-                                                    let n_l_c =
-                                                        self.get_node(n_l_c_id)?.ok_or_else(
-                                                            || anyhow!("Cannot find node"),
-                                                        )?;
+                                                    let n_l_c = self.get_node(n_l_c_id)?;
                                                     let n_lower = n_l_c.as_ref().get_range_low();
                                                     let new_n_range =
                                                         Range::new(n_lower, new_n_range_higher);
@@ -669,9 +667,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                                 .child_ids
                                                 .get(idx - 1)
                                                 .ok_or_else(|| anyhow!("Cannot find child id"))?;
-                                            let l_n = self
-                                                .get_node(*id)?
-                                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                            let l_n = self.get_node(*id)?;
                                             match l_n.as_ref() {
                                                 BPlusTreeNode::Leaf(_l_n) => {}
                                                 BPlusTreeNode::NonLeaf(l_n) => {
@@ -688,20 +684,14 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                                         let l_n_c_size = l_n.child_ids.len();
                                                         let l_n_c0_inv_id =
                                                             l_n.child_ids[l_n_c_size - 1];
-                                                        let l_n_c0_inv = self
-                                                            .get_node(l_n_c0_inv_id)?
-                                                            .ok_or_else(|| {
-                                                                anyhow!("Cannot find node")
-                                                            })?;
+                                                        let l_n_c0_inv =
+                                                            self.get_node(l_n_c0_inv_id)?;
                                                         let l_n_c0_inv_acc =
                                                             l_n_c0_inv.as_ref().get_node_acc();
                                                         let l_n_c1_inv_id =
                                                             l_n.child_ids[l_n_c_size - 2];
-                                                        let l_n_c1_inv = self
-                                                            .get_node(l_n_c1_inv_id)?
-                                                            .ok_or_else(|| {
-                                                                anyhow!("Cannot find node")
-                                                            })?;
+                                                        let l_n_c1_inv =
+                                                            self.get_node(l_n_c1_inv_id)?;
                                                         let new_l_n_higher =
                                                             l_n_c1_inv.as_ref().get_range_high();
                                                         let new_l_n_range =
@@ -722,20 +712,15 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                                             l_n.data_set_acc - l_n_c0_inv_acc;
 
                                                         let n_id = new_root_id;
-                                                        let n = self.get_node(n_id)?.ok_or_else(
-                                                            || anyhow!("Cannot find node"),
-                                                        )?;
+                                                        let n = self.get_node(n_id)?;
                                                         match n.as_ref() {
                                                             BPlusTreeNode::Leaf(_n) => {}
                                                             BPlusTreeNode::NonLeaf(n) => {
                                                                 let n_c_size = n.child_ids.len();
                                                                 let n_r_c_id =
                                                                     n.child_ids[n_c_size - 1];
-                                                                let n_r_c = self
-                                                                    .get_node(n_r_c_id)?
-                                                                    .ok_or_else(|| {
-                                                                        anyhow!("Cannot find node")
-                                                                    })?;
+                                                                let n_r_c =
+                                                                    self.get_node(n_r_c_id)?;
                                                                 let n_higher =
                                                                     n_r_c.as_ref().get_range_high();
                                                                 let new_n_range = Range::new(
@@ -798,9 +783,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                                         let new_n_higher = r_n.range.get_high();
 
                                                         let n_id = new_root_id;
-                                                        let n = self.get_node(n_id)?.ok_or_else(
-                                                            || anyhow!("Cannot find node"),
-                                                        )?;
+                                                        let n = self.get_node(n_id)?;
                                                         match n.as_ref() {
                                                             BPlusTreeNode::Leaf(_n) => {}
                                                             BPlusTreeNode::NonLeaf(n) => {
@@ -849,9 +832,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                             let r_n_acc = r_n.data_set_acc;
                                             let new_n_higher = r_n.range.get_high();
                                             let n_id = new_root_id;
-                                            let n = self
-                                                .get_node(n_id)?
-                                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                            let n = self.get_node(n_id)?;
                                             match n.as_ref() {
                                                 BPlusTreeNode::Leaf(_n) => {}
                                                 BPlusTreeNode::NonLeaf(n) => {
@@ -892,9 +873,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                     .child_ids
                                     .get(idx - 1)
                                     .ok_or_else(|| anyhow!("Cannot find child id"))?;
-                                let l_sib = self
-                                    .get_node(*l_sib_id)?
-                                    .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                let l_sib = self.get_node(*l_sib_id)?;
                                 match l_sib.as_ref() {
                                     BPlusTreeNode::Leaf(_l_n) => {}
                                     BPlusTreeNode::NonLeaf(l_n) => {
@@ -908,14 +887,10 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                             let l_n_higher = l_n.range.get_high();
                                             let l_n_c_size = l_n.child_ids.len();
                                             let l_n_c0_inv_id = l_n.child_ids[l_n_c_size - 1];
-                                            let l_n_c0_inv = self
-                                                .get_node(l_n_c0_inv_id)?
-                                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                            let l_n_c0_inv = self.get_node(l_n_c0_inv_id)?;
                                             let l_n_c0_inv_acc = l_n_c0_inv.as_ref().get_node_acc();
                                             let l_n_c1_inv_id = l_n.child_ids[l_n_c_size - 2];
-                                            let l_n_c1_inv = self
-                                                .get_node(l_n_c1_inv_id)?
-                                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                            let l_n_c1_inv = self.get_node(l_n_c1_inv_id)?;
                                             let new_l_n_higher =
                                                 l_n_c1_inv.as_ref().get_range_high();
                                             let new_l_n_range =
@@ -932,18 +907,13 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                             let new_l_n_acc = l_n.data_set_acc - l_n_c0_inv_acc;
 
                                             let n_id = new_root_id;
-                                            let n = self
-                                                .get_node(n_id)?
-                                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                            let n = self.get_node(n_id)?;
                                             match n.as_ref() {
                                                 BPlusTreeNode::Leaf(_n) => {}
                                                 BPlusTreeNode::NonLeaf(n) => {
                                                     let n_c_size = n.child_ids.len();
                                                     let n_r_c_id = n.child_ids[n_c_size - 1];
-                                                    let n_r_c =
-                                                        self.get_node(n_r_c_id)?.ok_or_else(
-                                                            || anyhow!("Cannot find node"),
-                                                        )?;
+                                                    let n_r_c = self.get_node(n_r_c_id)?;
                                                     let n_higher = n_r_c.as_ref().get_range_high();
                                                     let new_n_range =
                                                         Range::new(l_n_higher, n_higher);
@@ -993,9 +963,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                             let l_n_acc = l_n.data_set_acc;
                                             let new_n_lower = l_n.range.get_low();
                                             let n_id = new_root_id;
-                                            let n = self
-                                                .get_node(n_id)?
-                                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                                            let n = self.get_node(n_id)?;
                                             match n.as_ref() {
                                                 BPlusTreeNode::Leaf(_n) => {}
                                                 BPlusTreeNode::NonLeaf(n) => {
@@ -1069,9 +1037,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                     } else {
                         if key == node.range.get_low() {
                             let sib_id = node.child_ids[0];
-                            let sib_n = self
-                                .get_node(sib_id)?
-                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                            let sib_n = self.get_node(sib_id)?;
                             match sib_n.as_ref() {
                                 BPlusTreeNode::Leaf(sib) => {
                                     node.range.set_low(sib.num);
@@ -1083,9 +1049,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                         } else if key == node.range.get_high() {
                             let children_size = node.child_ids.len();
                             let sib_id = node.child_ids[children_size - 1];
-                            let sib_n = self
-                                .get_node(sib_id)?
-                                .ok_or_else(|| anyhow!("Cannot find node"))?;
+                            let sib_n = self.get_node(sib_id)?;
                             match sib_n.as_ref() {
                                 BPlusTreeNode::Leaf(sib) => {
                                     node.range.set_high(sib.num);
@@ -1105,7 +1069,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
             cur_tmp_len -= 1;
         }
 
-        self.apply.root_id = new_root_id;
+        self.apply.root_id = Some(new_root_id);
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
         }

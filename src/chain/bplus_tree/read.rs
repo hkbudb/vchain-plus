@@ -3,21 +3,28 @@ use super::{
     BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader,
 };
 use crate::{
-    acc::{AccValue, Set, AccPublicKey},
+    acc::{AccPublicKey, AccValue, Set},
     chain::{range::Range, traits::Num, MAX_INLINE_FANOUT},
     digest::{Digest, Digestible},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Result};
 use smallvec::SmallVec;
 use std::collections::VecDeque;
 
 pub fn range_query<K: Num>(
     node_loader: impl BPlusTreeNodeLoader<K>,
-    root_id: BPlusTreeNodeId,
+    root_id: Option<BPlusTreeNodeId>,
     range: Range<K>,
-    pk: &AccPublicKey
+    pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, Proof<K>)> {
-    let (res, acc, p) = inner_range_query(node_loader, root_id, range, pk)?;
+    let bplus_tree_root_id: BPlusTreeNodeId;
+    match root_id {
+        Some(id) => {
+            bplus_tree_root_id = id;
+        }
+        None => bail!("The BPlus tree is empty"),
+    }
+    let (res, acc, p) = inner_range_query(node_loader, bplus_tree_root_id, range, pk)?;
     Ok((res, acc, Proof::from_subproof(p)))
 }
 
@@ -25,7 +32,7 @@ fn inner_range_query<K: Num>(
     node_loader: impl BPlusTreeNodeLoader<K>,
     root_id: BPlusTreeNodeId,
     range: Range<K>,
-    pk: &AccPublicKey
+    pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, SubProof<K>)> {
     use super::proof::{
         leaf::BPlusTreeLeaf, non_leaf::BPlusTreeNonLeaf, res_sub_tree::BPlusTreeResSubTree,
@@ -35,9 +42,8 @@ fn inner_range_query<K: Num>(
     let mut res_acc_val: AccValue = AccValue::from_set(&query_res, pk);
     let mut query_proof = SubProof::from_hash(range, Digest::zero());
 
-    let root_node = node_loader
-        .load_node(root_id)?
-        .ok_or_else(|| anyhow!("Cannot find node"))?;
+    let root_node = node_loader.load_node(root_id)?;
+    //.ok_or_else(|| anyhow!("Cannot find node"))?;
     let cur_proof = &mut query_proof as *mut _;
 
     let mut queue: VecDeque<(BPlusTreeNode<K>, *mut SubProof<K>)> = VecDeque::new();
@@ -85,9 +91,8 @@ fn inner_range_query<K: Num>(
                         SmallVec::<[Option<Box<SubProof<K>>>; MAX_INLINE_FANOUT]>::new();
 
                     for child_id in &n.child_ids {
-                        let child_node = node_loader
-                            .load_node(*child_id)?
-                            .ok_or_else(|| anyhow!("Cannot find node"))?;
+                        let child_node = node_loader.load_node(*child_id)?;
+                        //.ok_or_else(|| anyhow!("Cannot find node"))?;
                         let mut sub_proof = match &child_node {
                             BPlusTreeNode::Leaf(n) => Box::new(SubProof::from_hash(
                                 Range::new(n.num, n.num),

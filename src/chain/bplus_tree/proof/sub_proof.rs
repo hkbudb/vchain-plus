@@ -3,7 +3,7 @@ use super::{
     sub_tree::BPlusTreeSubTree,
 };
 use crate::{
-    acc::{set::Set, AccValue, AccPublicKey},
+    acc::{set::Set, AccPublicKey, AccValue},
     chain::{range::Range, traits::Num},
     digest::{Digest, Digestible},
 };
@@ -47,7 +47,11 @@ impl<K: Num> SubProof<K> {
         Self::ResSubTree(Box::new(n))
     }
 
-    pub(crate) fn value_acc_completeness(&self, range: Range<K>, pk: &AccPublicKey) -> Result<AccValue> {
+    pub(crate) fn value_acc_completeness(
+        &self,
+        range: Range<K>,
+        pk: &AccPublicKey,
+    ) -> Result<AccValue> {
         let mut res_acc_val: AccValue = AccValue::from_set(&Set::new(), pk);
         let mut completeness = true;
         let mut cur_proof = Box::new(self.clone());

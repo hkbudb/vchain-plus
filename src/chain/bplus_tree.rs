@@ -171,7 +171,7 @@ impl<K: Num> Digestible for BPlusTreeNonLeafNode<K> {
 }
 
 pub trait BPlusTreeNodeLoader<K: Num> {
-    fn load_node(&self, id: BPlusTreeNodeId) -> Result<Option<BPlusTreeNode<K>>>;
+    fn load_node(&self, id: BPlusTreeNodeId) -> Result<BPlusTreeNode<K>>;
 }
 
 #[cfg(test)]

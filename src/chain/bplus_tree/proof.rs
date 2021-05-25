@@ -1,5 +1,5 @@
 use crate::{
-    acc::{AccValue, AccPublicKey},
+    acc::{AccPublicKey, AccValue},
     chain::{range::Range, traits::Num},
     digest::{Digest, Digestible},
 };
@@ -34,7 +34,7 @@ impl<K: Num> Proof<K> {
         tree_root_hash: Digest,
         query_range: Range<K>,
         acc_val: AccValue,
-        pk: &AccPublicKey
+        pk: &AccPublicKey,
     ) -> Result<()> {
         ensure!(self.root_hash() == tree_root_hash, "Root hash not matched!");
 
