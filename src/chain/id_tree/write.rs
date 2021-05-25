@@ -11,7 +11,7 @@ use std::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Apply {
-    pub root_id: IdTreeNodeId,
+    pub root_id: Option<IdTreeNodeId>,
     pub nodes: HashMap<IdTreeNodeId, IdTreeNode>,
 }
 
@@ -22,7 +22,8 @@ pub struct WriteContext<L: IdTreeNodeLoader> {
 }
 
 impl<L: IdTreeNodeLoader> WriteContext<L> {
-    pub fn new(node_loader: L, root_id: IdTreeNodeId) -> Self {
+    pub fn new(node_loader: L, root_id: Option<IdTreeNodeId>) -> Self {
+        IdTreeNodeId::next_id();
         Self {
             node_loader,
             apply: Apply {
@@ -52,10 +53,10 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         (id, hash)
     }
 
-    fn get_node(&self, id: IdTreeNodeId) -> Result<Option<Cow<IdTreeNode>>> {
+    fn get_node(&self, id: IdTreeNodeId) -> Result<Cow<IdTreeNode>> {
         Ok(match self.apply.nodes.get(&id) {
-            Some(n) => Some(Cow::Borrowed(n)),
-            None => self.node_loader.load_node(id)?.map(Cow::Owned),
+            Some(n) => Cow::Borrowed(n),
+            None => Cow::Owned(self.node_loader.load_node(id)?),
         })
     }
 
@@ -66,7 +67,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         n_k: usize,
         fanout: usize,
     ) -> Result<()> {
-        let mut cur_id = self.apply.root_id;
+        let mut cur_id_opt = self.apply.root_id;
         let depth = (n_k as f64).log(fanout as f64).floor() as usize;
         let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
 
@@ -76,11 +77,43 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         }
 
         let mut temp_nodes: Vec<TempNode> = Vec::new();
-
         loop {
-            self.outdated.insert(cur_id);
-            let cur_node = match self.get_node(cur_id)? {
-                Some(n) => n,
+            match cur_id_opt {
+                Some(id) => {
+                    self.outdated.insert(id);
+                    let cur_node = self.get_node(id)?;
+                    match cur_node.as_ref() {
+                        IdTreeNode::Leaf(_n) => {
+                            let (leaf_id, leaf_hash) = self.write_leaf(obj_id, obj_hash);
+                            temp_nodes.push(TempNode::Leaf {
+                                id: leaf_id,
+                                hash: leaf_hash,
+                            });
+                            break;
+                        }
+                        IdTreeNode::NonLeaf(n) => {
+                            let idx = cur_path_rev
+                                .pop()
+                                .ok_or_else(|| anyhow!("Path is empty!"))?;
+                            temp_nodes.push(TempNode::NonLeaf {
+                                node: IdTreeNonLeafNode::new(
+                                    n.child_hashes.clone(),
+                                    n.child_ids.clone(),
+                                ),
+                                idx,
+                            });
+
+                            let cur_id = *n
+                                .get_child_id(idx)
+                                .ok_or_else(|| anyhow!("Cannot find child id!"))?;
+                            if cur_id == IdTreeNodeId(0) {
+                                cur_id_opt = None;
+                            } else {
+                                cur_id_opt = Some(cur_id);
+                            }
+                        }
+                    }
+                }
                 None => {
                     loop {
                         if cur_path_rev.is_empty() {
@@ -102,30 +135,6 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                         }
                     }
                     break;
-                }
-            };
-
-            match cur_node.as_ref() {
-                IdTreeNode::Leaf(_n) => {
-                    let (leaf_id, leaf_hash) = self.write_leaf(obj_id, obj_hash);
-                    temp_nodes.push(TempNode::Leaf {
-                        id: leaf_id,
-                        hash: leaf_hash,
-                    });
-                    break;
-                }
-                IdTreeNode::NonLeaf(n) => {
-                    let idx = cur_path_rev
-                        .pop()
-                        .ok_or_else(|| anyhow!("Path is empty!"))?;
-                    temp_nodes.push(TempNode::NonLeaf {
-                        node: IdTreeNonLeafNode::new(n.child_hashes.clone(), n.child_ids.clone()),
-                        idx,
-                    });
-
-                    cur_id = *n
-                        .get_child_id(idx)
-                        .ok_or_else(|| anyhow!("Cannot find child id!"))?;
                 }
             }
         }
@@ -151,7 +160,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                 }
             }
         }
-        self.apply.root_id = new_root_id;
+        self.apply.root_id = Some(new_root_id);
 
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
@@ -182,7 +191,6 @@ mod tests {
         let expect_ten: Vec<usize> = vec![1, 3, 0, 7, 9, 1];
         let v_ten: Vec<usize> = fanout_nary_rev(197031, 10, 6);
         assert_eq!(v_ten, expect_ten);
-        //dbg!(v_ten);
 
         let expect_two: Vec<usize> = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
         let v_two: Vec<usize> = fanout_nary_rev(1025, 2, 11);

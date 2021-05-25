@@ -11,7 +11,7 @@ use crate::{
     },
     digest::{blake2, Digest, Digestible},
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use smallvec::SmallVec;
 use std::collections::{HashMap, HashSet};
 
@@ -34,26 +34,27 @@ fn create_id_tree_non_leaf(
         child_ids,
     }
 }
+
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct TestIdTree {
-    root_id: IdTreeNodeId,
+    root_id: Option<IdTreeNodeId>,
     nodes: HashMap<IdTreeNodeId, IdTreeNode>,
 }
 
 impl IdTreeNodeLoader for TestIdTree {
-    fn load_node(&self, id: IdTreeNodeId) -> Result<Option<IdTreeNode>> {
+    fn load_node(&self, id: IdTreeNodeId) -> Result<IdTreeNode> {
         match self.nodes.get(&id).cloned() {
-            Some(n) => Ok(Some(n)),
-            None => Ok(None),
+            Some(n) => Ok(n),
+            None => bail!("Cannot find node in TestIdTree"),
         }
     }
 }
 
 impl IdTreeNodeLoader for &'_ TestIdTree {
-    fn load_node(&self, id: IdTreeNodeId) -> Result<Option<IdTreeNode>> {
+    fn load_node(&self, id: IdTreeNodeId) -> Result<IdTreeNode> {
         match self.nodes.get(&id).cloned() {
-            Some(n) => Ok(Some(n)),
-            None => Ok(None),
+            Some(n) => Ok(n),
+            None => bail!("Cannot find node in TestIdTree"),
         }
     }
 }
@@ -61,7 +62,7 @@ impl IdTreeNodeLoader for &'_ TestIdTree {
 impl TestIdTree {
     pub fn new() -> Self {
         Self {
-            root_id: IdTreeNodeId::next_id(),
+            root_id: None,
             nodes: HashMap::new(),
         }
     }
@@ -189,7 +190,7 @@ fn build_test_id_tree0() -> TestIdTree {
         .nodes
         .insert(non_leaf1_id, IdTreeNode::NonLeaf(non_leaf1));
 
-    id_tree.root_id = non_leaf1_id;
+    id_tree.root_id = Some(non_leaf1_id);
     id_tree
 }
 
@@ -362,7 +363,7 @@ fn build_test_id_tree1() -> TestIdTree {
         .nodes
         .insert(non_leaf4_id, IdTreeNode::NonLeaf(non_leaf4));
 
-    id_tree.root_id = non_leaf4_id;
+    id_tree.root_id = Some(non_leaf4_id);
     id_tree
 }
 
@@ -378,6 +379,7 @@ fn test_write0() {
         let obj = dataset.pop().unwrap();
         let obj_id = IdTreeObjId(obj.id.get_num() % (n * k) as u64);
         let obj_hash = obj.to_digest();
+        println!("inserting obj {:?}", obj_id);
         ctx.insert(obj_id, obj_hash, n * k, FANOUT).unwrap();
     }
     let changes = ctx.changes();
@@ -406,7 +408,14 @@ fn test_write1() {
 fn test_read1() {
     let id_tree = build_test_id_tree1();
 
-    let v = query_without_proof(N * K, &id_tree, id_tree.root_id, IdTreeObjId(11), FANOUT).unwrap();
+    let v = query_without_proof(
+        N * K,
+        &id_tree,
+        id_tree.root_id.unwrap(),
+        IdTreeObjId(11),
+        FANOUT,
+    )
+    .unwrap();
     assert_eq!(None, v);
     let (v, p) = query_id_tree(N * K, &id_tree, id_tree.root_id, IdTreeObjId(11), FANOUT).unwrap();
     assert_eq!(None, v);
@@ -416,14 +425,20 @@ fn test_read1() {
         .is_zero());
     assert_eq!(
         id_tree
-            .load_node(id_tree.root_id)
-            .unwrap()
+            .load_node(id_tree.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
     );
 
-    let v = query_without_proof(N * K, &id_tree, id_tree.root_id, IdTreeObjId(0), FANOUT).unwrap();
+    let v = query_without_proof(
+        N * K,
+        &id_tree,
+        id_tree.root_id.unwrap(),
+        IdTreeObjId(0),
+        FANOUT,
+    )
+    .unwrap();
     let mut o1_keywords: HashSet<String> = HashSet::new();
     o1_keywords.insert("a".to_string());
     let o1: Object<i32> = Object::new_dbg(ObjId(0), BlockId(1), vec![2], o1_keywords);
@@ -433,8 +448,7 @@ fn test_read1() {
     assert_eq!(Some(o1_digest), v);
     assert_eq!(
         id_tree
-            .load_node(id_tree.root_id)
-            .unwrap()
+            .load_node(id_tree.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -445,7 +459,14 @@ fn test_read1() {
     let n_digest = Digest::from(state.finalize());
     assert_eq!(Some(n_digest), p.value_hash(IdTreeObjId(0), N * K, FANOUT));
 
-    let v = query_without_proof(N * K, &id_tree, id_tree.root_id, IdTreeObjId(1), FANOUT).unwrap();
+    let v = query_without_proof(
+        N * K,
+        &id_tree,
+        id_tree.root_id.unwrap(),
+        IdTreeObjId(1),
+        FANOUT,
+    )
+    .unwrap();
     let mut o2_keywords: HashSet<String> = HashSet::new();
     o2_keywords.insert("b".to_string());
     let o2: Object<i32> = Object::new_dbg(ObjId(1), BlockId(1), vec![3], o2_keywords);
@@ -455,8 +476,7 @@ fn test_read1() {
     assert_eq!(Some(o2_digest), v);
     assert_eq!(
         id_tree
-            .load_node(id_tree.root_id)
-            .unwrap()
+            .load_node(id_tree.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -467,7 +487,14 @@ fn test_read1() {
     let n_digest = Digest::from(state.finalize());
     assert_eq!(Some(n_digest), p.value_hash(IdTreeObjId(1), N * K, FANOUT));
 
-    let v = query_without_proof(N * K, &id_tree, id_tree.root_id, IdTreeObjId(2), FANOUT).unwrap();
+    let v = query_without_proof(
+        N * K,
+        &id_tree,
+        id_tree.root_id.unwrap(),
+        IdTreeObjId(2),
+        FANOUT,
+    )
+    .unwrap();
     let mut o3_keywords: HashSet<String> = HashSet::new();
     o3_keywords.insert("c".to_string());
     let o3: Object<i32> = Object::new_dbg(ObjId(2), BlockId(1), vec![7], o3_keywords);
@@ -477,8 +504,7 @@ fn test_read1() {
     assert_eq!(Some(o3_digest), v);
     assert_eq!(
         id_tree
-            .load_node(id_tree.root_id)
-            .unwrap()
+            .load_node(id_tree.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -557,8 +583,7 @@ fn test_read_ctx1() {
 
     assert_eq!(
         id_tree
-            .load_node(id_tree.root_id)
-            .unwrap()
+            .load_node(id_tree.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()

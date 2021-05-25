@@ -3,7 +3,7 @@ use super::{
     write::fanout_nary_rev,
     Digest, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader, IdTreeObjId,
 };
-use crate::{digest::Digestible};
+use crate::digest::Digestible;
 use anyhow::{anyhow, bail, Result};
 
 pub fn query_without_proof(
@@ -13,10 +13,7 @@ pub fn query_without_proof(
     obj_id: IdTreeObjId,
     fanout: usize,
 ) -> Result<Option<Digest>> {
-    let root_node = match node_loader.load_node(root_id)? {
-        Some(n) => n,
-        None => return Ok(None),
-    };
+    let root_node = node_loader.load_node(root_id)?;
 
     let mut cur_node = root_node;
     let depth = (n_k as f64).log(fanout as f64).floor() as usize;
@@ -38,10 +35,7 @@ pub fn query_without_proof(
                 let child_id = *n
                     .get_child_id(idx)
                     .ok_or_else(|| anyhow!("Cannot find child id!"))?;
-                if let Some(child_node) = node_loader.load_node(child_id)? {
-                    cur_node = child_node;
-                    continue;
-                }
+                cur_node = node_loader.load_node(child_id)?;
             }
         }
     };
@@ -85,25 +79,24 @@ fn inner_query_id_tree(
                     if let (Some(child_id), Some(child_hash)) =
                         (n.get_child_id(child_idx), n.get_child_hash(child_idx))
                     {
-                        if let Some(sub_node) = node_loader.load_node(*child_id)? {
-                            let mut sub_proof =
-                                Box::new(SubProof::from_hash(*child_id, *child_hash));
-                            let sub_proof_ptr = &mut *sub_proof as *mut _;
-                            let mut non_leaf =
-                                IdTreeNonLeaf::from_hashes(n.child_hashes.clone(), n.child_ids.clone());
-                            *non_leaf.get_child_mut(child_idx) = Some(sub_proof);
-                            unsafe {
-                                *cur_proof = SubProof::from_non_leaf(non_leaf);
-                            }
-                            cur_node = sub_node;
-                            cur_proof = sub_proof_ptr;
-                            continue;
+                        let sub_node = node_loader.load_node(*child_id)?;
+                        let mut sub_proof = Box::new(SubProof::from_hash(*child_id, *child_hash));
+                        let sub_proof_ptr = &mut *sub_proof as *mut _;
+                        let mut non_leaf =
+                            IdTreeNonLeaf::from_hashes(n.child_hashes.clone(), n.child_ids.clone());
+                        *non_leaf.get_child_mut(child_idx) = Some(sub_proof);
+                        unsafe {
+                            *cur_proof = SubProof::from_non_leaf(non_leaf);
                         }
+                        cur_node = sub_node;
+                        cur_proof = sub_proof_ptr;
+                        continue;
                     }
                 } else {
                     bail!("Invalid obj_id");
                 }
-                let non_leaf = IdTreeNonLeaf::from_hashes(n.child_hashes.clone(), n.child_ids.clone());
+                let non_leaf =
+                    IdTreeNonLeaf::from_hashes(n.child_hashes.clone(), n.child_ids.clone());
 
                 unsafe {
                     *cur_proof = SubProof::from_non_leaf(non_leaf);
@@ -119,41 +112,58 @@ fn inner_query_id_tree(
 pub fn query_id_tree(
     n_k: usize,
     node_loader: &impl IdTreeNodeLoader,
-    root_id: IdTreeNodeId,
+    root_id: Option<IdTreeNodeId>,
     obj_id: IdTreeObjId,
     fanout: usize,
 ) -> Result<(Option<Digest>, Proof)> {
-    let root_node = match node_loader.load_node(root_id)? {
-        Some(n) => n,
-        None => return Ok((None, Proof::from_root_hash(root_id, Digest::zero()))),
-    };
+    let id_tree_root_id: IdTreeNodeId;
+    match root_id {
+        Some(id) => {
+            id_tree_root_id = id;
+        }
+        None => bail!("The id tree is empty"),
+    }
+    let root_node = node_loader.load_node(id_tree_root_id)?;
     let depth = (n_k as f64).log(fanout as f64).floor() as usize;
     let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
-    let (v, p) = inner_query_id_tree(node_loader, root_id, root_node, obj_id, &mut cur_path_rev)?;
+    let (v, p) = inner_query_id_tree(
+        node_loader,
+        id_tree_root_id,
+        root_node,
+        obj_id,
+        &mut cur_path_rev,
+    )?;
     Ok((v, Proof::from_subproof(p)))
 }
 
 pub struct ReadContext<L: IdTreeNodeLoader> {
     node_loader: L,
-    root_id: IdTreeNodeId,
+    root_id: Option<IdTreeNodeId>,
     proof: Proof,
 }
 
 impl<L: IdTreeNodeLoader> ReadContext<L> {
-    pub fn new(node_loader: L, root_id: IdTreeNodeId) -> Self {
-        match node_loader.load_node(root_id) {
-            Ok(n) => {
-                let dig = n.unwrap().to_digest();
-                Self {
+    pub fn new(node_loader: L, root_id: Option<IdTreeNodeId>) -> Self {
+        match root_id {
+            Some(id) => match node_loader.load_node(id) {
+                Ok(n) => {
+                    let dig = n.to_digest();
+                    Self {
+                        node_loader,
+                        root_id,
+                        proof: Proof::from_root_hash(id, dig),
+                    }
+                }
+                Err(_) => Self {
                     node_loader,
                     root_id,
-                    proof: Proof::from_root_hash(root_id, dig),
-                }
-            }
-            Err(_) => Self {
+                    proof: Proof::from_root_hash(id, Digest::zero()),
+                },
+            },
+            None => Self {
                 node_loader,
                 root_id,
-                proof: Proof::from_root_hash(root_id, Digest::zero()),
+                proof: Proof::from_root_hash(IdTreeNodeId(0), Digest::zero()),
             },
         }
     }
@@ -174,19 +184,20 @@ impl<L: IdTreeNodeLoader> ReadContext<L> {
         self.proof
     }
 
-    pub fn query(&mut self, n_k: usize, obj_id: IdTreeObjId, fanout: usize) -> Result<Option<Digest>> {
+    pub fn query(
+        &mut self,
+        n_k: usize,
+        obj_id: IdTreeObjId,
+        fanout: usize,
+    ) -> Result<Option<Digest>> {
         let value = match self.proof.root.as_mut() {
             Some(root) => {
                 let depth = (n_k as f64).log(fanout as f64).floor() as usize;
-                let mut cur_path_rev =
-                    fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
+                let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
 
                 match root.search_prefix(obj_id, &mut cur_path_rev) {
                     Some((sub_proof, sub_root_id, sub_path)) => {
-                        let sub_root_node = self
-                            .node_loader
-                            .load_node(sub_root_id)?
-                            .ok_or_else(|| anyhow!("Cannot find sub-root node!"))?;
+                        let sub_root_node = self.node_loader.load_node(sub_root_id)?;
                         let (v, p) = inner_query_id_tree(
                             &self.node_loader,
                             sub_root_id,

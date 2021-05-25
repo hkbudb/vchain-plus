@@ -119,9 +119,8 @@ impl Digestible for IdTreeNonLeafNode {
         id_tree_non_leaf_hash(self.child_hashes.iter())
     }
 }
-
 pub trait IdTreeNodeLoader {
-    fn load_node(&self, id: IdTreeNodeId) -> Result<Option<IdTreeNode>>;
+    fn load_node(&self, id: IdTreeNodeId) -> Result<IdTreeNode>;
 }
 
 #[cfg(test)]

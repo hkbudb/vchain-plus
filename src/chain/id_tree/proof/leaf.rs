@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) struct IdTreeLeaf {
     pub(crate) obj_id: IdTreeObjId,
     pub(crate) node_id: IdTreeNodeId,
-    pub(crate) node_hash: Digest, // obj_hash
+    pub(crate) node_hash: Digest,
 }
 
 impl Digestible for IdTreeLeaf {
