@@ -1,6 +1,6 @@
 use super::{super::TrieNodeId, leaf::TrieLeaf, non_leaf::TrieNonLeaf, sub_tree::TrieSubTree};
 use crate::{
-    acc::{AccValue, Set, AccPublicKey},
+    acc::{AccPublicKey, AccValue, Set},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};

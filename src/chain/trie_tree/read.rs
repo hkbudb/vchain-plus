@@ -3,23 +3,29 @@ use super::{
     TrieNode, TrieNodeId, TrieNodeLoader,
 };
 use crate::{
-    acc::{AccValue, Set, AccPublicKey},
-    chain::{trie_tree::split_at_common_prefix2},
+    acc::{AccPublicKey, AccValue, Set},
+    chain::trie_tree::split_at_common_prefix2,
     digest::{Digest, Digestible},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 
 pub fn query_trie(
     node_loader: &impl TrieNodeLoader,
-    root_id: TrieNodeId,
+    root_id: Option<TrieNodeId>,
     keyword: String,
-    pk: &AccPublicKey
+    pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, Proof)> {
-    let root_node = node_loader
-        .load_node(root_id)?
-        .ok_or_else(|| anyhow!("Cannot find Node!"))?;
-    let (res, acc, p) = inner_query_trie(node_loader, root_id, root_node, keyword, pk)?;
+    let trie_root_id: TrieNodeId;
+    match root_id {
+        Some(id) => {
+            trie_root_id = id;
+        }
+        None => bail!("The id tree is empty"),
+    }
+
+    let root_node = node_loader.load_node(trie_root_id)?;
+    let (res, acc, p) = inner_query_trie(node_loader, trie_root_id, root_node, keyword, pk)?;
     Ok((res, acc, Proof::from_subproof(p)))
 }
 
@@ -68,41 +74,38 @@ fn inner_query_trie(
 
                 match n.children.get(&cur_idx) {
                     Some((id, hash)) => {
-                        if let Some(sub_node) = node_loader.load_node(*id)? {
-                            let mut sub_proof =
-                                Box::new(SubProof::from_hash(*id, rest_cur_key.clone(), *hash));
-                            let sub_proof_ptr = &mut *sub_proof as *mut _;
-                            let mut children = BTreeMap::new();
-                            for (c, (i, h)) in &n.children {
-                                let child_node = node_loader
-                                    .load_node(*i)?
-                                    .ok_or_else(|| anyhow!("Cannot find node!"))?;
-                                children.insert(
-                                    *c,
-                                    Box::new(SubProof::from_hash(
-                                        child_node.get_id(),
-                                        child_node.get_string(),
-                                        *h,
-                                    )),
-                                );
-                            }
-                            let mut non_leaf = TrieNonLeaf::from_hashes(
-                                (*n.nibble).to_string(),
-                                n.data_set_acc,
-                                children,
+                        let sub_node = node_loader.load_node(*id)?;
+                        let mut sub_proof =
+                            Box::new(SubProof::from_hash(*id, rest_cur_key.clone(), *hash));
+                        let sub_proof_ptr = &mut *sub_proof as *mut _;
+                        let mut children = BTreeMap::new();
+                        for (c, (i, h)) in &n.children {
+                            let child_node = node_loader.load_node(*i)?;
+                            children.insert(
+                                *c,
+                                Box::new(SubProof::from_hash(
+                                    child_node.get_id(),
+                                    child_node.get_string(),
+                                    *h,
+                                )),
                             );
-                            *non_leaf
-                                .children
-                                .get_mut(&cur_idx)
-                                .ok_or_else(|| anyhow!("Cannot find subproof!"))? = sub_proof;
-                            unsafe {
-                                *cur_proof = SubProof::from_non_leaf(non_leaf);
-                            }
-                            cur_node = sub_node;
-                            cur_proof = sub_proof_ptr;
-                            cur_key = rest_cur_key;
-                            continue;
                         }
+                        let mut non_leaf = TrieNonLeaf::from_hashes(
+                            (*n.nibble).to_string(),
+                            n.data_set_acc,
+                            children,
+                        );
+                        *non_leaf
+                            .children
+                            .get_mut(&cur_idx)
+                            .ok_or_else(|| anyhow!("Cannot find subproof!"))? = sub_proof;
+                        unsafe {
+                            *cur_proof = SubProof::from_non_leaf(non_leaf);
+                        }
+                        cur_node = sub_node;
+                        cur_proof = sub_proof_ptr;
+                        cur_key = rest_cur_key;
+                        continue;
                     }
                     None => {
                         query_val = Set::new();
@@ -122,27 +125,33 @@ fn inner_query_trie(
 
 pub struct ReadContext<L: TrieNodeLoader> {
     node_loader: L,
-    root_id: TrieNodeId,
+    root_id: Option<TrieNodeId>,
     proof: Proof,
 }
 
 impl<L: TrieNodeLoader> ReadContext<L> {
-    pub fn new(node_loader: L, root_id: TrieNodeId) -> Self {
-        match node_loader.load_node(root_id) {
-            Ok(n) => {
-                let root = n.unwrap();
-                let nibble = root.get_string();
-                let dig = root.to_digest();
-                Self {
+    pub fn new(node_loader: L, root_id: Option<TrieNodeId>) -> Self {
+        match root_id {
+            Some(id) => match node_loader.load_node(id) {
+                Ok(n) => {
+                    let nibble = n.get_string();
+                    let dig = n.to_digest();
+                    Self {
+                        node_loader,
+                        root_id: root_id,
+                        proof: Proof::from_root_hash(id, nibble, dig),
+                    }
+                }
+                Err(_) => Self {
                     node_loader,
                     root_id,
-                    proof: Proof::from_root_hash(root_id, nibble, dig),
-                }
-            }
-            Err(_) => Self {
+                    proof: Proof::from_root_hash(id, "".to_string(), Digest::zero()),
+                },
+            },
+            None => Self {
                 node_loader,
                 root_id,
-                proof: Proof::from_root_hash(root_id, "".to_string(), Digest::zero()),
+                proof: Proof::from_root_hash(TrieNodeId(0), "".to_string(), Digest::zero()),
             },
         }
     }
@@ -161,12 +170,14 @@ impl<L: TrieNodeLoader> ReadContext<L> {
         match self.proof.root.as_mut() {
             Some(root) => match root.search_prefix(keyword) {
                 Some((sub_proof, sub_root_id, cur_key)) => {
-                    let sub_root_node = self
-                        .node_loader
-                        .load_node(sub_root_id)?
-                        .ok_or_else(|| anyhow!("Cannot find node!"))?;
-                    let (v, a, p) =
-                        inner_query_trie(&self.node_loader, sub_root_id, sub_root_node, cur_key, pk)?;
+                    let sub_root_node = self.node_loader.load_node(sub_root_id)?;
+                    let (v, a, p) = inner_query_trie(
+                        &self.node_loader,
+                        sub_root_id,
+                        sub_root_node,
+                        cur_key,
+                        pk,
+                    )?;
                     unsafe {
                         *sub_proof = p;
                     }

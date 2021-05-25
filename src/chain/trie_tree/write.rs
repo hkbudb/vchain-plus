@@ -2,12 +2,8 @@ use super::{
     split_at_common_prefix2, AccValue, Digest, Digestible, Set, TrieLeafNode, TrieNode, TrieNodeId,
     TrieNodeLoader, TrieNonLeafNode,
 };
-use crate::{
-    chain::{id_tree::IdTreeObjId},
-    set,
-    acc::AccPublicKey,
-};
-use anyhow::{anyhow, Result};
+use crate::{acc::AccPublicKey, chain::id_tree::IdTreeObjId, set};
+use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::{
@@ -17,7 +13,7 @@ use std::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Apply {
-    pub root_id: TrieNodeId,
+    pub root_id: Option<TrieNodeId>,
     pub nodes: HashMap<TrieNodeId, TrieNode>,
 }
 
@@ -28,7 +24,7 @@ pub struct WriteContext<L: TrieNodeLoader> {
 }
 
 impl<L: TrieNodeLoader> WriteContext<L> {
-    pub fn new(node_loader: L, root_id: TrieNodeId) -> Self {
+    pub fn new(node_loader: L, root_id: Option<TrieNodeId>) -> Self {
         Self {
             node_loader,
             apply: Apply {
@@ -63,10 +59,10 @@ impl<L: TrieNodeLoader> WriteContext<L> {
         (id, hash)
     }
 
-    fn get_node(&self, id: TrieNodeId) -> Result<Option<Cow<TrieNode>>> {
+    fn get_node(&self, id: TrieNodeId) -> Result<Cow<TrieNode>> {
         Ok(match self.apply.nodes.get(&id) {
-            Some(n) => Some(Cow::Borrowed(n)),
-            None => self.node_loader.load_node(id)?.map(Cow::Owned),
+            Some(n) => Cow::Borrowed(n),
+            None => Cow::Owned(self.node_loader.load_node(id)?),
         })
     }
 
@@ -77,7 +73,7 @@ impl<L: TrieNodeLoader> WriteContext<L> {
             }
         };
         let new_acc = AccValue::from_set(&set, pk);
-        let mut cur_id = self.apply.root_id;
+        let mut cur_id_opt = self.apply.root_id;
         let mut cur_key = key;
 
         enum TempNode {
@@ -87,94 +83,126 @@ impl<L: TrieNodeLoader> WriteContext<L> {
         let mut temp_nodes: Vec<TempNode> = Vec::new();
 
         loop {
-            self.outdated.insert(cur_id);
-            let cur_node = match self.get_node(cur_id)? {
-                Some(n) => n,
-                None => {
-                    let (leaf_id, leaf_hash) = self.write_leaf(cur_key, set, new_acc);
-                    temp_nodes.push(TempNode::Leaf {
-                        id: leaf_id,
-                        hash: leaf_hash,
-                    });
-                    break;
-                }
-            };
-
-            match cur_node.as_ref() {
-                TrieNode::Leaf(n) => {
-                    if cur_key == n.rest {
-                        let leaf_set = &set | &n.data_set;
-                        let sets_inter = (&set) & (&n.data_set);
-                        let leaf_acc =
-                            new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
-                        let (leaf_id, leaf_hash) = self.write_leaf(cur_key, leaf_set, leaf_acc);
-                        temp_nodes.push(TempNode::Leaf {
-                            id: leaf_id,
-                            hash: leaf_hash,
-                        });
-                        break;
-                    } else {
-                        let (common_key, cur_idx, rest_cur_key, node_idx, rest_node_key) =
-                            split_at_common_prefix2(&cur_key, &n.rest);
-                        let non_leaf_set = &set | &n.data_set;
-                        let sets_inter = (&set) & (&n.data_set);
-                        let non_leaf_acc =
-                            new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
-                        let node_data_set = n.data_set.clone();
-                        let node_acc = n.data_set_acc;
-                        let (node_leaf_id, node_leaf_hash) =
-                            self.write_leaf(rest_node_key, node_data_set, node_acc);
-
-                        let mut btree_map: BTreeMap<char, (TrieNodeId, Digest)> = BTreeMap::new();
-                        btree_map.insert(node_idx, (node_leaf_id, node_leaf_hash));
-                        let non_leaf =
-                            TrieNonLeafNode::new(common_key, non_leaf_set, non_leaf_acc, btree_map);
-                        temp_nodes.push(TempNode::NonLeaf {
-                            node: non_leaf,
-                            idx: cur_idx,
-                        });
-
-                        let (leaf_id, leaf_hash) = self.write_leaf(rest_cur_key, set, new_acc);
-                        temp_nodes.push(TempNode::Leaf {
-                            id: leaf_id,
-                            hash: leaf_hash,
-                        });
-                        break;
-                    }
-                }
-                TrieNode::NonLeaf(n) => {
-                    let (common_key, cur_idx, rest_cur_key, node_idx, rest_node_key) =
-                        split_at_common_prefix2(&cur_key, &n.nibble);
-                    let non_leaf_set = &set | &n.data_set;
-                    let sets_inter = (&set) & (&n.data_set);
-                    let non_leaf_acc =
-                        new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
-                    if common_key == n.nibble {
-                        match n.children.get(&cur_idx) {
-                            Some((id, _digest)) => {
-                                // has path, go down
-                                temp_nodes.push(TempNode::NonLeaf {
-                                    node: TrieNonLeafNode::new(
-                                        common_key,
-                                        non_leaf_set,
-                                        non_leaf_acc,
-                                        n.children.clone(),
-                                    ),
-                                    idx: cur_idx,
+            match cur_id_opt {
+                Some(id) => {
+                    self.outdated.insert(id);
+                    let cur_node = self.get_node(id)?;
+                    match cur_node.as_ref() {
+                        TrieNode::Leaf(n) => {
+                            if cur_key == n.rest {
+                                let leaf_set = &set | &n.data_set;
+                                let sets_inter = (&set) & (&n.data_set);
+                                let leaf_acc =
+                                    new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
+                                let (leaf_id, leaf_hash) =
+                                    self.write_leaf(cur_key, leaf_set, leaf_acc);
+                                temp_nodes.push(TempNode::Leaf {
+                                    id: leaf_id,
+                                    hash: leaf_hash,
                                 });
-                                cur_id = *id;
-                                cur_key = rest_cur_key;
-                            }
-                            None => {
-                                // no path, create leaf
+                                break;
+                            } else {
+                                let (common_key, cur_idx, rest_cur_key, node_idx, rest_node_key) =
+                                    split_at_common_prefix2(&cur_key, &n.rest);
+                                let non_leaf_set = &set | &n.data_set;
+                                let sets_inter = (&set) & (&n.data_set);
+                                let non_leaf_acc =
+                                    new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
+                                let node_data_set = n.data_set.clone();
+                                let node_acc = n.data_set_acc;
+                                let (node_leaf_id, node_leaf_hash) =
+                                    self.write_leaf(rest_node_key, node_data_set, node_acc);
+
+                                let mut btree_map: BTreeMap<char, (TrieNodeId, Digest)> =
+                                    BTreeMap::new();
+                                btree_map.insert(node_idx, (node_leaf_id, node_leaf_hash));
                                 let non_leaf = TrieNonLeafNode::new(
                                     common_key,
                                     non_leaf_set,
                                     non_leaf_acc,
+                                    btree_map,
+                                );
+                                temp_nodes.push(TempNode::NonLeaf {
+                                    node: non_leaf,
+                                    idx: cur_idx,
+                                });
+
+                                let (leaf_id, leaf_hash) =
+                                    self.write_leaf(rest_cur_key, set, new_acc);
+                                temp_nodes.push(TempNode::Leaf {
+                                    id: leaf_id,
+                                    hash: leaf_hash,
+                                });
+                                break;
+                            }
+                        }
+                        TrieNode::NonLeaf(n) => {
+                            let (common_key, cur_idx, rest_cur_key, node_idx, rest_node_key) =
+                                split_at_common_prefix2(&cur_key, &n.nibble);
+                            let non_leaf_set = &set | &n.data_set;
+                            let sets_inter = (&set) & (&n.data_set);
+                            let non_leaf_acc =
+                                new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
+                            if common_key == n.nibble {
+                                match n.children.get(&cur_idx) {
+                                    Some((id, _digest)) => {
+                                        // has path, go down
+                                        temp_nodes.push(TempNode::NonLeaf {
+                                            node: TrieNonLeafNode::new(
+                                                common_key,
+                                                non_leaf_set,
+                                                non_leaf_acc,
+                                                n.children.clone(),
+                                            ),
+                                            idx: cur_idx,
+                                        });
+                                        cur_id_opt = Some(*id);
+                                        cur_key = rest_cur_key;
+                                    }
+                                    None => {
+                                        // no path, create leaf
+                                        let non_leaf = TrieNonLeafNode::new(
+                                            common_key,
+                                            non_leaf_set,
+                                            non_leaf_acc,
+                                            n.children.clone(),
+                                        );
+                                        let (new_leaf_id, new_leaf_hash) =
+                                            self.write_leaf(rest_cur_key, set, new_acc);
+                                        temp_nodes.push(TempNode::NonLeaf {
+                                            node: non_leaf,
+                                            idx: cur_idx,
+                                        });
+                                        temp_nodes.push(TempNode::Leaf {
+                                            id: new_leaf_id,
+                                            hash: new_leaf_hash,
+                                        });
+                                        break;
+                                    }
+                                }
+                            } else {
+                                let mut btree_map: BTreeMap<char, (TrieNodeId, Digest)> =
+                                    BTreeMap::new();
+
+                                let child_non_leaf = TrieNonLeafNode::new(
+                                    rest_node_key,
+                                    n.data_set.clone(),
+                                    n.data_set_acc,
                                     n.children.clone(),
                                 );
+                                let (child_non_leaf_id, child_non_leaf_hash) =
+                                    self.write_non_leaf(child_non_leaf);
+                                btree_map
+                                    .insert(node_idx, (child_non_leaf_id, child_non_leaf_hash));
+
                                 let (new_leaf_id, new_leaf_hash) =
                                     self.write_leaf(rest_cur_key, set, new_acc);
+                                let non_leaf = TrieNonLeafNode::new(
+                                    common_key,
+                                    non_leaf_set,
+                                    non_leaf_acc,
+                                    btree_map,
+                                );
                                 temp_nodes.push(TempNode::NonLeaf {
                                     node: non_leaf,
                                     idx: cur_idx,
@@ -186,33 +214,15 @@ impl<L: TrieNodeLoader> WriteContext<L> {
                                 break;
                             }
                         }
-                    } else {
-                        let mut btree_map: BTreeMap<char, (TrieNodeId, Digest)> = BTreeMap::new();
-
-                        let child_non_leaf = TrieNonLeafNode::new(
-                            rest_node_key,
-                            n.data_set.clone(),
-                            n.data_set_acc,
-                            n.children.clone(),
-                        );
-                        let (child_non_leaf_id, child_non_leaf_hash) =
-                            self.write_non_leaf(child_non_leaf);
-                        btree_map.insert(node_idx, (child_non_leaf_id, child_non_leaf_hash));
-
-                        let (new_leaf_id, new_leaf_hash) =
-                            self.write_leaf(rest_cur_key, set, new_acc);
-                        let non_leaf =
-                            TrieNonLeafNode::new(common_key, non_leaf_set, non_leaf_acc, btree_map);
-                        temp_nodes.push(TempNode::NonLeaf {
-                            node: non_leaf,
-                            idx: cur_idx,
-                        });
-                        temp_nodes.push(TempNode::Leaf {
-                            id: new_leaf_id,
-                            hash: new_leaf_hash,
-                        });
-                        break;
                     }
+                }
+                None => {
+                    let (leaf_id, leaf_hash) = self.write_leaf(cur_key, set, new_acc);
+                    temp_nodes.push(TempNode::Leaf {
+                        id: leaf_id,
+                        hash: leaf_hash,
+                    });
+                    break;
                 }
             }
         }
@@ -234,7 +244,7 @@ impl<L: TrieNodeLoader> WriteContext<L> {
                 }
             }
         }
-        self.apply.root_id = new_root_id;
+        self.apply.root_id = Some(new_root_id);
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
         }
@@ -249,7 +259,7 @@ impl<L: TrieNodeLoader> WriteContext<L> {
             }
         };
         let delta_acc = AccValue::from_set(&set, pk);
-        let mut cur_id = self.apply.root_id;
+        let mut cur_id_opt = self.apply.root_id;
         let mut cur_key = key;
 
         enum TempNode {
@@ -266,54 +276,59 @@ impl<L: TrieNodeLoader> WriteContext<L> {
         let mut temp_nodes: Vec<TempNode> = Vec::new();
 
         loop {
-            self.outdated.insert(cur_id);
-            let cur_node = self
-                .get_node(cur_id)?
-                .ok_or_else(|| anyhow!("Cannot find node!"))?;
-
-            match cur_node.as_ref() {
-                TrieNode::Leaf(n) => {
-                    if cur_key == n.rest {
-                        let set_dif = (&n.data_set) / (&set);
-                        let old_acc = n.data_set_acc;
-                        let mut is_empty = false;
-                        if set_dif.is_empty() {
-                            is_empty = true;
+            match cur_id_opt {
+                Some(id) => {
+                    self.outdated.insert(id);
+                    let cur_node = self.get_node(id)?;
+                    match cur_node.as_ref() {
+                        TrieNode::Leaf(n) => {
+                            if cur_key == n.rest {
+                                let set_dif = (&n.data_set) / (&set);
+                                let old_acc = n.data_set_acc;
+                                let mut is_empty = false;
+                                if set_dif.is_empty() {
+                                    is_empty = true;
+                                }
+                                let (id, hash) =
+                                    self.write_leaf(cur_key, set_dif, old_acc - delta_acc);
+                                if is_empty {
+                                    self.outdated.insert(id);
+                                }
+                                temp_nodes.push(TempNode::Leaf { id, hash, is_empty });
+                                break;
+                            } else {
+                                return Err(anyhow!("Key not found"));
+                            }
                         }
-                        let (id, hash) = self.write_leaf(cur_key, set_dif, old_acc - delta_acc);
-                        if is_empty {
-                            self.outdated.insert(id);
+                        TrieNode::NonLeaf(n) => {
+                            let (_common_key, cur_idx, rest_cur_key, _node_idx, _rest_node_key) =
+                                split_at_common_prefix2(&cur_key, &n.nibble);
+                            match n.children.get(&cur_idx) {
+                                Some((id, _hash)) => {
+                                    let set_dif = (&n.data_set) / (&set);
+                                    let old_acc = n.data_set_acc;
+                                    let non_leaf = TrieNonLeafNode::new(
+                                        n.nibble.clone(),
+                                        set_dif,
+                                        old_acc - delta_acc,
+                                        n.children.clone(),
+                                    );
+                                    temp_nodes.push(TempNode::NonLeaf {
+                                        node: non_leaf,
+                                        idx: cur_idx,
+                                    });
+                                    cur_id_opt = Some(*id);
+                                    cur_key = rest_cur_key;
+                                }
+                                None => {
+                                    return Err(anyhow!("Key not found"));
+                                }
+                            }
                         }
-                        temp_nodes.push(TempNode::Leaf { id, hash, is_empty });
-                        break;
-                    } else {
-                        return Err(anyhow!("Key not found"));
                     }
                 }
-                TrieNode::NonLeaf(n) => {
-                    let (_common_key, cur_idx, rest_cur_key, _node_idx, _rest_node_key) =
-                        split_at_common_prefix2(&cur_key, &n.nibble);
-                    match n.children.get(&cur_idx) {
-                        Some((id, _hash)) => {
-                            let set_dif = (&n.data_set) / (&set);
-                            let old_acc = n.data_set_acc;
-                            let non_leaf = TrieNonLeafNode::new(
-                                n.nibble.clone(),
-                                set_dif,
-                                old_acc - delta_acc,
-                                n.children.clone(),
-                            );
-                            temp_nodes.push(TempNode::NonLeaf {
-                                node: non_leaf,
-                                idx: cur_idx,
-                            });
-                            cur_id = *id;
-                            cur_key = rest_cur_key;
-                        }
-                        None => {
-                            return Err(anyhow!("Key not found"));
-                        }
-                    }
+                None => {
+                    bail!("Cannot find node");
                 }
             }
         }
@@ -341,9 +356,7 @@ impl<L: TrieNodeLoader> WriteContext<L> {
                         let mut new_str: String = node.nibble;
                         for (c, (id, _hash)) in node.children {
                             self.outdated.insert(id);
-                            let child_n = self
-                                .get_node(id)?
-                                .ok_or_else(|| anyhow!("Cannot find node!"))?;
+                            let child_n = self.get_node(id)?;
                             match child_n.as_ref() {
                                 TrieNode::Leaf(n) => {
                                     if c == '\0' {
@@ -397,7 +410,7 @@ impl<L: TrieNodeLoader> WriteContext<L> {
             }
         }
 
-        self.apply.root_id = new_root_id;
+        self.apply.root_id = Some(new_root_id);
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
         }

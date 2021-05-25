@@ -1,33 +1,35 @@
-use super::{read::ReadContext, write::WriteContext, write::Apply, TrieNode, TrieNodeId, TrieNodeLoader};
+use super::{
+    read::ReadContext, write::Apply, write::WriteContext, TrieNode, TrieNodeId, TrieNodeLoader,
+};
 use crate::{
     acc::{AccValue, Set},
-    chain::{id_tree::IdTreeObjId, trie_tree::read::query_trie, tests::PUB_KEY},
+    chain::{id_tree::IdTreeObjId, tests::PUB_KEY, trie_tree::read::query_trie},
     digest::Digestible,
     set,
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::collections::HashMap;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct TestTrie {
-    root_id: TrieNodeId,
+    root_id: Option<TrieNodeId>,
     nodes: HashMap<TrieNodeId, TrieNode>,
 }
 
 impl TrieNodeLoader for TestTrie {
-    fn load_node(&self, id: TrieNodeId) -> Result<Option<TrieNode>> {
+    fn load_node(&self, id: TrieNodeId) -> Result<TrieNode> {
         match self.nodes.get(&id).cloned() {
-            Some(n) => Ok(Some(n)),
-            None => Ok(None),
+            Some(n) => Ok(n),
+            None => bail!("Cannot find node in TestTrie"),
         }
     }
 }
 
 impl TrieNodeLoader for &'_ TestTrie {
-    fn load_node(&self, id: TrieNodeId) -> Result<Option<TrieNode>> {
+    fn load_node(&self, id: TrieNodeId) -> Result<TrieNode> {
         match self.nodes.get(&id).cloned() {
-            Some(n) => Ok(Some(n)),
-            None => Ok(None),
+            Some(n) => Ok(n),
+            None => bail!("Cannot find node in TestTrie"),
         }
     }
 }
@@ -35,7 +37,7 @@ impl TrieNodeLoader for &'_ TestTrie {
 impl TestTrie {
     pub fn new() -> Self {
         Self {
-            root_id: TrieNodeId::next_id(),
+            root_id: None,
             nodes: HashMap::new(),
         }
     }
@@ -69,20 +71,29 @@ fn test_write() {
     let mut ctx = WriteContext::new(&test_trie, test_trie.root_id);
     for i in 0..10 {
         let data = &data[i];
-        ctx.insert(data.0.clone(), IdTreeObjId(data.1), &PUB_KEY).unwrap();
+        ctx.insert(data.0.clone(), IdTreeObjId(data.1), &PUB_KEY)
+            .unwrap();
     }
-    ctx.delete("abcd".to_string(), IdTreeObjId(4), &PUB_KEY).unwrap();
-    ctx.delete("abcd".to_string(), IdTreeObjId(1), &PUB_KEY).unwrap();
-    ctx.delete("bce".to_string(), IdTreeObjId(10), &PUB_KEY).unwrap();
-    ctx.delete("abcb".to_string(), IdTreeObjId(6), &PUB_KEY).unwrap();
-    ctx.delete("abc".to_string(), IdTreeObjId(5), &PUB_KEY).unwrap();
-    ctx.delete("a".to_string(), IdTreeObjId(8), &PUB_KEY).unwrap();
-    ctx.delete("bcd".to_string(), IdTreeObjId(9), &PUB_KEY).unwrap();
-    ctx.delete("abdef".to_string(), IdTreeObjId(7), &PUB_KEY).unwrap();
-    ctx.delete("abca".to_string(), IdTreeObjId(3), &PUB_KEY).unwrap();
+    ctx.delete("abcd".to_string(), IdTreeObjId(4), &PUB_KEY)
+        .unwrap();
+    ctx.delete("abcd".to_string(), IdTreeObjId(1), &PUB_KEY)
+        .unwrap();
+    ctx.delete("bce".to_string(), IdTreeObjId(10), &PUB_KEY)
+        .unwrap();
+    ctx.delete("abcb".to_string(), IdTreeObjId(6), &PUB_KEY)
+        .unwrap();
+    ctx.delete("abc".to_string(), IdTreeObjId(5), &PUB_KEY)
+        .unwrap();
+    ctx.delete("a".to_string(), IdTreeObjId(8), &PUB_KEY)
+        .unwrap();
+    ctx.delete("bcd".to_string(), IdTreeObjId(9), &PUB_KEY)
+        .unwrap();
+    ctx.delete("abdef".to_string(), IdTreeObjId(7), &PUB_KEY)
+        .unwrap();
+    ctx.delete("abca".to_string(), IdTreeObjId(3), &PUB_KEY)
+        .unwrap();
     let change = ctx.changes();
     test_trie.apply(change);
-    println!("{:#?}", test_trie);
     assert_eq!(1, 1);
 }
 
@@ -93,7 +104,8 @@ fn test_read() {
     let mut ctx = WriteContext::new(&test_trie, test_trie.root_id);
     for i in 0..10 {
         let data = &data[i];
-        ctx.insert(data.0.clone(), IdTreeObjId(data.1), &PUB_KEY).unwrap();
+        ctx.insert(data.0.clone(), IdTreeObjId(data.1), &PUB_KEY)
+            .unwrap();
     }
     let change = ctx.changes();
     test_trie.apply(change);
@@ -106,8 +118,7 @@ fn test_read() {
     assert_eq!(a, empty_acc);
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -121,8 +132,7 @@ fn test_read() {
     assert_eq!(a, expect_acc);
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -136,8 +146,7 @@ fn test_read() {
     assert_eq!(a, expect_acc);
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -151,8 +160,7 @@ fn test_read() {
     assert_eq!(a, expect_acc);
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -166,8 +174,7 @@ fn test_read() {
     assert_eq!(a, expect_acc);
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -181,8 +188,7 @@ fn test_read() {
     assert_eq!(a, expect_acc);
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -196,8 +202,7 @@ fn test_read() {
     assert_eq!(a, expect_acc);
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -211,8 +216,7 @@ fn test_read() {
     assert_eq!(a, expect_acc);
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -226,8 +230,7 @@ fn test_read() {
     assert_eq!(a, expect_acc);
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()
@@ -241,7 +244,8 @@ fn test_read_ctx() {
     let mut ctx = WriteContext::new(&test_trie, test_trie.root_id);
     for i in 0..10 {
         let data = &data[i];
-        ctx.insert(data.0.clone(), IdTreeObjId(data.1), &PUB_KEY).unwrap();
+        ctx.insert(data.0.clone(), IdTreeObjId(data.1), &PUB_KEY)
+            .unwrap();
     }
     let change = ctx.changes();
     test_trie.apply(change);
@@ -305,8 +309,7 @@ fn test_read_ctx() {
     let p = ctx.into_proof();
     assert_eq!(
         test_trie
-            .load_node(test_trie.root_id)
-            .unwrap()
+            .load_node(test_trie.root_id.unwrap())
             .unwrap()
             .to_digest(),
         p.root_hash()

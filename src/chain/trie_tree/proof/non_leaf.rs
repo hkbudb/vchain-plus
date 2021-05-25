@@ -4,7 +4,7 @@ use super::{
     TrieNodeId,
 };
 use crate::{
-    acc::{AccValue, Set, AccPublicKey},
+    acc::{AccPublicKey, AccValue, Set},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};

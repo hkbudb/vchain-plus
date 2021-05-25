@@ -94,7 +94,7 @@ pub struct TrieNonLeafNode {
     pub nibble: String,
     pub data_set: Set,
     pub data_set_acc: AccValue,
-    pub children: BTreeMap<char, (TrieNodeId, Digest)>, // nibble + char + children's rest, use smol_str, ref: https://github.com/rust-analyzer/smol_str
+    pub children: BTreeMap<char, (TrieNodeId, Digest)>,
 }
 
 impl Digestible for TrieNonLeafNode {
@@ -125,7 +125,7 @@ impl TrieNonLeafNode {
 }
 
 pub trait TrieNodeLoader {
-    fn load_node(&self, id: TrieNodeId) -> Result<Option<TrieNode>>;
+    fn load_node(&self, id: TrieNodeId) -> Result<TrieNode>;
 }
 
 pub fn common_prefix_len(a: &str, b: &str) -> usize {

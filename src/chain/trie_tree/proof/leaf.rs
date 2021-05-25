@@ -1,6 +1,6 @@
 use super::super::{hash::trie_leaf_proof_hash, TrieNodeId};
 use crate::{
-    acc::{AccValue, Set, AccPublicKey},
+    acc::{AccPublicKey, AccValue, Set},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
