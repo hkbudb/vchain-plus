@@ -37,6 +37,7 @@ struct IntersectionProof<E: PairingEngine> {
 }
 
 impl<E: PairingEngine> IntersectionProof<E> {
+    #[allow(clippy::many_single_char_names)]
     fn new(
         set: &Set,
         q_poly: &Poly<E::Fr>,
@@ -456,7 +457,7 @@ mod tests {
         let s2_acc = AccValue::from_set_sk(&s2, &sk, q);
         let intersection_acc = AccValue::from_set_sk(&set! {1}, &sk, q);
         let union_acc = AccValue::from_set_sk(&set! {1, 2, 3, 5}, &sk, q);
-        let difference_acc = AccValue::from_set_sk(&set! {2, 3}, &sk, q);
+        let _difference_acc = AccValue::from_set_sk(&set! {2, 3}, &sk, q);
 
         let (intersection_result_set, intersection_result_acc, intersection_proof) =
             compute_set_operation_intermediate::<Bls12_381>(

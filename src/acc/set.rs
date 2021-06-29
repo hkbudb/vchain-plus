@@ -19,6 +19,12 @@ impl Set {
         Self(HashSet::with_capacity(cap))
     }
 
+    pub fn from_single_element(elm: NonZeroU64) -> Self {
+        let mut set = Set::with_capacity(1);
+        set.insert(elm);
+        set
+    }
+
     pub fn set_intersection(&self, rhs: &Self) -> Self {
         if self.len() < rhs.len() {
             self.iter().filter(|v| rhs.contains(v)).copied().collect()
@@ -37,10 +43,6 @@ impl Set {
 
     pub fn is_subset_of(&self, rhs: &Self) -> bool {
         self.iter().all(|v| rhs.contains(v))
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 }
 
@@ -129,6 +131,10 @@ macro_rules! set {
 
 #[cfg(test)]
 mod tests {
+    use std::iter::FromIterator;
+
+    use crate::acc::Set;
+
     #[test]
     fn test_intersection() {
         let a = set! {1, 2, 3};
@@ -172,5 +178,15 @@ mod tests {
         assert!(!a.is_subset_of(&b));
         assert!(c.is_subset_of(&a));
         assert!(c.is_subset_of(&b));
+    }
+
+    #[test]
+    fn test_from_iter() {
+        let mut v = Vec::<u64>::new();
+        v.push(1);
+        v.push(2);
+        v.push(3);
+        let b = Set::from_iter(v.into_iter());
+        assert_eq!(b, set! {1,2,3})
     }
 }
