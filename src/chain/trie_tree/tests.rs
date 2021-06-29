@@ -3,12 +3,16 @@ use super::{
 };
 use crate::{
     acc::{AccValue, Set},
-    chain::{id_tree::IdTreeObjId, tests::PUB_KEY, trie_tree::read::query_trie},
+    chain::{
+        id_tree::ObjId,
+        tests::PUB_KEY,
+        trie_tree::{read::query_trie, TrieRoot},
+    },
     digest::Digestible,
     set,
 };
 use anyhow::{bail, Result};
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroU64};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct TestTrie {
@@ -43,55 +47,100 @@ impl TestTrie {
     }
 
     fn apply(&mut self, apply: Apply) {
-        self.root_id = apply.root_id;
+        self.root_id = apply.root.trie_root_id;
         self.nodes.extend(apply.nodes.into_iter());
     }
 }
 
-fn get_dataset() -> Vec<(String, u64)> {
-    let data: Vec<(String, u64)> = vec![
-        ("abcd".to_string(), 1),
-        ("abcde".to_string(), 2),
-        ("abca".to_string(), 3),
-        ("abcd".to_string(), 4),
-        ("abc".to_string(), 5),
-        ("abcb".to_string(), 6),
-        ("abdef".to_string(), 7),
-        ("a".to_string(), 8),
-        ("bcd".to_string(), 9),
-        ("bce".to_string(), 10),
-    ];
-    data
+pub fn set_root_id(trie_root: &mut TrieRoot, id: Option<TrieNodeId>) {
+    trie_root.trie_root_id = id;
+}
+
+fn get_dataset() -> Vec<(String, NonZeroU64)> {
+    unsafe {
+        let data: Vec<(String, NonZeroU64)> = vec![
+            ("abcd".to_string(), NonZeroU64::new_unchecked(1)),
+            ("abcde".to_string(), NonZeroU64::new_unchecked(2)),
+            ("abca".to_string(), NonZeroU64::new_unchecked(3)),
+            ("abcd".to_string(), NonZeroU64::new_unchecked(4)),
+            ("abc".to_string(), NonZeroU64::new_unchecked(5)),
+            ("abcb".to_string(), NonZeroU64::new_unchecked(6)),
+            ("abdef".to_string(), NonZeroU64::new_unchecked(7)),
+            ("a".to_string(), NonZeroU64::new_unchecked(8)),
+            ("bcd".to_string(), NonZeroU64::new_unchecked(9)),
+            ("bce".to_string(), NonZeroU64::new_unchecked(10)),
+        ];
+        data
+    }
 }
 
 #[test]
 fn test_write() {
     let data = get_dataset();
     let mut test_trie = TestTrie::new();
-    let mut ctx = WriteContext::new(&test_trie, test_trie.root_id);
+    let mut test_trie_root = TrieRoot::default();
+    set_root_id(&mut test_trie_root, test_trie.root_id);
+    let mut ctx = WriteContext::new(&test_trie, test_trie_root);
     for i in 0..10 {
         let data = &data[i];
-        ctx.insert(data.0.clone(), IdTreeObjId(data.1), &PUB_KEY)
-            .unwrap();
+        ctx.insert(data.0.clone(), ObjId(data.1), &PUB_KEY).unwrap();
     }
-    ctx.delete("abcd".to_string(), IdTreeObjId(4), &PUB_KEY)
+    unsafe {
+        ctx.delete(
+            "abcd".to_string(),
+            ObjId(NonZeroU64::new_unchecked(4)),
+            &PUB_KEY,
+        )
         .unwrap();
-    ctx.delete("abcd".to_string(), IdTreeObjId(1), &PUB_KEY)
+        ctx.delete(
+            "abcd".to_string(),
+            ObjId(NonZeroU64::new_unchecked(1)),
+            &PUB_KEY,
+        )
         .unwrap();
-    ctx.delete("bce".to_string(), IdTreeObjId(10), &PUB_KEY)
+        ctx.delete(
+            "bce".to_string(),
+            ObjId(NonZeroU64::new_unchecked(10)),
+            &PUB_KEY,
+        )
         .unwrap();
-    ctx.delete("abcb".to_string(), IdTreeObjId(6), &PUB_KEY)
+        ctx.delete(
+            "abcb".to_string(),
+            ObjId(NonZeroU64::new_unchecked(6)),
+            &PUB_KEY,
+        )
         .unwrap();
-    ctx.delete("abc".to_string(), IdTreeObjId(5), &PUB_KEY)
+        ctx.delete(
+            "abc".to_string(),
+            ObjId(NonZeroU64::new_unchecked(5)),
+            &PUB_KEY,
+        )
         .unwrap();
-    ctx.delete("a".to_string(), IdTreeObjId(8), &PUB_KEY)
+        ctx.delete(
+            "a".to_string(),
+            ObjId(NonZeroU64::new_unchecked(8)),
+            &PUB_KEY,
+        )
         .unwrap();
-    ctx.delete("bcd".to_string(), IdTreeObjId(9), &PUB_KEY)
+        ctx.delete(
+            "bcd".to_string(),
+            ObjId(NonZeroU64::new_unchecked(9)),
+            &PUB_KEY,
+        )
         .unwrap();
-    ctx.delete("abdef".to_string(), IdTreeObjId(7), &PUB_KEY)
+        ctx.delete(
+            "abdef".to_string(),
+            ObjId(NonZeroU64::new_unchecked(7)),
+            &PUB_KEY,
+        )
         .unwrap();
-    ctx.delete("abca".to_string(), IdTreeObjId(3), &PUB_KEY)
+        ctx.delete(
+            "abca".to_string(),
+            ObjId(NonZeroU64::new_unchecked(3)),
+            &PUB_KEY,
+        )
         .unwrap();
+    }
     let change = ctx.changes();
     test_trie.apply(change);
     assert_eq!(1, 1);
@@ -101,11 +150,12 @@ fn test_write() {
 fn test_read() {
     let data = get_dataset();
     let mut test_trie = TestTrie::new();
-    let mut ctx = WriteContext::new(&test_trie, test_trie.root_id);
+    let mut test_trie_root = TrieRoot::default();
+    set_root_id(&mut test_trie_root, test_trie.root_id);
+    let mut ctx = WriteContext::new(&test_trie, test_trie_root);
     for i in 0..10 {
         let data = &data[i];
-        ctx.insert(data.0.clone(), IdTreeObjId(data.1), &PUB_KEY)
-            .unwrap();
+        ctx.insert(data.0.clone(), ObjId(data.1), &PUB_KEY).unwrap();
     }
     let change = ctx.changes();
     test_trie.apply(change);
@@ -241,11 +291,12 @@ fn test_read() {
 fn test_read_ctx() {
     let data = get_dataset();
     let mut test_trie = TestTrie::new();
-    let mut ctx = WriteContext::new(&test_trie, test_trie.root_id);
+    let mut test_trie_root = TrieRoot::default();
+    set_root_id(&mut test_trie_root, test_trie.root_id);
+    let mut ctx = WriteContext::new(&test_trie, test_trie_root);
     for i in 0..10 {
         let data = &data[i];
-        ctx.insert(data.0.clone(), IdTreeObjId(data.1), &PUB_KEY)
-            .unwrap();
+        ctx.insert(data.0.clone(), ObjId(data.1), &PUB_KEY).unwrap();
     }
     let change = ctx.changes();
     test_trie.apply(change);
@@ -315,15 +366,26 @@ fn test_read_ctx() {
         p.root_hash()
     );
 
-    assert_eq!(empty_acc, p.value_acc("befg".to_string(), &PUB_KEY));
-    assert_eq!(empty_acc, p.value_acc("cefg".to_string(), &PUB_KEY));
-    assert_eq!(expect_acc1, p.value_acc("abcd".to_string(), &PUB_KEY));
-    assert_eq!(expect_acc2, p.value_acc("abcb".to_string(), &PUB_KEY));
-    assert_eq!(expect_acc3, p.value_acc("bce".to_string(), &PUB_KEY));
-    assert_eq!(expect_acc4, p.value_acc("abc".to_string(), &PUB_KEY));
-    assert_eq!(expect_acc5, p.value_acc("a".to_string(), &PUB_KEY));
-    assert_eq!(expect_acc6, p.value_acc("bcd".to_string(), &PUB_KEY));
-    assert_eq!(expect_acc7, p.value_acc("abdef".to_string(), &PUB_KEY));
-    assert_eq!(expect_acc8, p.value_acc("abca".to_string(), &PUB_KEY));
-    assert_eq!(expect_acc9, p.value_acc("abcde".to_string(), &PUB_KEY));
+    p.verify_acc(empty_acc, "befg".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(empty_acc, "cefg".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(expect_acc1, "abcd".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(expect_acc2, "abcb".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(expect_acc3, "bce".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(expect_acc4, "abc".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(expect_acc5, "a".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(expect_acc6, "bcd".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(expect_acc7, "abdef".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(expect_acc8, "abca".to_string(), &PUB_KEY)
+        .unwrap();
+    p.verify_acc(expect_acc9, "abcde".to_string(), &PUB_KEY)
+        .unwrap();
 }

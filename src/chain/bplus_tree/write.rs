@@ -1,11 +1,10 @@
 use super::{
     BPlusTreeLeafNode, BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader, BPlusTreeNonLeafNode,
-    Digest, Digestible,
+    BPlusTreeRoot, Digest, Digestible,
 };
 use crate::{
     acc::{AccPublicKey, AccValue, Set},
-    chain::{id_tree::IdTreeObjId, range::Range, traits::Num, MAX_INLINE_FANOUT},
-    set,
+    chain::{id_tree::ObjId, range::Range, traits::Num, MAX_INLINE_FANOUT},
 };
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
@@ -17,22 +16,22 @@ use std::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Apply<K: Num> {
-    pub root_id: Option<BPlusTreeNodeId>,
+    pub root: BPlusTreeRoot,
     pub nodes: HashMap<BPlusTreeNodeId, BPlusTreeNode<K>>,
 }
 
-pub struct WriteContext<K: Num, L: BPlusTreeNodeLoader<K>> {
-    node_loader: L,
+pub struct WriteContext<'a, K: Num, L: BPlusTreeNodeLoader<K>> {
+    node_loader: &'a L,
     apply: Apply<K>,
     outdated: HashSet<BPlusTreeNodeId>,
 }
 
-impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
-    pub fn new(node_loader: L, root_id: Option<BPlusTreeNodeId>) -> Self {
+impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
+    pub fn new(node_loader: &'a L, root: BPlusTreeRoot) -> Self {
         Self {
             node_loader,
             apply: Apply {
-                root_id,
+                root,
                 nodes: HashMap::new(),
             },
             outdated: HashSet::new(),
@@ -73,18 +72,14 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
     pub fn insert(
         &mut self,
         key: K,
-        obj_id: IdTreeObjId,
+        obj_id: ObjId,
         fanout: usize,
         pk: &AccPublicKey,
     ) -> Result<()> {
-        let set = match obj_id {
-            IdTreeObjId(id) => {
-                set! {id}
-            }
-        };
+        let set = Set::from_single_element(obj_id.0);
         let new_acc = AccValue::from_set(&set, pk);
 
-        let mut cur_id_opt = self.apply.root_id;
+        let mut cur_id_opt = self.apply.root.bplus_tree_root_id;
         let mut insert_flag = false;
         let mut update_flag = false;
 
@@ -303,6 +298,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
         }
 
         let mut new_root_id = BPlusTreeNodeId::next_id();
+        let mut new_root_hash = Digest::zero();
         let mut child_ids: Vec<BPlusTreeNodeId> = Vec::new();
         let mut child_hashes: Vec<Digest> = Vec::new();
         let mut cur_tmp_len = temp_nodes.len();
@@ -314,6 +310,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                     child_ids.push(id);
                     child_hashes.push(hash);
                     new_root_id = id;
+                    new_root_hash = hash;
                 }
                 TempNode::NonLeaf { mut node, idx } => {
                     if node.child_ids.is_empty() {
@@ -357,6 +354,7 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                         child_ids.push(id);
                         child_hashes.push(hash);
                         new_root_id = id;
+                        new_root_hash = hash;
                         insert_flag = false;
                     } else {
                         insert_flag = true;
@@ -428,8 +426,9 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                 new_root_child_hashes,
                                 new_root_child_ids,
                             );
-                            let (new_rt_id, _new_rt_hash) = self.write_non_leaf(new_root);
+                            let (new_rt_id, new_rt_hash) = self.write_non_leaf(new_root);
                             new_root_id = new_rt_id;
+                            new_root_hash = new_rt_hash;
                         }
                     }
                 }
@@ -437,7 +436,8 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
             cur_tmp_len -= 1;
         }
 
-        self.apply.root_id = Some(new_root_id);
+        self.apply.root.bplus_tree_root_id = Some(new_root_id);
+        self.apply.root.bplus_tree_root_hash = new_root_hash;
         self.outdated.insert(c_id);
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
@@ -449,17 +449,13 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
     pub fn delete(
         &mut self,
         key: K,
-        obj_id: IdTreeObjId,
+        obj_id: ObjId,
         fanout: usize,
         pk: &AccPublicKey,
     ) -> Result<()> {
-        let set = match obj_id {
-            IdTreeObjId(id) => {
-                set! {id}
-            }
-        };
+        let set = Set::from_single_element(obj_id.0);
         let delta_acc = AccValue::from_set(&set, pk);
-        let mut cur_id_opt = self.apply.root_id;
+        let mut cur_id_opt = self.apply.root.bplus_tree_root_id;
 
         #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
         enum TempNode<N: Num> {
@@ -511,7 +507,6 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
                                 for i in 0..*child_ids_len {
                                     let child_id = child_ids[i];
                                     let child_node = self.get_node(child_id)?;
-                                    //.ok_or_else(|| anyhow!("Cannot find node"))?;
                                     match child_node.as_ref() {
                                         BPlusTreeNode::Leaf(node) => {
                                             if node.num == key {
@@ -1069,7 +1064,8 @@ impl<K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<K, L> {
             cur_tmp_len -= 1;
         }
 
-        self.apply.root_id = Some(new_root_id);
+        self.apply.root.bplus_tree_root_id = Some(new_root_id);
+        self.apply.root.bplus_tree_root_hash = new_root_hash;
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
         }

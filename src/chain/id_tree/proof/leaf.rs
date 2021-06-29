@@ -1,12 +1,12 @@
 use crate::{
-    chain::id_tree::{hash::id_tree_leaf_proof_hash, IdTreeNodeId, IdTreeObjId},
+    chain::id_tree::{hash::id_tree_leaf_proof_hash, IdTreeInternalId, IdTreeNodeId},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct IdTreeLeaf {
-    pub(crate) obj_id: IdTreeObjId,
+    pub(crate) obj_id: IdTreeInternalId,
     pub(crate) node_id: IdTreeNodeId,
     pub(crate) node_hash: Digest,
 }
@@ -18,7 +18,7 @@ impl Digestible for IdTreeLeaf {
 }
 
 impl IdTreeLeaf {
-    pub(crate) fn new(obj_id: IdTreeObjId, node_id: IdTreeNodeId, node_hash: Digest) -> Self {
+    pub(crate) fn new(obj_id: IdTreeInternalId, node_id: IdTreeNodeId, node_hash: Digest) -> Self {
         Self {
             obj_id,
             node_id,
@@ -28,13 +28,13 @@ impl IdTreeLeaf {
 
     pub(crate) fn value_hash(
         &self,
-        obj_id: IdTreeObjId,
+        obj_id: IdTreeInternalId,
         _cur_path_rev: &mut Vec<usize>,
-    ) -> Option<Digest> {
+    ) -> Digest {
         if obj_id == self.obj_id {
-            Some(self.node_hash)
+            self.node_hash
         } else {
-            Some(Digest::zero())
+            Digest::zero()
         }
     }
 }

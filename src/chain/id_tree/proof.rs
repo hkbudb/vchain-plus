@@ -1,9 +1,12 @@
 use crate::{
-    chain::id_tree::{write::fanout_nary_rev, IdTreeNodeId, IdTreeObjId},
+    chain::id_tree::{write::fanout_nary_rev, IdTreeNodeId},
     digest::{Digest, Digestible},
 };
+use anyhow::{ensure, Result};
 use serde::{Deserialize, Serialize};
 use sub_proof::SubProof;
+
+use super::ObjId;
 
 pub(crate) mod leaf;
 pub(crate) mod non_leaf;
@@ -12,6 +15,7 @@ pub(crate) mod sub_tree;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Proof {
+    // pub(crate) cur_obj_id: ObjId
     pub(crate) root: Option<SubProof>,
 }
 
@@ -39,12 +43,28 @@ impl Proof {
         }
     }
 
-    pub fn value_hash(&self, obj_id: IdTreeObjId, n_k: usize, fanout: usize) -> Option<Digest> {
+    fn value_hash(&self, obj_id: ObjId, n_k: usize, fanout: usize) -> Digest {
         let depth = (n_k as f64).log(fanout as f64).floor() as usize;
-        let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
+        let mut cur_path_rev = fanout_nary_rev(obj_id.to_internal_id().0, fanout as u64, depth);
         match self.root.as_ref() {
-            None => Some(Digest::zero()),
-            Some(root) => root.value_hash(obj_id, &mut cur_path_rev),
+            None => Digest::zero(),
+            Some(root) => root.value_hash(obj_id.to_internal_id(), &mut cur_path_rev),
         }
+    }
+
+    pub fn verify_value(
+        &self,
+        target_hash: Digest,
+        obj_id: ObjId,
+        n_k: usize,
+        fanout: usize,
+    ) -> Result<()> {
+        let computed_hash = self.value_hash(obj_id, n_k, fanout);
+        ensure!(
+            target_hash == computed_hash,
+            "Object hash value not matched! The mismatched obj id is {:?}.",
+            obj_id,
+        );
+        Ok(())
     }
 }

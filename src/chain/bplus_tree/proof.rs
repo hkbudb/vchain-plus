@@ -10,7 +10,7 @@ pub(crate) mod non_leaf;
 pub(crate) mod res_sub_tree;
 pub(crate) mod sub_proof;
 pub(crate) mod sub_tree;
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{anyhow, bail, Result};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Proof<K: Num> {
@@ -31,13 +31,10 @@ impl<K: Num> Proof<K> {
 
     pub(crate) fn verify(
         &self,
-        tree_root_hash: Digest,
         query_range: Range<K>,
         acc_val: AccValue,
         pk: &AccPublicKey,
-    ) -> Result<()> {
-        ensure!(self.root_hash() == tree_root_hash, "Root hash not matched!");
-
+    ) -> Result<Digest> {
         if self
             .root
             .as_ref()
@@ -47,6 +44,6 @@ impl<K: Num> Proof<K> {
         {
             bail!("Acc value not matched");
         }
-        Ok(())
+        Ok(self.root_hash())
     }
 }

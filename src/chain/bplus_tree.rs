@@ -16,6 +16,18 @@ pub mod proof;
 pub mod read;
 pub mod write;
 
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct BPlusTreeRoot {
+    pub(crate) bplus_tree_root_id: Option<BPlusTreeNodeId>,
+    pub(crate) bplus_tree_root_hash: Digest,
+}
+
+impl Digestible for BPlusTreeRoot {
+    fn to_digest(&self) -> Digest {
+        self.bplus_tree_root_hash
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum BPlusTreeNode<K: Num> {
     Leaf(BPlusTreeLeafNode<K>),

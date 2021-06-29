@@ -3,6 +3,7 @@ use crate::{
     acc::{AccPublicKey, AccValue, Set},
     digest::{Digest, Digestible},
 };
+use anyhow::{ensure, Result};
 use serde::{Deserialize, Serialize};
 use sub_proof::SubProof;
 
@@ -40,7 +41,7 @@ impl Proof {
         }
     }
 
-    pub fn value_acc(&self, keyword: String, pk: &AccPublicKey) -> AccValue {
+    fn value_acc(&self, keyword: String, pk: &AccPublicKey) -> AccValue {
         match self.root.as_ref() {
             Some(root) => root.value_acc(keyword, pk),
             None => {
@@ -48,5 +49,16 @@ impl Proof {
                 AccValue::from_set(&empty_set, pk)
             }
         }
+    }
+
+    pub fn verify_acc(
+        &self,
+        target_acc: AccValue,
+        keyword: String,
+        pk: &AccPublicKey,
+    ) -> Result<()> {
+        let computed_acc = self.value_acc(keyword, pk);
+        ensure!(target_acc == computed_acc, "Acc value not matched!");
+        Ok(())
     }
 }

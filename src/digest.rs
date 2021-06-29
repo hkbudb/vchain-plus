@@ -134,7 +134,7 @@ pub fn blake2() -> blake2b_simd::Params {
 }
 
 pub trait Digestible {
-    fn to_digest(&self) -> Digest; // convert a data (string, int, ...) to a hash digest
+    fn to_digest(&self) -> Digest;
 }
 
 impl Digestible for [u8] {
@@ -145,7 +145,7 @@ impl Digestible for [u8] {
 
 impl Digestible for str {
     fn to_digest(&self) -> Digest {
-        self.as_bytes().to_digest() // as_bytes(): convert a string slice to an array of bytes
+        self.as_bytes().to_digest()
     }
 }
 
@@ -171,16 +171,14 @@ impl_digestable_for_numeric!(u8, u16, u32, u64, u128);
 impl_digestable_for_numeric!(f32, f64);
 
 pub fn concat_digest_ref<'a>(input: impl Iterator<Item = &'a Digest>) -> Digest {
-    // given a iterator of a reference of a digests vec (usually two digests), return the hash digest of their concatenation
-    let mut state = blake2().to_state(); // put digest to state, then do concatenation
+    let mut state = blake2().to_state();
     for d in input {
-        state.update(d.as_bytes()); //  &d.0 is an array
+        state.update(d.as_bytes());
     }
     Digest::from(state.finalize())
 }
 
 pub fn concat_digest(input: impl Iterator<Item = Digest>) -> Digest {
-    // given a vec of digests (usually two digests), return the hash digest of their concatenation
     let mut state = blake2().to_state();
     for d in input {
         state.update(d.as_bytes()); //
@@ -194,17 +192,16 @@ mod tests {
 
     #[test]
     fn test_to_digest() {
-        let expect = Digest(*b"\x32\x4d\xcf\x02\x7d\xd4\xa3\x0a\x93\x2c\x44\x1f\x36\x5a\x25\xe8\x6b\x17\x3d\xef\xa4\xb8\xe5\x89\x48\x25\x34\x71\xb8\x1b\x72\xcf"); // *: dereference 解引用, return a string instead of a reference
-        assert_eq!(b"hello"[..].to_digest(), expect); // b"hello" indicates that it is a bytes array
+        let expect = Digest(*b"\x32\x4d\xcf\x02\x7d\xd4\xa3\x0a\x93\x2c\x44\x1f\x36\x5a\x25\xe8\x6b\x17\x3d\xef\xa4\xb8\xe5\x89\x48\x25\x34\x71\xb8\x1b\x72\xcf");
+        assert_eq!(b"hello"[..].to_digest(), expect);
         assert_eq!("hello".to_digest(), expect);
-        assert_eq!("hello".to_owned().to_digest(), expect); // "hello".to_owned(): return a String using "hello" instead of a reference
+        assert_eq!("hello".to_owned().to_digest(), expect);
     }
 
     #[test]
     fn test_zero() {
         let expect = Digest(*b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00");
         assert_eq!(Digest::zero(), expect);
-        //dbg!(Digest::zero().0);
     }
 
     #[test]
@@ -217,10 +214,10 @@ mod tests {
     fn test_digest_concat() {
         let input = vec!["hello".to_digest(), "world!".to_digest()];
         let expect = {
-            let mut buf: Vec<u8> = Vec::new(); // create an empty vec
-            buf.extend_from_slice(&input[0].0[..]); // append the digest of "hello" to the buf vec
-            buf.extend_from_slice(&input[1].0[..]); // append the digest of "world" to the buf vec
-            buf.as_slice().to_digest() // hash the concatenation of two digests
+            let mut buf: Vec<u8> = Vec::new();
+            buf.extend_from_slice(&input[0].0[..]);
+            buf.extend_from_slice(&input[1].0[..]);
+            buf.as_slice().to_digest()
         };
         assert_eq!(concat_digest_ref(input.iter()), expect);
         assert_eq!(concat_digest(input.into_iter()), expect);
@@ -228,7 +225,6 @@ mod tests {
 
     #[test]
     fn test_serde() {
-        // serde: convert string to json or binary format, this test tests serialize and deserialize
         let digest = "hello".to_digest();
         let json = serde_json::to_string_pretty(&digest).unwrap();
         assert_eq!(

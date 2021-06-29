@@ -1,6 +1,6 @@
 use super::{
-    Digest, Digestible, IdTreeLeafNode, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader,
-    IdTreeNonLeafNode, IdTreeObjId,
+    Digest, Digestible, IdTreeInternalId, IdTreeLeafNode, IdTreeNode, IdTreeNodeId,
+    IdTreeNodeLoader, IdTreeNonLeafNode, IdTreeRoot, ObjId,
 };
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -11,23 +11,23 @@ use std::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Apply {
-    pub root_id: Option<IdTreeNodeId>,
+    pub root: IdTreeRoot,
     pub nodes: HashMap<IdTreeNodeId, IdTreeNode>,
 }
 
-pub struct WriteContext<L: IdTreeNodeLoader> {
-    node_loader: L,
+pub struct WriteContext<'a, L: IdTreeNodeLoader> {
+    node_loader: &'a L,
     apply: Apply,
     outdated: HashSet<IdTreeNodeId>,
 }
 
-impl<L: IdTreeNodeLoader> WriteContext<L> {
-    pub fn new(node_loader: L, root_id: Option<IdTreeNodeId>) -> Self {
+impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
+    pub fn new(node_loader: &'a L, root: IdTreeRoot) -> Self {
         IdTreeNodeId::next_id();
         Self {
             node_loader,
             apply: Apply {
-                root_id,
+                root,
                 nodes: HashMap::new(),
             },
             outdated: HashSet::new(),
@@ -38,7 +38,11 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         self.apply
     }
 
-    pub fn write_leaf(&mut self, obj_id: IdTreeObjId, obj_hash: Digest) -> (IdTreeNodeId, Digest) {
+    pub fn write_leaf(
+        &mut self,
+        obj_id: IdTreeInternalId,
+        obj_hash: Digest,
+    ) -> (IdTreeNodeId, Digest) {
         let node = IdTreeLeafNode::new(obj_id, obj_hash);
         let id = node.id;
         let hash = node.to_digest();
@@ -60,16 +64,14 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
         })
     }
 
-    pub fn insert(
-        &mut self,
-        obj_id: IdTreeObjId,
-        obj_hash: Digest,
-        n_k: usize,
-        fanout: usize,
-    ) -> Result<()> {
-        let mut cur_id_opt = self.apply.root_id;
-        let depth = (n_k as f64).log(fanout as f64).floor() as usize;
-        let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
+    pub fn insert(&mut self, obj_hash: Digest, max_id_num: usize, fanout: usize) -> Result<ObjId> {
+        let cur_id = self.apply.root.cur_obj_id;
+        let internal_id = cur_id.to_internal_id();
+        let next_internal_id = IdTreeInternalId((internal_id.0 + 1) % max_id_num as u64);
+        self.apply.root.cur_obj_id = ObjId::from_internal_id(next_internal_id);
+        let mut cur_id_opt = self.apply.root.id_tree_root_id;
+        let depth = (max_id_num as f64).log(fanout as f64).floor() as usize;
+        let mut cur_path_rev = fanout_nary_rev(internal_id.0, fanout as u64, depth);
 
         enum TempNode {
             Leaf { id: IdTreeNodeId, hash: Digest },
@@ -84,7 +86,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                     let cur_node = self.get_node(id)?;
                     match cur_node.as_ref() {
                         IdTreeNode::Leaf(_n) => {
-                            let (leaf_id, leaf_hash) = self.write_leaf(obj_id, obj_hash);
+                            let (leaf_id, leaf_hash) = self.write_leaf(internal_id, obj_hash);
                             temp_nodes.push(TempNode::Leaf {
                                 id: leaf_id,
                                 hash: leaf_hash,
@@ -117,7 +119,7 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                 None => {
                     loop {
                         if cur_path_rev.is_empty() {
-                            let (leaf_id, leaf_hash) = self.write_leaf(obj_id, obj_hash);
+                            let (leaf_id, leaf_hash) = self.write_leaf(internal_id, obj_hash);
                             temp_nodes.push(TempNode::Leaf {
                                 id: leaf_id,
                                 hash: leaf_hash,
@@ -160,13 +162,14 @@ impl<L: IdTreeNodeLoader> WriteContext<L> {
                 }
             }
         }
-        self.apply.root_id = Some(new_root_id);
+        self.apply.root.id_tree_root_id = Some(new_root_id);
+        self.apply.root.id_tree_root_hash = new_root_hash;
 
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
         }
 
-        Ok(())
+        Ok(cur_id)
     }
 }
 

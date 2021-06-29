@@ -1,6 +1,6 @@
 use super::{leaf::IdTreeLeaf, non_leaf::IdTreeNonLeaf, sub_tree::IdTreeSubTree};
 use crate::{
-    chain::id_tree::{IdTreeNodeId, IdTreeObjId},
+    chain::id_tree::{IdTreeInternalId, IdTreeNodeId},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
@@ -46,11 +46,11 @@ impl SubProof {
 
     pub(crate) fn value_hash(
         &self,
-        obj_id: IdTreeObjId,
+        obj_id: IdTreeInternalId,
         cur_path_rev: &mut Vec<usize>,
-    ) -> Option<Digest> {
+    ) -> Digest {
         match self {
-            Self::Hash(_) => None,
+            Self::Hash(_) => Digest::zero(),
             Self::Leaf(n) => n.value_hash(obj_id, cur_path_rev),
             Self::NonLeaf(n) => n.value_hash(obj_id, cur_path_rev),
         }
@@ -58,7 +58,7 @@ impl SubProof {
 
     pub(crate) fn search_prefix<'a>(
         &mut self,
-        obj_id: IdTreeObjId,
+        obj_id: IdTreeInternalId,
         cur_path_rev: &'a mut Vec<usize>,
     ) -> Option<(*mut SubProof, IdTreeNodeId, &'a mut Vec<usize>)> {
         match self {

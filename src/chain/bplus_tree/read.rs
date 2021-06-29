@@ -12,7 +12,7 @@ use smallvec::SmallVec;
 use std::collections::VecDeque;
 
 pub fn range_query<K: Num>(
-    node_loader: impl BPlusTreeNodeLoader<K>,
+    node_loader: &impl BPlusTreeNodeLoader<K>,
     root_id: Option<BPlusTreeNodeId>,
     range: Range<K>,
     pk: &AccPublicKey,
@@ -29,7 +29,7 @@ pub fn range_query<K: Num>(
 }
 
 fn inner_range_query<K: Num>(
-    node_loader: impl BPlusTreeNodeLoader<K>,
+    node_loader: &impl BPlusTreeNodeLoader<K>,
     root_id: BPlusTreeNodeId,
     range: Range<K>,
     pk: &AccPublicKey,
@@ -43,7 +43,6 @@ fn inner_range_query<K: Num>(
     let mut query_proof = SubProof::from_hash(range, Digest::zero());
 
     let root_node = node_loader.load_node(root_id)?;
-    //.ok_or_else(|| anyhow!("Cannot find node"))?;
     let cur_proof = &mut query_proof as *mut _;
 
     let mut queue: VecDeque<(BPlusTreeNode<K>, *mut SubProof<K>)> = VecDeque::new();

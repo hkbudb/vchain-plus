@@ -1,4 +1,4 @@
-use super::{block::BlockId, object::ObjId, range::Range, traits::Num};
+use super::{block::Height, range::Range, traits::Num};
 use crate::digest::{blake2, concat_digest, Digest, Digestible};
 use std::collections::HashSet;
 
@@ -12,14 +12,12 @@ pub(crate) fn range_hash<K: Num>(range: &Range<K>) -> Digest {
 
 #[inline]
 pub(crate) fn object_hash<K: Num>(
-    id: ObjId,
-    block_id: BlockId,
+    blk_height: Height,
     num_data: &[K],
     keyword_data: &HashSet<String>,
 ) -> Digest {
     let mut state = blake2().to_state();
-    state.update(&id.to_le_bytes());
-    state.update(&block_id.to_le_bytes());
+    state.update(&blk_height.to_le_bytes());
 
     let num_hash = concat_digest(num_data.iter().map(|n| n.to_digest()));
     state.update(&num_hash.0);

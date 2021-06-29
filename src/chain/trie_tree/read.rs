@@ -123,14 +123,14 @@ fn inner_query_trie(
     Ok((query_val, res_acc, query_proof))
 }
 
-pub struct ReadContext<L: TrieNodeLoader> {
-    node_loader: L,
+pub struct ReadContext<'a, L: TrieNodeLoader> {
+    node_loader: &'a L,
     root_id: Option<TrieNodeId>,
     proof: Proof,
 }
 
-impl<L: TrieNodeLoader> ReadContext<L> {
-    pub fn new(node_loader: L, root_id: Option<TrieNodeId>) -> Self {
+impl<'a, L: TrieNodeLoader> ReadContext<'a, L> {
+    pub fn new(node_loader: &'a L, root_id: Option<TrieNodeId>) -> Self {
         match root_id {
             Some(id) => match node_loader.load_node(id) {
                 Ok(n) => {
@@ -138,7 +138,7 @@ impl<L: TrieNodeLoader> ReadContext<L> {
                     let dig = n.to_digest();
                     Self {
                         node_loader,
-                        root_id: root_id,
+                        root_id,
                         proof: Proof::from_root_hash(id, nibble, dig),
                     }
                 }
@@ -172,7 +172,7 @@ impl<L: TrieNodeLoader> ReadContext<L> {
                 Some((sub_proof, sub_root_id, cur_key)) => {
                     let sub_root_node = self.node_loader.load_node(sub_root_id)?;
                     let (v, a, p) = inner_query_trie(
-                        &self.node_loader,
+                        self.node_loader,
                         sub_root_id,
                         sub_root_node,
                         cur_key,
@@ -190,7 +190,7 @@ impl<L: TrieNodeLoader> ReadContext<L> {
                 }
             },
             None => {
-                let (v, a, p) = query_trie(&self.node_loader, self.root_id, keyword, pk)?;
+                let (v, a, p) = query_trie(self.node_loader, self.root_id, keyword, pk)?;
                 self.proof = p;
                 query_val = v;
                 res_acc = a;

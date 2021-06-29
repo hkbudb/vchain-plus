@@ -1,19 +1,85 @@
+use std::num::NonZeroU64;
+
 use super::MAX_INLINE_FANOUT;
 use crate::{
     create_id_type,
     digest::{Digest, Digestible},
 };
 use anyhow::Result;
-use hash::{id_tree_leaf_hash, id_tree_non_leaf_hash};
+use hash::{id_tree_leaf_hash, id_tree_non_leaf_hash, id_tree_root_hash};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 create_id_type!(IdTreeNodeId);
-create_id_type!(IdTreeObjId);
+create_id_type!(IdTreeInternalId);
 
 pub mod hash;
 pub mod proof;
 pub mod read;
 pub mod write;
+
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    derive_more::Deref,
+    derive_more::DerefMut,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
+)]
+pub struct ObjId(pub NonZeroU64);
+
+impl Digestible for ObjId {
+    fn to_digest(&self) -> Digest {
+        self.0.get().to_digest()
+    }
+}
+
+impl ObjId {
+    pub(crate) fn to_internal_id(self) -> IdTreeInternalId {
+        IdTreeInternalId(self.0.get() - 1)
+    }
+
+    fn from_internal_id(id: IdTreeInternalId) -> Self {
+        Self(unsafe { NonZeroU64::new_unchecked(id.0 + 1) })
+    }
+}
+
+impl Default for ObjId {
+    fn default() -> Self {
+        Self(unsafe { NonZeroU64::new_unchecked(1) })
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct IdTreeRoot {
+    id_tree_root_id: Option<IdTreeNodeId>,
+    id_tree_root_hash: Digest,
+    cur_obj_id: ObjId,
+}
+
+impl Digestible for IdTreeRoot {
+    fn to_digest(&self) -> Digest {
+        id_tree_root_hash(&self.cur_obj_id.to_digest(), &self.id_tree_root_hash)
+    }
+}
+
+impl IdTreeRoot {
+    pub(crate) fn get_id_tree_root_id(&self) -> Option<IdTreeNodeId> {
+        self.id_tree_root_id
+    }
+
+    pub(crate) fn get_cur_obj_id(&self) -> ObjId {
+        self.cur_obj_id
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum IdTreeNode {
@@ -50,12 +116,12 @@ impl Digestible for IdTreeNode {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct IdTreeLeafNode {
     pub id: IdTreeNodeId,
-    pub obj_id: IdTreeObjId,
+    pub obj_id: IdTreeInternalId,
     pub obj_hash: Digest,
 }
 
 impl IdTreeLeafNode {
-    fn new(obj_id: IdTreeObjId, obj_hash: Digest) -> Self {
+    fn new(obj_id: IdTreeInternalId, obj_hash: Digest) -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
             obj_id,

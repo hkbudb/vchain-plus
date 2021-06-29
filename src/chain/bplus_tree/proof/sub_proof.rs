@@ -54,17 +54,11 @@ impl<K: Num> SubProof<K> {
     ) -> Result<AccValue> {
         let mut res_acc_val: AccValue = AccValue::from_set(&Set::new(), pk);
         let mut completeness = true;
-        let mut cur_proof = Box::new(self.clone());
+        let cur_proof = Box::new(self.clone());
         let mut queue: VecDeque<Box<SubProof<K>>> = VecDeque::new();
         queue.push_back(cur_proof);
 
-        loop {
-            if queue.is_empty() {
-                break;
-            } else {
-                cur_proof = queue.pop_front().ok_or_else(|| anyhow!("Queue is empty"))?;
-            }
-
+        while let Some(cur_proof) = queue.pop_front() {
             match *cur_proof {
                 SubProof::Hash(n) => {
                     if !n.range.has_no_intersection(range) {

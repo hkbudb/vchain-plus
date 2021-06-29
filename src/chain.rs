@@ -1,22 +1,25 @@
 use serde::{Deserialize, Serialize};
 
 pub mod block;
-pub mod block_ads;
 pub mod bplus_tree;
-pub mod id_tree;
-pub mod trie_tree;
 pub mod hash;
+pub mod id_tree;
 pub mod object;
+pub mod query;
 pub mod range;
 pub mod traits;
+pub mod trie_tree;
+pub mod verify;
 
 pub const MAX_INLINE_FANOUT: usize = 16;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Parameter {
-    pub time_windows: Vec<u64>,
-    // pub id_tree_fanout: usize,
-    // pub bplus_tree_fanout: usize,
+    pub time_wins: Vec<u64>,
+    pub id_tree_fanout: usize,
+    pub max_id_num: usize,
+    pub bplus_tree_fanout: usize,
+    pub num_dim: usize,
 }
 
 #[cfg(test)]

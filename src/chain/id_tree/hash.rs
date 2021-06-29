@@ -1,8 +1,8 @@
-use super::super::id_tree::IdTreeObjId;
+use super::super::id_tree::IdTreeInternalId;
 use crate::digest::{blake2, concat_digest_ref, Digest};
 
 #[inline]
-pub(crate) fn id_tree_leaf_hash(obj_id: IdTreeObjId, obj_hash: &Digest) -> Digest {
+pub(crate) fn id_tree_leaf_hash(obj_id: IdTreeInternalId, obj_hash: &Digest) -> Digest {
     let mut state = blake2().to_state();
     state.update(&obj_id.to_le_bytes());
     state.update(obj_hash.as_bytes());
@@ -38,5 +38,13 @@ pub(crate) fn id_tree_non_leaf_proof_hash(
     if !has_child {
         return Digest::zero();
     }
+    Digest::from(state.finalize())
+}
+
+#[inline]
+pub(crate) fn id_tree_root_hash(cur_obj_id_hash: &Digest, id_tree_root_hash: &Digest) -> Digest {
+    let mut state = blake2().to_state();
+    state.update(&cur_obj_id_hash.as_bytes());
+    state.update(id_tree_root_hash.as_bytes());
     Digest::from(state.finalize())
 }

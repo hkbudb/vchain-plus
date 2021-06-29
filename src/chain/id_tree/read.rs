@@ -1,7 +1,7 @@
 use super::{
     proof::{sub_proof::SubProof, Proof},
     write::fanout_nary_rev,
-    Digest, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader, IdTreeObjId,
+    Digest, IdTreeInternalId, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader, ObjId,
 };
 use crate::digest::Digestible;
 use anyhow::{anyhow, bail, Result};
@@ -10,14 +10,14 @@ pub fn query_without_proof(
     n_k: usize,
     node_loader: impl IdTreeNodeLoader,
     root_id: IdTreeNodeId,
-    obj_id: IdTreeObjId,
+    obj_id: IdTreeInternalId,
     fanout: usize,
 ) -> Result<Option<Digest>> {
     let root_node = node_loader.load_node(root_id)?;
 
     let mut cur_node = root_node;
     let depth = (n_k as f64).log(fanout as f64).floor() as usize;
-    let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
+    let mut cur_path_rev = fanout_nary_rev(obj_id.0, fanout as u64, depth);
 
     let value = loop {
         match &cur_node {
@@ -47,7 +47,7 @@ fn inner_query_id_tree(
     node_loader: &impl IdTreeNodeLoader,
     root_id: IdTreeNodeId,
     root_node: IdTreeNode,
-    obj_id: IdTreeObjId,
+    obj_id: IdTreeInternalId,
     path_rev: &mut Vec<usize>,
 ) -> Result<(Option<Digest>, SubProof)> {
     use super::proof::{leaf::IdTreeLeaf, non_leaf::IdTreeNonLeaf};
@@ -113,7 +113,7 @@ pub fn query_id_tree(
     n_k: usize,
     node_loader: &impl IdTreeNodeLoader,
     root_id: Option<IdTreeNodeId>,
-    obj_id: IdTreeObjId,
+    obj_id: IdTreeInternalId,
     fanout: usize,
 ) -> Result<(Option<Digest>, Proof)> {
     let id_tree_root_id: IdTreeNodeId;
@@ -125,7 +125,7 @@ pub fn query_id_tree(
     }
     let root_node = node_loader.load_node(id_tree_root_id)?;
     let depth = (n_k as f64).log(fanout as f64).floor() as usize;
-    let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
+    let mut cur_path_rev = fanout_nary_rev(obj_id.0, fanout as u64, depth);
     let (v, p) = inner_query_id_tree(
         node_loader,
         id_tree_root_id,
@@ -136,14 +136,14 @@ pub fn query_id_tree(
     Ok((v, Proof::from_subproof(p)))
 }
 
-pub struct ReadContext<L: IdTreeNodeLoader> {
-    node_loader: L,
+pub struct ReadContext<'a, L: IdTreeNodeLoader> {
+    node_loader: &'a L,
     root_id: Option<IdTreeNodeId>,
     proof: Proof,
 }
 
-impl<L: IdTreeNodeLoader> ReadContext<L> {
-    pub fn new(node_loader: L, root_id: Option<IdTreeNodeId>) -> Self {
+impl<'a, L: IdTreeNodeLoader> ReadContext<'a, L> {
+    pub fn new(node_loader: &'a L, root_id: Option<IdTreeNodeId>) -> Self {
         match root_id {
             Some(id) => match node_loader.load_node(id) {
                 Ok(n) => {
@@ -172,10 +172,6 @@ impl<L: IdTreeNodeLoader> ReadContext<L> {
         &self.node_loader
     }
 
-    pub fn get_node_loader_mut(&mut self) -> &mut L {
-        &mut self.node_loader
-    }
-
     pub fn get_proof(&self) -> &Proof {
         &self.proof
     }
@@ -186,23 +182,24 @@ impl<L: IdTreeNodeLoader> ReadContext<L> {
 
     pub fn query(
         &mut self,
-        n_k: usize,
-        obj_id: IdTreeObjId,
+        obj_id: ObjId,
+        max_id_num: usize,
         fanout: usize,
     ) -> Result<Option<Digest>> {
+        let internal_id: IdTreeInternalId = obj_id.to_internal_id();
         let value = match self.proof.root.as_mut() {
             Some(root) => {
-                let depth = (n_k as f64).log(fanout as f64).floor() as usize;
-                let mut cur_path_rev = fanout_nary_rev(obj_id.get_num(), fanout as u64, depth);
+                let depth = (max_id_num as f64).log(fanout as f64).floor() as usize;
+                let mut cur_path_rev = fanout_nary_rev(internal_id.0, fanout as u64, depth);
 
-                match root.search_prefix(obj_id, &mut cur_path_rev) {
+                match root.search_prefix(internal_id, &mut cur_path_rev) {
                     Some((sub_proof, sub_root_id, sub_path)) => {
                         let sub_root_node = self.node_loader.load_node(sub_root_id)?;
                         let (v, p) = inner_query_id_tree(
-                            &self.node_loader,
+                            self.node_loader,
                             sub_root_id,
                             sub_root_node,
-                            obj_id,
+                            internal_id,
                             sub_path,
                         )?;
                         unsafe {
@@ -214,7 +211,13 @@ impl<L: IdTreeNodeLoader> ReadContext<L> {
                 }
             }
             None => {
-                let (v, p) = query_id_tree(n_k, &self.node_loader, self.root_id, obj_id, fanout)?;
+                let (v, p) = query_id_tree(
+                    max_id_num,
+                    self.node_loader,
+                    self.root_id,
+                    internal_id,
+                    fanout,
+                )?;
                 self.proof = p;
                 v
             }

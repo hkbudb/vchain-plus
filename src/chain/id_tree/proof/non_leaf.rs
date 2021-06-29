@@ -1,7 +1,7 @@
 use super::{sub_proof::SubProof, sub_tree::IdTreeSubTree};
 use crate::{
     chain::id_tree::{
-        hash::id_tree_non_leaf_proof_hash, IdTreeNodeId, IdTreeObjId, MAX_INLINE_FANOUT,
+        hash::id_tree_non_leaf_proof_hash, IdTreeInternalId, IdTreeNodeId, MAX_INLINE_FANOUT,
     },
     digest::{Digest, Digestible},
 };
@@ -64,22 +64,22 @@ impl IdTreeNonLeaf {
 
     pub(crate) fn value_hash(
         &self,
-        obj_id: IdTreeObjId,
+        obj_id: IdTreeInternalId,
         cur_path_rev: &mut Vec<usize>,
-    ) -> Option<Digest> {
+    ) -> Digest {
         let child_idx = match cur_path_rev.pop() {
             Some(idx) => idx,
-            None => return None,
+            None => return Digest::zero(),
         };
         match self.get_child(child_idx) {
-            None => Some(Digest::zero()),
+            None => Digest::zero(),
             Some(child) => child.value_hash(obj_id, cur_path_rev),
         }
     }
 
     pub(crate) fn search_prefix<'a>(
         &mut self,
-        obj_id: IdTreeObjId,
+        obj_id: IdTreeInternalId,
         cur_path_rev: &'a mut Vec<usize>,
     ) -> Option<(*mut SubProof, IdTreeNodeId, &'a mut Vec<usize>)> {
         let child_idx = match cur_path_rev.pop() {

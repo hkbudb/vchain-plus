@@ -1,8 +1,9 @@
 use super::{
     split_at_common_prefix2, AccValue, Digest, Digestible, Set, TrieLeafNode, TrieNode, TrieNodeId,
-    TrieNodeLoader, TrieNonLeafNode,
+    TrieNodeLoader, TrieNonLeafNode, TrieRoot,
 };
-use crate::{acc::AccPublicKey, chain::id_tree::IdTreeObjId, set};
+use crate::acc::AccPublicKey;
+use crate::chain::id_tree::ObjId;
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -13,22 +14,23 @@ use std::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Apply {
-    pub root_id: Option<TrieNodeId>,
+    pub root: TrieRoot,
     pub nodes: HashMap<TrieNodeId, TrieNode>,
 }
 
-pub struct WriteContext<L: TrieNodeLoader> {
-    node_loader: L,
+#[derive(Debug, Clone)]
+pub struct WriteContext<'a, L: TrieNodeLoader> {
+    node_loader: &'a L,
     apply: Apply,
     outdated: HashSet<TrieNodeId>,
 }
 
-impl<L: TrieNodeLoader> WriteContext<L> {
-    pub fn new(node_loader: L, root_id: Option<TrieNodeId>) -> Self {
+impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
+    pub fn new(node_loader: &'a L, root: TrieRoot) -> Self {
         Self {
             node_loader,
             apply: Apply {
-                root_id,
+                root,
                 nodes: HashMap::new(),
             },
             outdated: HashSet::new(),
@@ -66,14 +68,10 @@ impl<L: TrieNodeLoader> WriteContext<L> {
         })
     }
 
-    pub fn insert(&mut self, key: String, obj_id: IdTreeObjId, pk: &AccPublicKey) -> Result<()> {
-        let set = match obj_id {
-            IdTreeObjId(id) => {
-                set! {id}
-            }
-        };
+    pub fn insert(&mut self, key: String, obj_id: ObjId, pk: &AccPublicKey) -> Result<()> {
+        let set = Set::from_single_element(obj_id.0);
         let new_acc = AccValue::from_set(&set, pk);
-        let mut cur_id_opt = self.apply.root_id;
+        let mut cur_id_opt = self.apply.root.trie_root_id;
         let mut cur_key = key;
 
         enum TempNode {
@@ -244,7 +242,8 @@ impl<L: TrieNodeLoader> WriteContext<L> {
                 }
             }
         }
-        self.apply.root_id = Some(new_root_id);
+        self.apply.root.trie_root_id = Some(new_root_id);
+        self.apply.root.trie_root_hash = new_root_hash;
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
         }
@@ -252,14 +251,10 @@ impl<L: TrieNodeLoader> WriteContext<L> {
         Ok(())
     }
 
-    pub fn delete(&mut self, key: String, obj_id: IdTreeObjId, pk: &AccPublicKey) -> Result<()> {
-        let set = match obj_id {
-            IdTreeObjId(id) => {
-                set! {id}
-            }
-        };
+    pub fn delete(&mut self, key: String, obj_id: ObjId, pk: &AccPublicKey) -> Result<()> {
+        let set = Set::from_single_element(obj_id.0);
         let delta_acc = AccValue::from_set(&set, pk);
-        let mut cur_id_opt = self.apply.root_id;
+        let mut cur_id_opt = self.apply.root.trie_root_id;
         let mut cur_key = key;
 
         enum TempNode {
@@ -410,7 +405,9 @@ impl<L: TrieNodeLoader> WriteContext<L> {
             }
         }
 
-        self.apply.root_id = Some(new_root_id);
+        self.apply.root.trie_root_id = Some(new_root_id);
+        self.apply.root.trie_root_hash = new_root_hash;
+
         for id in self.outdated.drain() {
             self.apply.nodes.remove(&id);
         }

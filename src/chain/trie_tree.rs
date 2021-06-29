@@ -15,6 +15,18 @@ pub mod proof;
 pub mod read;
 pub mod write;
 
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TrieRoot {
+    pub(crate) trie_root_id: Option<TrieNodeId>,
+    pub(crate) trie_root_hash: Digest,
+}
+
+impl Digestible for TrieRoot {
+    fn to_digest(&self) -> Digest {
+        self.trie_root_hash
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TrieNode {
     Leaf(TrieLeafNode),
