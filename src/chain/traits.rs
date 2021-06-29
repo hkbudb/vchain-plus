@@ -1,39 +1,73 @@
 use super::{
-    block::{BlockContent, BlockHead, BlockId},
-    bplus_tree::{BPlusTreeNode, BPlusTreeNodeId},
-    id_tree::{IdTreeNode, IdTreeNodeId},
-    object::{ObjId, Object},
-    trie_tree::{TrieNode, TrieTreeNodeId},
+    block::{BlockContent, BlockHead, Height},
+    bplus_tree::{BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader},
+    id_tree::{IdTreeNode, IdTreeNodeId, IdTreeNodeLoader},
+    object::Object,
+    trie_tree::TrieNodeLoader,
+    trie_tree::{TrieNode, TrieNodeId},
     Parameter,
 };
-use crate::digest::Digestible;
+use crate::digest::{Digest, Digestible};
 use anyhow::Result;
+use core::str::FromStr;
 use std::fmt;
-//use ark_ec::PairingEngine;
+pub trait Num:
+    num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr
+{
+}
 
-pub trait Num: num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible {}
+impl<T> Num for T where
+    T: num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr
+{
+}
 
-impl<T> Num for T where T: num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible {}
-
-pub trait ReadInterface<K: Num> {
+pub trait ReadInterface {
+    type K: Num;
     fn get_parameter(&self) -> Result<Parameter>;
-    fn read_block_header(&self, block_id: BlockId) -> Result<BlockHead>;
-    fn read_block_content(&self, block_id: BlockId) -> Result<BlockContent>;
+    fn read_block_head(&self, blk_heihgt: Height) -> Result<BlockHead>;
+    fn read_block_content(&self, blk_height: Height) -> Result<BlockContent>;
     fn read_id_tree_node(&self, id_tree_node_id: IdTreeNodeId) -> Result<IdTreeNode>;
     fn read_bplus_tree_node(
         &self,
         bplus_tree_node_id: BPlusTreeNodeId,
-    ) -> Result<BPlusTreeNode<K /*, E*/>>;
-    fn read_trie_tree_node(&self, trie_node_id: TrieTreeNodeId) -> Result<TrieNode>;
-    fn read_object(&self, id: ObjId) -> Result<Object<K>>;
+    ) -> Result<BPlusTreeNode<Self::K>>;
+    fn read_trie_node(&self, trie_node_id: TrieNodeId) -> Result<TrieNode>;
+    fn read_object(&self, obj_hash: Digest) -> Result<Object<Self::K>>;
 }
 
-pub trait WriteInterface<K: Num> {
-    fn set_parameter(&mut self, param: Parameter) -> Result<()>;
-    fn write_block_header(&mut self, block_header: BlockHead) -> Result<()>;
-    fn write_block_content(&mut self, block_content: BlockContent) -> Result<()>;
-    fn write_id_tree_node(&mut self, node: IdTreeNode) -> Result<()>;
-    fn write_bplus_tree_node(&mut self, node: BPlusTreeNode<K /*, E*/>) -> Result<()>;
-    fn write_trie_tree_node(&mut self, node: TrieNode) -> Result<()>;
-    fn write_object(&mut self, obj: Object<K>) -> Result<()>;
+impl<Interface: ReadInterface> IdTreeNodeLoader for Interface {
+    fn load_node(&self, id: IdTreeNodeId) -> Result<IdTreeNode> {
+        self.read_id_tree_node(id)
+    }
+}
+
+impl<Interface: ReadInterface> BPlusTreeNodeLoader<Interface::K> for Interface {
+    fn load_node(&self, id: BPlusTreeNodeId) -> Result<BPlusTreeNode<Interface::K>> {
+        self.read_bplus_tree_node(id)
+    }
+}
+
+impl<Interface: ReadInterface> TrieNodeLoader for Interface {
+    fn load_node(&self, id: TrieNodeId) -> Result<TrieNode> {
+        self.read_trie_node(id)
+    }
+}
+
+pub trait WriteInterface {
+    type K: Num;
+    fn set_parameter(&mut self, param: &Parameter) -> Result<()>;
+    fn write_block_head(&mut self, blk_height: Height, block_head: &BlockHead) -> Result<()>;
+    fn write_block_content(
+        &mut self,
+        blk_height: Height,
+        block_content: &BlockContent,
+    ) -> Result<()>;
+    fn write_id_tree_node(&mut self, n_id: IdTreeNodeId, node: &IdTreeNode) -> Result<()>;
+    fn write_bplus_tree_node(
+        &mut self,
+        n_id: BPlusTreeNodeId,
+        node: &BPlusTreeNode<Self::K>,
+    ) -> Result<()>;
+    fn write_trie_node(&mut self, n_id: TrieNodeId, node: &TrieNode) -> Result<()>;
+    fn write_object(&mut self, obj_hash: Digest, obj: &Object<Self::K>) -> Result<()>;
 }
