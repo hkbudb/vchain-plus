@@ -1,4 +1,4 @@
-extern crate tracing;
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 pub mod acc;
 pub mod chain;
