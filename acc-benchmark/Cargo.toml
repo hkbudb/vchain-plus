@@ -10,19 +10,19 @@ name = "bench"
 harness = false
 
 [dependencies]
-ark-ec = { version = "0.2", features = ["parallel"] }
-ark-ff = { version = "0.2", features = ["asm", "parallel"] }
+ark-ec = { version = "0.3", features = ["parallel"] }
+ark-ff = { version = "0.3", features = ["asm", "parallel"] }
 criterion = { version = "0.3", features = ["html_reports"] }
-once_cell = "1.7"
-rand = "0.7"
+once_cell = "1.8"
+rand = "0.8"
 vchain-plus = { path = "../" }
 
-ark-bls12-377 = "0.2"
-ark-bls12-381 = "0.2"
-ark-bn254 = "0.2"
-ark-bw6-761 = "0.2"
-ark-cp6-782 = "0.2"
-ark-mnt4-298 = "0.2"
-ark-mnt4-753 = "0.2"
-ark-mnt6-298 = "0.2"
-ark-mnt6-753 = "0.2"
+ark-bls12-377 = "0.3"
+ark-bls12-381 = "0.3"
+ark-bn254 = "0.3"
+ark-bw6-761 = "0.3"
+ark-cp6-782 = "0.3"
+ark-mnt4-298 = "0.3"
+ark-mnt4-753 = "0.3"
+ark-mnt6-298 = "0.3"
+ark-mnt6-753 = "0.3"
