@@ -117,9 +117,13 @@ pub struct IntermediateProof<E: PairingEngine> {
     op: Op,
     inner_proof_r: IntersectionProof<E>,
     inner_proof_s: IntersectionProof<E>,
+    #[serde(with = "super::serde_impl")]
     result_acc_s_r_gamma: E::G1Affine,
+    #[serde(with = "super::serde_impl")]
     result_acc_r_s_gamma: E::G1Affine,
+    #[serde(with = "super::serde_impl")]
     z_s_r: E::G1Affine,
+    #[serde(with = "super::serde_impl")]
     z_r_s: E::G1Affine,
 }
 
