@@ -4,7 +4,6 @@ use crate::chain::{block::Height, object::Object, traits::Num};
 use anyhow::{Context, Error, Result};
 use ark_serialize::Read;
 use rand::{CryptoRng, RngCore};
-use tracing_subscriber::EnvFilter;
 use std::error::Error as StdError;
 use std::fs;
 use std::path::PathBuf;
@@ -15,6 +14,7 @@ use std::{
     io::BufReader,
     path::Path,
 };
+use tracing_subscriber::EnvFilter;
 
 #[macro_export]
 macro_rules! create_id_type {
@@ -52,9 +52,7 @@ macro_rules! create_id_type {
 pub fn load_query_param_from_file(path: &Path) -> Result<Vec<QueryParam<u32>>> {
     let data = fs::read_to_string(path)?;
     let query_params: Vec<QueryParam<u32>> = serde_json::from_str(&data)?;
-    println!("{:?}", query_params);
     Ok(query_params)
-
 }
 
 // input format: block_id sep [ v_data ] sep { w_data }
@@ -132,7 +130,7 @@ impl KeyPair {
     }
 
     pub fn save(self, path: PathBuf) -> Result<()> {
-        if ! path.exists() {
+        if !path.exists() {
             fs::create_dir_all(path.clone())?;
         }
         let sk_path = path.join("sk");
@@ -158,22 +156,26 @@ impl KeyPair {
 }
 
 pub fn init_tracing_subscriber(default_level: &str) -> Result<()> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new(default_level.to_string())
-    });
-    tracing_subscriber::fmt().with_env_filter(filter).try_init().map_err(Error::msg)
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(default_level.to_string()));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .try_init()
+        .map_err(Error::msg)
 }
-
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, path::{Path, PathBuf}};
-
+    use super::{load_query_param_from_file, KeyPair};
+    use crate::{
+        chain::{block::Height, object::Object, query::query_param::QueryParam},
+        utils::load_raw_obj_from_str,
+    };
     use serde_json::json;
-
-    use crate::{chain::{block::Height, object::Object, query::query_param::QueryParam}, utils::load_raw_obj_from_str};
-
-    use super::{KeyPair, load_query_param_from_file};
+    use std::{
+        collections::BTreeMap,
+        path::{Path, PathBuf},
+    };
 
     #[test]
     fn test_create_id() {
