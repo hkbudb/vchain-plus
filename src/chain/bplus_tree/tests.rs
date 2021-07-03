@@ -3,54 +3,19 @@ use super::{
     proof::sub_proof::SubProof,
     read::range_query,
     write::{Apply, WriteContext},
-    BPlusTreeLeafNode, BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader, BPlusTreeNonLeafNode,
+    BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader,
 };
 use crate::chain::bplus_tree::BPlusTreeRoot;
 use crate::chain::id_tree::ObjId;
 use crate::{
-    acc::{AccValue, Set},
-    chain::{range::Range, traits::Num, MAX_INLINE_FANOUT},
+    chain::{range::Range, traits::Num},
     digest::{Digest, Digestible},
-    set,
 };
-
 use anyhow::{bail, Result};
-use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::num::NonZeroU64;
 
-fn create_bplus_tree_leaf<K: Num>(
-    id: BPlusTreeNodeId,
-    num: K,
-    data_set: Set,
-) -> BPlusTreeLeafNode<K> {
-    let acc_val = AccValue::from_set(&data_set, &PUB_KEY);
-    BPlusTreeLeafNode {
-        id,
-        num,
-        data_set,
-        data_set_acc: acc_val,
-    }
-}
-
-fn create_bplus_tree_non_leaf<K: Num>(
-    id: BPlusTreeNodeId,
-    range: Range<K>,
-    data_set: Set,
-    data_set_acc: AccValue,
-    child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
-    child_ids: SmallVec<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>,
-) -> BPlusTreeNonLeafNode<K> {
-    BPlusTreeNonLeafNode {
-        id,
-        range,
-        data_set,
-        data_set_acc,
-        child_hashes,
-        child_ids,
-    }
-}
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct TestBPlusTree<K: Num> {
     root_id: Option<BPlusTreeNodeId>,
@@ -86,50 +51,6 @@ impl<K: Num> TestBPlusTree<K> {
     fn apply(&mut self, apply: Apply<K>) {
         self.root_id = apply.root.bplus_tree_root_id;
         self.nodes.extend(apply.nodes.into_iter());
-    }
-
-    fn search(&self, key: K) -> bool {
-        let res;
-        let root_id = self.root_id.unwrap();
-        let mut cur_node = self.load_node(root_id).unwrap();
-        'outer: loop {
-            match cur_node {
-                BPlusTreeNode::Leaf(ref n) => {
-                    if n.num == key {
-                        res = true;
-                        break;
-                    } else {
-                        res = false;
-                        break;
-                    }
-                }
-                BPlusTreeNode::NonLeaf(ref n) => {
-                    if !n.range.is_in_range(key) {
-                        res = false;
-                        break;
-                    }
-                    'inner: for child in &n.child_ids {
-                        let node = self.load_node(*child).unwrap();
-                        match node {
-                            BPlusTreeNode::Leaf(ref n) => {
-                                if n.num == key {
-                                    res = true;
-                                    break 'outer;
-                                }
-                            }
-                            BPlusTreeNode::NonLeaf(ref n) => {
-                                if n.range.is_in_range(key) {
-                                    cur_node = BPlusTreeNode::NonLeaf(n.clone());
-                                    break 'inner;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        res
     }
 }
 
@@ -231,58 +152,6 @@ fn test_read() {
         range_query(&test_b_tree, test_b_tree.root_id, query_range, &PUB_KEY).unwrap();
     let res_digest = p.verify(query_range, acc, &PUB_KEY).unwrap();
     assert_eq!(root_digest, res_digest);
-}
-
-fn build_test_bplus_tree0() -> TestBPlusTree<u32> {
-    let mut bplus_tree: TestBPlusTree<u32> = TestBPlusTree::default();
-    let leaf1 = create_bplus_tree_leaf(BPlusTreeNodeId(3), 9 as u32, set! {1});
-    let leaf1_id = leaf1.id;
-    bplus_tree
-        .nodes
-        .insert(leaf1_id, BPlusTreeNode::Leaf(leaf1));
-    bplus_tree.root_id = Some(leaf1_id);
-    bplus_tree
-}
-
-fn build_test_bplus_tree1() -> TestBPlusTree<u32> {
-    let mut bplus_tree: TestBPlusTree<u32> = TestBPlusTree::default();
-    let leaf1 = create_bplus_tree_leaf(BPlusTreeNodeId(15), 9 as u32, set! {1});
-    let leaf1_id = leaf1.id;
-    let leaf1_hash = leaf1.to_digest();
-    bplus_tree
-        .nodes
-        .insert(leaf1_id, BPlusTreeNode::Leaf(leaf1));
-
-    let leaf2 = create_bplus_tree_leaf(BPlusTreeNodeId(17), 11 as u32, set! {2});
-    let leaf2_id = leaf2.id;
-    let leaf2_hash = leaf2.to_digest();
-    bplus_tree
-        .nodes
-        .insert(leaf2_id, BPlusTreeNode::Leaf(leaf2));
-
-    let mut non_leaf1_child_ids = SmallVec::<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>::new();
-    non_leaf1_child_ids.push(leaf1_id);
-    non_leaf1_child_ids.push(leaf2_id);
-    let mut non_leaf1_child_hashes = SmallVec::<[Digest; MAX_INLINE_FANOUT]>::new();
-    non_leaf1_child_hashes.push(leaf1_hash);
-    non_leaf1_child_hashes.push(leaf2_hash);
-    let non_leaf1_set = set! {1, 2};
-    let non_leaf1_set_acc = AccValue::from_set(&non_leaf1_set, &PUB_KEY);
-    let non_leaf1 = create_bplus_tree_non_leaf(
-        BPlusTreeNodeId(14),
-        Range::new(9, 11),
-        non_leaf1_set,
-        non_leaf1_set_acc,
-        non_leaf1_child_hashes,
-        non_leaf1_child_ids,
-    );
-    let non_leaf1_id = non_leaf1.id;
-    bplus_tree
-        .nodes
-        .insert(non_leaf1_id, BPlusTreeNode::NonLeaf(non_leaf1));
-    bplus_tree.root_id = Some(non_leaf1_id);
-
-    bplus_tree
 }
 
 #[test]
