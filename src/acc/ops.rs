@@ -33,6 +33,7 @@ struct IntersectionProof<E: PairingEngine> {
     q_x_y_delta: E::G1Affine,
     #[serde(with = "super::serde_impl")]
     l_x: E::G1Affine,
+    #[serde(bound = "E: PairingEngine")]
     _marker: PhantomData<E>,
 }
 
@@ -117,7 +118,9 @@ impl<E: PairingEngine> IntersectionProof<E> {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IntermediateProof<E: PairingEngine> {
     op: Op,
+    #[serde(bound = "E: PairingEngine")]
     inner_proof_r: IntersectionProof<E>,
+    #[serde(bound = "E: PairingEngine")]
     inner_proof_s: IntersectionProof<E>,
     #[serde(with = "super::serde_impl")]
     result_acc_s_r_gamma: E::G1Affine,
@@ -338,6 +341,7 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FinalProof<E: PairingEngine> {
     op: Op,
+    #[serde(bound = "E: PairingEngine")]
     inner_proof: IntersectionProof<E>,
 }
 
@@ -447,6 +451,12 @@ mod tests {
                 pk.h_r,
             )
             .unwrap();
+
+        let bin = bincode::serialize(&proof).unwrap();
+        assert_eq!(
+            bincode::deserialize::<IntersectionProof<_>>(&bin[..]).unwrap(),
+            proof
+        );
     }
 
     #[test]
@@ -480,6 +490,12 @@ mod tests {
             .verify(&s1_acc, &s2_acc, &intersection_result_acc, &pk)
             .unwrap();
 
+        let bin = bincode::serialize(&intersection_proof).unwrap();
+        assert_eq!(
+            bincode::deserialize::<IntermediateProof<_>>(&bin[..]).unwrap(),
+            intersection_proof
+        );
+
         let (union_result_set, union_result_acc, union_proof) =
             compute_set_operation_intermediate::<Bls12_381>(
                 Op::Union,
@@ -495,6 +511,12 @@ mod tests {
             .verify(&s1_acc, &s2_acc, &union_result_acc, &pk)
             .unwrap();
 
+        let bin = bincode::serialize(&union_proof).unwrap();
+        assert_eq!(
+            bincode::deserialize::<IntermediateProof<_>>(&bin[..]).unwrap(),
+            union_proof
+        );
+
         let (diff_result_set, diff_result_acc, diff_proof) =
             compute_set_operation_intermediate::<Bls12_381>(
                 Op::Difference,
@@ -509,6 +531,12 @@ mod tests {
         diff_proof
             .verify(&s1_acc, &s2_acc, &diff_result_acc, &pk)
             .unwrap();
+
+        let bin = bincode::serialize(&diff_proof).unwrap();
+        assert_eq!(
+            bincode::deserialize::<IntermediateProof<_>>(&bin[..]).unwrap(),
+            diff_proof
+        );
     }
 
     #[test]
@@ -531,6 +559,12 @@ mod tests {
             .verify(&s1_acc, &s2_acc, &intersection_result, &pk)
             .unwrap();
 
+        let bin = bincode::serialize(&intersection_proof).unwrap();
+        assert_eq!(
+            bincode::deserialize::<FinalProof<_>>(&bin[..]).unwrap(),
+            intersection_proof
+        );
+
         let (union_result, union_proof) =
             compute_set_operation_final::<Bls12_381>(Op::Union, &s1, &s2, &pk);
         assert_eq!(union_result, set! {1, 2, 3, 5});
@@ -538,11 +572,23 @@ mod tests {
             .verify(&s1_acc, &s2_acc, &union_result, &pk)
             .unwrap();
 
+        let bin = bincode::serialize(&union_proof).unwrap();
+        assert_eq!(
+            bincode::deserialize::<FinalProof<_>>(&bin[..]).unwrap(),
+            union_proof
+        );
+
         let (diff_result, diff_proof) =
             compute_set_operation_final::<Bls12_381>(Op::Difference, &s1, &s2, &pk);
         assert_eq!(diff_result, set! {2, 3});
         diff_proof
             .verify(&s1_acc, &s2_acc, &diff_result, &pk)
             .unwrap();
+
+        let bin = bincode::serialize(&diff_proof).unwrap();
+        assert_eq!(
+            bincode::deserialize::<FinalProof<_>>(&bin[..]).unwrap(),
+            diff_proof
+        );
     }
 }
