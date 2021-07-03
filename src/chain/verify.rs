@@ -14,11 +14,13 @@ use crate::{
 use anyhow::{bail, ensure, Result};
 use hash::{ads_hash, bplus_roots_hash};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing};
-use tracing::info;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
+use tracing::info;
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VerifyInfo {
-    //vo_size: usize,
+    vo_size: usize,
     verify_time: String,
 }
 
@@ -29,6 +31,8 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
     pk: &AccPublicKey,
 ) -> Result<VerifyInfo> {
     // verify dag, including range query and set operation
+    let bytes = bincode::serialize(&vo).unwrap();
+    let vo_size = bytes.len();
     let timer = howlong::ProcessCPUTimer::new();
     let vo_dag_struct = vo.vo_dag;
     let vo_dag = vo_dag_struct.dag;
@@ -289,10 +293,8 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
         );
     }
     let time = timer.elapsed();
-    //let bytes = bincode::serialize(&vo).unwrap();
-    //let vo_size = len(bytes);
     let verify_time = VerifyInfo {
-        //vo_size,
+        vo_size,
         verify_time: time.to_string(),
     };
     info!("Verification time: {:?}", time);

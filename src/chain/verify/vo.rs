@@ -16,7 +16,7 @@ use petgraph::{graph::NodeIndex, Graph};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum VONode<K: Num> {
     Range(VORangeNode<K>),
     Keyword(VOKeywordNode),
@@ -69,39 +69,40 @@ pub struct VOBlkRtNode {
     pub(crate) acc: AccValue,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VOInterUnion {
     pub(crate) acc: AccValue,
     pub(crate) proof: IntermediateProof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VOFinalUnion {
     pub(crate) proof: FinalProof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VOInterIntersec {
     pub(crate) acc: AccValue,
     pub(crate) proof: IntermediateProof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VOFinalIntersec {
     pub(crate) proof: FinalProof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VOInterDiff {
     pub(crate) acc: AccValue,
     pub(crate) proof: IntermediateProof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VOFinalDiff {
     pub(crate) proof: FinalProof,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MerkleProof {
     pub(crate) id_tree_root_hash: Option<Digest>,
     pub(crate) id_set_root_hash: Digest,
@@ -122,11 +123,13 @@ impl MerkleProof {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VoDag<K: Num> {
     pub(crate) output_sets: HashMap<NodeIndex, Set>,
     pub(crate) dag: Graph<VONode<K>, ()>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct VO<K: Num> {
     pub(crate) vo_dag: VoDag<K>,
     pub(crate) trie_proofs: HashMap<Height, trie_tree::proof::Proof>,

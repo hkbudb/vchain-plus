@@ -10,14 +10,15 @@ use super::{
 use crate::digest::{Digest, Digestible};
 use anyhow::Result;
 use core::str::FromStr;
+use serde::Serialize;
 use std::fmt;
 pub trait Num:
-    num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr
+    num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr + Serialize
 {
 }
 
 impl<T> Num for T where
-    T: num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr
+    T: num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr + Serialize
 {
 }
 

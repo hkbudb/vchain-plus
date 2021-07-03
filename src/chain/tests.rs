@@ -7,10 +7,15 @@ use super::{
     trie_tree::{TrieNode, TrieNodeId},
     Parameter,
 };
-use crate::{acc::{AccPublicKey, AccSecretKey, AccSecretKeyWithPowCache}, chain::{
-        query::{query_basic, query_param::QueryParam},
+use crate::{
+    acc::{AccPublicKey, AccSecretKey, AccSecretKeyWithPowCache},
+    chain::{
+        query::{query, query_param::QueryParam},
         verify::verify,
-    }, digest::{Digest, Digestible}, utils::{init_tracing_subscriber, load_raw_obj_from_str}};
+    },
+    digest::{Digest, Digestible},
+    utils::{init_tracing_subscriber, load_raw_obj_from_str},
+};
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use rand::{prelude::*, rngs::StdRng};
@@ -228,7 +233,8 @@ fn build_chain(data: &str, param: &Parameter) -> Result<FakeChain> {
     chain.set_parameter(param)?;
     let mut prev_hash = Digest::zero();
     for (blk_height, objs) in load_raw_obj_from_str(data)? {
-        let (blk_head, _duration) = build_block(blk_height, prev_hash, objs, &mut chain, &param, &PUB_KEY)?;
+        let (blk_head, _duration) =
+            build_block(blk_height, prev_hash, objs, &mut chain, &param, &PUB_KEY)?;
         prev_hash = blk_head.to_digest();
     }
     Ok(chain)
@@ -358,7 +364,7 @@ fn test_fake_chain_read_basic() -> Result<()> {
         },
     });
     let query1_param: QueryParam<u32> = serde_json::from_value(query1_param_data).unwrap();
-    let ((res, vo), _time)= query_basic(&test_chain, query1_param, 4, &PUB_KEY).unwrap();
+    let ((res, vo), _time) = query(&test_chain, query1_param, false, &PUB_KEY).unwrap();
     println!("results for query 1: ");
     println!("{:#?}", res);
     verify(&test_chain, &res, vo, &PUB_KEY).unwrap();
@@ -375,7 +381,7 @@ fn test_fake_chain_read_basic() -> Result<()> {
         },
     });
     let query2_param: QueryParam<u32> = serde_json::from_value(query2_param_data).unwrap();
-    let ((res, vo), _time) = query_basic(&test_chain, query2_param, 4, &PUB_KEY).unwrap();
+    let ((res, vo), _time) = query(&test_chain, query2_param, false, &PUB_KEY).unwrap();
     println!("results for query 2: ");
     println!("{:#?}", res);
     verify(&test_chain, &res, vo, &PUB_KEY).unwrap();

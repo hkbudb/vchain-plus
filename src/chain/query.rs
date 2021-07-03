@@ -27,9 +27,10 @@ use crate::{
 use anyhow::{bail, Result};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_plan::QueryPlan;
-use tracing::info;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
+use tracing::info;
 
 #[allow(clippy::type_complexity)]
 fn query_final<K: Num, T: ReadInterface<K = K>>(
@@ -512,6 +513,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     Ok((obj_map, vo))
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct QueryTime {
     pub(crate) param_to_q: String,
     pub(crate) q_to_qp: String,
@@ -519,13 +521,23 @@ pub struct QueryTime {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn query_basic<K: Num, T: ReadInterface<K = K>>(
+pub fn query<K: Num, T: ReadInterface<K = K>>(
     chain: T,
     query_param: QueryParam<K>,
-    time_win: u64,
+    optimized: bool,
     pk: &AccPublicKey,
 ) -> Result<((HashMap<ObjId, Object<K>>, VO<K>), QueryTime)> {
     let timer = howlong::ProcessCPUTimer::new();
+    let time_win: u64;
+    if !optimized {
+        let chain_param = chain.get_parameter()?;
+        time_win = *chain_param
+            .time_wins
+            .get(0)
+            .expect("No time window provided in this blockchain");
+    } else {
+        todo!()
+    }
     let query = query_param.into_query_basic(time_win)?;
     let time1 = timer.elapsed();
     let timer = howlong::ProcessCPUTimer::new();
@@ -539,8 +551,8 @@ pub fn query_basic<K: Num, T: ReadInterface<K = K>>(
         q_to_qp: time2.to_string(),
         process_qp: time3.to_string(),
     };
-    info!("Query param to query: {:?}, CPU usage is {:.2}.", time1, time1.cpu_usage());
-    info!("Query to query plan: {:?}, CPU usage is {:.2}.", time2, time2.cpu_usage());
-    info!("Process query plan: {:?}, CPU usage is {:.2}.", time2, time2.cpu_usage());
+    info!("Stage1: {:?}, CPU usage: {:.2}.", time1, time1.cpu_usage());
+    info!("Stage2: {:?}, CPU usage: {:.2}.", time2, time2.cpu_usage());
+    info!("Stage3: {:?}, CPU usage: {:.2}.", time3, time3.cpu_usage());
     Ok((res, time))
 }
