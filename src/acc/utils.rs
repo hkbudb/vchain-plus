@@ -34,7 +34,11 @@ impl<G: ProjectiveCurve> FixedBaseCurvePow<G> {
             .collect();
             table.push(sub_table);
             if i != num_lookups - 1 {
-                let last = *table.last().expect("cannot access table last").last().expect("cannot access last");
+                let last = *table
+                    .last()
+                    .expect("cannot access table last")
+                    .last()
+                    .expect("cannot access last");
                 multiplier.add_assign(&last);
             }
         }
@@ -91,7 +95,11 @@ impl<F: PrimeField> FixedBaseScalarPow<F> {
             .collect();
             table.push(sub_table);
             if i != num_lookups - 1 {
-                let last = *table.last().expect("cannot access table last").last().expect("cannot access last");
+                let last = *table
+                    .last()
+                    .expect("cannot access table last")
+                    .last()
+                    .expect("cannot access last");
                 multiplier.mul_assign(&last);
             }
         }
