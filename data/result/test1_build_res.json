@@ -1,0 +1,45 @@
+{
+  "time_set": [
+    {
+      "blk_height": 1,
+      "build_time": "40ms wall, 40ms user + 0ns system = 40ms CPU (100.0%)"
+    },
+    {
+      "blk_height": 2,
+      "build_time": "700ms wall, 710ms user + 10ms system = 720ms CPU (102.9%)"
+    },
+    {
+      "blk_height": 3,
+      "build_time": "910ms wall, 910ms user + 0ns system = 910ms CPU (100.0%)"
+    },
+    {
+      "blk_height": 4,
+      "build_time": "770ms wall, 770ms user + 0ns system = 770ms CPU (100.0%)"
+    },
+    {
+      "blk_height": 5,
+      "build_time": "1.55s wall, 1.56s user + 10ms system = 1.57s CPU (101.3%)"
+    },
+    {
+      "blk_height": 6,
+      "build_time": "1.29s wall, 1.29s user + 0ns system = 1.29s CPU (100.0%)"
+    },
+    {
+      "blk_height": 7,
+      "build_time": "1.39s wall, 1.39s user + 0ns system = 1.39s CPU (100.0%)"
+    },
+    {
+      "blk_height": 8,
+      "build_time": "1.46s wall, 1.45s user + 10ms system = 1.46s CPU (100.0%)"
+    },
+    {
+      "blk_height": 9,
+      "build_time": "1.71s wall, 1.69s user + 10ms system = 1.7s CPU (99.4%)"
+    },
+    {
+      "blk_height": 10,
+      "build_time": "1.52s wall, 1.51s user + 10ms system = 1.52s CPU (100.0%)"
+    }
+  ],
+  "total_time": "11.35s wall, 11.32s user + 50ms system = 11.37s CPU (100.2%)"
+}

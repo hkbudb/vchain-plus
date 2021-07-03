@@ -1,0 +1,24 @@
+[
+     {
+        "start_blk": 1,
+        "end_blk": 3,
+        "range": [[1, 5], [2, 8]],
+        "keyword_exp": {
+            "or": [
+                {"input": "a"},
+                {"not": {"input": "b"}}
+            ]
+        }
+    },
+    {
+        "start_blk": 2,
+        "end_blk": 4,
+        "range": [[1, 7], [2, 9]],
+        "keyword_exp": {
+            "or": [
+                {"input": "a"},
+                {"and": [{"input": "b"}, {"input": "c"}]}
+            ]
+        }
+    }
+]

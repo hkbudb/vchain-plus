@@ -1,0 +1,9 @@
+{
+  "time_wins": [
+    4
+  ],
+  "id_tree_fanout": 4,
+  "max_id_num": 32,
+  "bplus_tree_fanout": 4,
+  "num_dim": 2
+}
