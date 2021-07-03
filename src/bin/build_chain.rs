@@ -72,7 +72,7 @@ fn build_chain(
     param: &Parameter,
 ) -> Result<()> {
     if !db_path.exists() {
-        fs::create_dir_all(db_path.clone())?;
+        fs::create_dir_all(db_path)?;
     }
     let mut chain = SimChain::create(db_path, param.clone())?;
     chain.set_parameter(param)?;

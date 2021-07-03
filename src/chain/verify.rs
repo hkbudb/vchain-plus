@@ -31,7 +31,7 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
     pk: &AccPublicKey,
 ) -> Result<VerifyInfo> {
     // verify dag, including range query and set operation
-    let bytes = bincode::serialize(&vo).unwrap();
+    let bytes = bincode::serialize(&vo)?;
     let vo_size = bytes.len();
     let timer = howlong::ProcessCPUTimer::new();
     let vo_dag_struct = vo.vo_dag;
