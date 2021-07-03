@@ -1,5 +1,3 @@
-use std::num::NonZeroU64;
-
 use super::MAX_INLINE_FANOUT;
 use crate::{
     create_id_type,
@@ -9,6 +7,7 @@ use anyhow::Result;
 use hash::{id_tree_leaf_hash, id_tree_non_leaf_hash, id_tree_root_hash};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
+use std::num::NonZeroU64;
 create_id_type!(IdTreeNodeId);
 create_id_type!(IdTreeInternalId);
 
@@ -84,7 +83,7 @@ impl IdTreeRoot {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum IdTreeNode {
     Leaf(IdTreeLeafNode),
-    NonLeaf(IdTreeNonLeafNode),
+    NonLeaf(Box<IdTreeNonLeafNode>),
 }
 
 impl IdTreeNode {
@@ -100,7 +99,7 @@ impl IdTreeNode {
     }
 
     pub fn from_non_leaf(n: IdTreeNonLeafNode) -> Self {
-        Self::NonLeaf(n)
+        Self::NonLeaf(Box::new(n))
     }
 }
 

@@ -77,8 +77,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
     };
     let mut idx_map = HashMap::<NodeIndex, NodeIndex>::new();
     let mut qp_inputs = Vec::<NodeIndex>::new();
-    let mut qp_outputs = Vec::<NodeIndex>::new();
-    qp_outputs.push(qp_output_elm);
+    let qp_outputs = vec![qp_output_elm];
 
     for idx in q_inputs {
         if let Some(node) = query_dag.node_weight(idx) {
@@ -102,7 +101,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                         time_win: n.time_win,
                         set: None,
                     };
-                    let qp_idx = qp_dag.add_node(QPNode::Keyword(qp_keyword_node));
+                    let qp_idx = qp_dag.add_node(QPNode::Keyword(Box::new(qp_keyword_node)));
                     qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                 }
@@ -112,7 +111,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                         set: None,
                         acc: None,
                     };
-                    let qp_idx = qp_dag.add_node(QPNode::BlkRt(qp_blk_rt_node));
+                    let qp_idx = qp_dag.add_node(QPNode::BlkRt(Box::new(qp_blk_rt_node)));
                     qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                 }

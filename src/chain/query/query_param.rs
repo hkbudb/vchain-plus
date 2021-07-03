@@ -39,7 +39,7 @@ pub struct QueryParam<K: Num> {
 }
 
 impl<K: Num> QueryParam<K> {
-    pub fn to_query_basic(self, time_win: u64) -> Result<Query<K>> {
+    pub fn into_query_basic(self, time_win: u64) -> Result<Query<K>> {
         let end_blk_height = Height(self.end_blk);
         let keyword_exp = self.keyword_exp;
         let mut query_dag = Graph::<QueryNode<K>, ()>::new();
@@ -460,7 +460,7 @@ mod test {
         });
         let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
         let time_win = 4;
-        let query = query_param.to_query_basic(time_win).unwrap();
+        let query = query_param.into_query_basic(time_win).unwrap();
         let mut expect_query_dag = Graph::<QueryNode<u32>, ()>::new();
         let idx_0 = expect_query_dag.add_node(QueryNode::Union(UnionNode {}));
         let idx_1 = expect_query_dag.add_node(QueryNode::Keyword(KeywordNode {

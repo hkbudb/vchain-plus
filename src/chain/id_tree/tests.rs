@@ -185,7 +185,7 @@ fn build_test_id_tree0() -> TestIdTree {
     let non_leaf1_id = non_leaf1.id;
     id_tree
         .nodes
-        .insert(non_leaf1_id, IdTreeNode::NonLeaf(non_leaf1));
+        .insert(non_leaf1_id, IdTreeNode::NonLeaf(Box::new(non_leaf1)));
 
     id_tree.root_id = Some(non_leaf1_id);
     id_tree
@@ -230,7 +230,7 @@ fn build_test_id_tree1() -> TestIdTree {
     let non_leaf1_hash = non_leaf1.to_digest();
     id_tree
         .nodes
-        .insert(non_leaf1_id, IdTreeNode::NonLeaf(non_leaf1));
+        .insert(non_leaf1_id, IdTreeNode::NonLeaf(Box::new(non_leaf1)));
 
     let obj4 = dataset.pop().unwrap();
     let leaf4 = create_id_tree_leaf(IdTreeNodeId(25), IdTreeInternalId(3), obj4.to_digest());
@@ -267,7 +267,7 @@ fn build_test_id_tree1() -> TestIdTree {
     let non_leaf2_hash = non_leaf2.to_digest();
     id_tree
         .nodes
-        .insert(non_leaf2_id, IdTreeNode::NonLeaf(non_leaf2));
+        .insert(non_leaf2_id, IdTreeNode::NonLeaf(Box::new(non_leaf2)));
 
     let obj7 = dataset.pop().unwrap();
     let leaf7 = create_id_tree_leaf(IdTreeNodeId(37), IdTreeInternalId(6), obj7.to_digest());
@@ -304,7 +304,7 @@ fn build_test_id_tree1() -> TestIdTree {
     let non_leaf3_hash = non_leaf3.to_digest();
     id_tree
         .nodes
-        .insert(non_leaf3_id, IdTreeNode::NonLeaf(non_leaf3));
+        .insert(non_leaf3_id, IdTreeNode::NonLeaf(Box::new(non_leaf3)));
 
     let mut non_leaf4_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_INLINE_FANOUT]);
     non_leaf4_child_ids[0] = non_leaf1_id;
@@ -322,7 +322,7 @@ fn build_test_id_tree1() -> TestIdTree {
     let non_leaf4_id = non_leaf4.id;
     id_tree
         .nodes
-        .insert(non_leaf4_id, IdTreeNode::NonLeaf(non_leaf4));
+        .insert(non_leaf4_id, IdTreeNode::NonLeaf(Box::new(non_leaf4)));
 
     id_tree.root_id = Some(non_leaf4_id);
     id_tree

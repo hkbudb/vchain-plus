@@ -74,6 +74,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
         let mut cur_id_opt = self.apply.root.trie_root_id;
         let mut cur_key = key;
 
+        #[allow(clippy::large_enum_variant)]
         enum TempNode {
             Leaf { id: TrieNodeId, hash: Digest },
             NonLeaf { node: TrieNonLeafNode, idx: char },
@@ -257,6 +258,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
         let mut cur_id_opt = self.apply.root.trie_root_id;
         let mut cur_key = key;
 
+        #[allow(clippy::large_enum_variant)]
         enum TempNode {
             Leaf {
                 id: TrieNodeId,

@@ -73,6 +73,7 @@ impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
         let depth = (max_id_num as f64).log(fanout as f64).floor() as usize;
         let mut cur_path_rev = fanout_nary_rev(internal_id.0, fanout as u64, depth);
 
+        #[allow(clippy::large_enum_variant)]
         enum TempNode {
             Leaf { id: IdTreeNodeId, hash: Digest },
             NonLeaf { node: IdTreeNonLeafNode, idx: usize },

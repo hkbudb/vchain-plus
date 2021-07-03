@@ -66,12 +66,6 @@ impl From<HashSet<NonZeroU64>> for Set {
     }
 }
 
-impl Into<HashSet<NonZeroU64>> for Set {
-    fn into(self) -> HashSet<NonZeroU64> {
-        self.0
-    }
-}
-
 impl FromIterator<NonZeroU64> for Set {
     fn from_iter<T: IntoIterator<Item = NonZeroU64>>(iter: T) -> Self {
         Self(HashSet::from_iter(iter))

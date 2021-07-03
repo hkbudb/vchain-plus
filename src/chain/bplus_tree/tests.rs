@@ -286,37 +286,6 @@ fn build_test_bplus_tree1() -> TestBPlusTree<u32> {
 }
 
 #[test]
-#[ignore]
-fn test_write() {
-    let keys: Vec<u32> = get_dataset().0;
-    let ids: Vec<NonZeroU64> = get_dataset().1;
-
-    let mut test_b_tree0 = TestBPlusTree::<u32>::new();
-    let mut test_b_tree0_root = BPlusTreeRoot::default();
-    set_root_id(&mut test_b_tree0_root, test_b_tree0.root_id);
-    let mut ctx0 = WriteContext::new(&mut test_b_tree0, test_b_tree0_root);
-    for i in 0..1 {
-        ctx0.insert(keys[i], ObjId(ids[i]), FANOUT, &PUB_KEY)
-            .unwrap();
-    }
-    let changes0 = ctx0.changes();
-    test_b_tree0.apply(changes0);
-    assert_eq!(test_b_tree0, build_test_bplus_tree0());
-
-    let mut test_b_tree1 = TestBPlusTree::<u32>::new();
-    let mut test_b_tree1_root = BPlusTreeRoot::default();
-    set_root_id(&mut test_b_tree1_root, test_b_tree1.root_id);
-    let mut ctx1 = WriteContext::new(&mut test_b_tree1, test_b_tree1_root);
-    for i in 0..2 {
-        ctx1.insert(keys[i], ObjId(ids[i]), FANOUT, &PUB_KEY)
-            .unwrap();
-    }
-    let changes1 = ctx1.changes();
-    test_b_tree1.apply(changes1);
-    assert_eq!(test_b_tree1, build_test_bplus_tree1());
-}
-
-#[test]
 fn test_pointer() {
     let mut query_proof = SubProof::from_hash(Range::new(1, 2), Digest::zero());
     let mut cur_proof = &mut query_proof as *mut _;
@@ -329,37 +298,4 @@ fn test_pointer() {
     }
     println!("Raw pointer address after: {:p}", cur_proof);
     assert_eq!(1, 1);
-}
-
-#[test]
-#[ignore]
-fn test_rich() {
-    // time-consuming test, ignored
-    let mut res = true;
-    let mut test_b_tree = TestBPlusTree::<u32>::new();
-    let mut test_b_tree_root = BPlusTreeRoot::default();
-    set_root_id(&mut test_b_tree_root, test_b_tree.root_id);
-    let mut ctx = WriteContext::new(&mut test_b_tree, test_b_tree_root);
-    let upper_bound = 10;
-    for i in 0..upper_bound {
-        unsafe {
-            ctx.insert(
-                i,
-                ObjId(NonZeroU64::new_unchecked(i as u64)),
-                FANOUT,
-                &PUB_KEY,
-            )
-            .unwrap();
-        }
-    }
-    let changes = ctx.changes();
-    test_b_tree.apply(changes);
-
-    for i in 0..upper_bound {
-        res = res && test_b_tree.search(i);
-        if !res {
-            println!("failed in searching {}", i);
-        }
-    }
-    assert_eq!(res, true);
 }

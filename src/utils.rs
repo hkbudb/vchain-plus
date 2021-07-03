@@ -1,8 +1,13 @@
-use crate::acc::AccPublicKey;
+use crate::acc::{AccPublicKey, AccSecretKey};
+use crate::chain::query::query_param::QueryParam;
 use crate::chain::{block::Height, object::Object, traits::Num};
 use anyhow::{Context, Error, Result};
 use ark_serialize::Read;
+use rand::{CryptoRng, RngCore};
+use tracing_subscriber::EnvFilter;
 use std::error::Error as StdError;
+use std::fs;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -42,6 +47,14 @@ macro_rules! create_id_type {
             }
         }
     };
+}
+
+pub fn load_query_param_from_file(path: &Path) -> Result<Vec<QueryParam<u32>>> {
+    let data = fs::read_to_string(path)?;
+    let query_params: Vec<QueryParam<u32>> = serde_json::from_str(&data)?;
+    println!("{:?}", query_params);
+    Ok(query_params)
+
 }
 
 // input format: block_id sep [ v_data ] sep { w_data }
@@ -104,18 +117,63 @@ where
     Ok(res)
 }
 
-pub fn read_pub_key() -> AccPublicKey {
-    todo!()
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct KeyPair {
+    sk: AccSecretKey,
+    pub pk: AccPublicKey,
 }
+
+impl KeyPair {
+    pub fn gen(q: u64, mut rng: impl RngCore + CryptoRng) -> Self {
+        let sk = AccSecretKey::rand(&mut rng);
+        let sk_with_pow = sk.into();
+        let pk = AccPublicKey::gen_key(&sk_with_pow, q);
+        Self { sk, pk }
+    }
+
+    pub fn save(self, path: PathBuf) -> Result<()> {
+        if ! path.exists() {
+            fs::create_dir_all(path.clone())?;
+        }
+        let sk_path = path.join("sk");
+        let mut sk_f = File::create(&sk_path)?;
+        bincode::serialize_into(&mut sk_f, &self.sk)?;
+        let pk_path = path.join("pk");
+        let mut pk_f = File::create(&pk_path)?;
+        bincode::serialize_into(&mut pk_f, &self.pk)?;
+        Ok(())
+    }
+
+    pub fn load_pk(pk_path: &Path) -> Result<AccPublicKey> {
+        let reader = BufReader::new(File::open(pk_path)?);
+        let pk: AccPublicKey = bincode::deserialize_from(reader)?;
+        Ok(pk)
+    }
+
+    pub fn load_sk(sk_path: &Path) -> Result<AccSecretKey> {
+        let sk_cont: Vec<u8> = fs::read(&sk_path)?;
+        let sk: AccSecretKey = bincode::deserialize_from(&sk_cont[..])?;
+        Ok(sk)
+    }
+}
+
+pub fn init_tracing_subscriber(default_level: &str) -> Result<()> {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new(default_level.to_string())
+    });
+    tracing_subscriber::fmt().with_env_filter(filter).try_init().map_err(Error::msg)
+}
+
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, path::{Path, PathBuf}};
 
-    use crate::{
-        chain::{block::Height, object::Object},
-        utils::load_raw_obj_from_str,
-    };
+    use serde_json::json;
+
+    use crate::{chain::{block::Height, object::Object, query::query_param::QueryParam}, utils::load_raw_obj_from_str};
+
+    use super::{KeyPair, load_query_param_from_file};
 
     #[test]
     fn test_create_id() {
@@ -123,6 +181,39 @@ mod tests {
         assert_eq!(TestId::next_id(), TestId(0));
         assert_eq!(TestId::next_id(), TestId(1));
         assert_eq!(TestId::next_id(), TestId(2));
+    }
+
+    #[test]
+    fn test_load_query_param() {
+        let input = Path::new("./data/query/test.json");
+        let res = load_query_param_from_file(input).unwrap();
+        let param1_data = json!({
+            "start_blk": 1,
+            "end_blk": 3,
+            "range": [[1, 5], [2, 8]],
+            "keyword_exp": {
+                "or": [
+                    {"input": "a"},
+                    {"not": {"input": "b"}}
+                ]
+            }
+        });
+        let param1: QueryParam<u32> = serde_json::from_value(param1_data).unwrap();
+        assert_eq!(param1, res[0]);
+
+        let param2_data = json!({
+            "start_blk": 2,
+            "end_blk": 4,
+            "range": [(1, 7), (2, 9)],
+            "keyword_exp": {
+                "or": [
+                    {"input": "a"},
+                    {"and": [{"input": "b"}, {"input": "c"}]},
+                ]
+            },
+        });
+        let param2: QueryParam<u32> = serde_json::from_value(param2_data).unwrap();
+        assert_eq!(param2, res[1]);
     }
 
     #[test]
@@ -156,5 +247,24 @@ mod tests {
             exp
         };
         assert_eq!(load_raw_obj_from_str(&input).unwrap(), expect);
+    }
+
+    #[test]
+    fn test_maintain_key() {
+        let path = PathBuf::from("./keys/test_key");
+        let sk_path = path.join("sk");
+        let pk_path = path.join("pk");
+        let q: u64 = 10;
+        let rng = rand::thread_rng();
+        let key_pair = KeyPair::gen(q, rng);
+        key_pair.clone().save(path.clone()).unwrap();
+
+        let read_pk = KeyPair::load_pk(&pk_path).unwrap();
+        let read_sk = KeyPair::load_sk(&sk_path).unwrap();
+        let read_key_pair = KeyPair {
+            sk: read_sk,
+            pk: read_pk,
+        };
+        assert_eq!(key_pair, read_key_pair);
     }
 }

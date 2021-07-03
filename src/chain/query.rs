@@ -27,9 +27,11 @@ use crate::{
 use anyhow::{bail, Result};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_plan::QueryPlan;
+use tracing::info;
 use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 
+#[allow(clippy::type_complexity)]
 fn query_final<K: Num, T: ReadInterface<K = K>>(
     chain: T,
     query_plan: QueryPlan<K>,
@@ -510,13 +512,35 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     Ok((obj_map, vo))
 }
 
+pub struct QueryTime {
+    pub(crate) param_to_q: String,
+    pub(crate) q_to_qp: String,
+    pub(crate) process_qp: String,
+}
+
+#[allow(clippy::type_complexity)]
 pub fn query_basic<K: Num, T: ReadInterface<K = K>>(
     chain: T,
     query_param: QueryParam<K>,
     time_win: u64,
     pk: &AccPublicKey,
-) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
-    let query = query_param.to_query_basic(time_win)?;
+) -> Result<((HashMap<ObjId, Object<K>>, VO<K>), QueryTime)> {
+    let timer = howlong::ProcessCPUTimer::new();
+    let query = query_param.into_query_basic(time_win)?;
+    let time1 = timer.elapsed();
+    let timer = howlong::ProcessCPUTimer::new();
     let query_plan = query_to_qp(query)?;
-    query_final(chain, query_plan, pk)
+    let time2 = timer.elapsed();
+    let timer = howlong::ProcessCPUTimer::new();
+    let res = query_final(chain, query_plan, pk)?;
+    let time3 = timer.elapsed();
+    let time = QueryTime {
+        param_to_q: time1.to_string(),
+        q_to_qp: time2.to_string(),
+        process_qp: time3.to_string(),
+    };
+    info!("Query param to query: {:?}, CPU usage is {:.2}.", time1, time1.cpu_usage());
+    info!("Query to query plan: {:?}, CPU usage is {:.2}.", time2, time2.cpu_usage());
+    info!("Process query plan: {:?}, CPU usage is {:.2}.", time2, time2.cpu_usage());
+    Ok((res, time))
 }

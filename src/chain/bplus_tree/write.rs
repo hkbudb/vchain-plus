@@ -372,7 +372,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                         for i in 0..ids.len() {
                             let n_id = ids[i];
                             let nd = self.get_node(n_id)?;
-
+                            #[allow(clippy::op_ref)]
                             if i <= mid {
                                 old_set = &old_set | &nd.get_set();
                                 if i == mid {

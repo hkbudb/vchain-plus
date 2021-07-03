@@ -38,6 +38,7 @@ struct IntersectionProof<E: PairingEngine> {
 
 impl<E: PairingEngine> IntersectionProof<E> {
     #[allow(clippy::many_single_char_names)]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         set: &Set,
         q_poly: &Poly<E::Fr>,
@@ -78,6 +79,7 @@ impl<E: PairingEngine> IntersectionProof<E> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn verify(
         &self,
         lhs_acc: E::G1Affine,

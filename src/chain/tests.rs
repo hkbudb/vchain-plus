@@ -7,23 +7,18 @@ use super::{
     trie_tree::{TrieNode, TrieNodeId},
     Parameter,
 };
-use crate::{
-    acc::{AccPublicKey, AccSecretKey, AccSecretKeyWithPowCache},
-    chain::{
+use crate::{acc::{AccPublicKey, AccSecretKey, AccSecretKeyWithPowCache}, chain::{
         query::{query_basic, query_param::QueryParam},
         verify::verify,
-    },
-    digest::{Digest, Digestible},
-    utils::load_raw_obj_from_str,
-};
+    }, digest::{Digest, Digestible}, utils::{init_tracing_subscriber, load_raw_obj_from_str}};
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use rand::{prelude::*, rngs::StdRng};
 use serde_json::json;
 use std::collections::HashMap;
-//use howlong::{ProcessCPUTimer, ProcessDuration};
+//use howlong::{ProcessCUPTimer, ProcessDuration};
 
-const Q: u64 = 50; // to be modified
+const Q: u64 = 40;
 static SEC_KEY: Lazy<AccSecretKeyWithPowCache> = Lazy::new(|| {
     let mut rng = StdRng::seed_from_u64(123_456_789u64);
     let sk = AccSecretKey::rand(&mut rng);
@@ -233,7 +228,7 @@ fn build_chain(data: &str, param: &Parameter) -> Result<FakeChain> {
     chain.set_parameter(param)?;
     let mut prev_hash = Digest::zero();
     for (blk_height, objs) in load_raw_obj_from_str(data)? {
-        let blk_head = build_block(blk_height, prev_hash, objs, &mut chain, &param, &PUB_KEY)?;
+        let (blk_head, _duration) = build_block(blk_height, prev_hash, objs, &mut chain, &param, &PUB_KEY)?;
         prev_hash = blk_head.to_digest();
     }
     Ok(chain)
@@ -255,6 +250,25 @@ const TEST_DATA_1: &str = r#"
 "#;
 
 const TEST_DATA_2: &str = r#"
+1 [ 7, 2 ] { a }
+1 [ 9, 5 ] { ab, c }
+1 [ 2, 4 ] { ced }
+1 [ 8, 8 ] { a, b, c }
+2 [ 1, 4 ] { bc }
+2 [ 10, 7 ] { b, c, d }
+2 [ 11, 2 ] { b, c }
+2 [ 5, 8 ] { acd, c, b }
+3 [ 3, 9 ] { ae, b, c }
+3 [ 12, 4 ] { dc }
+3 [ 6, 6 ] { aed, a }
+3 [ 4, 9 ] { b }
+4 [ 4, 2 ] { c }
+4 [ 3, 8 ] { a }
+4 [ 6, 12 ] { b }
+4 [ 5, 7 ] { a, b, c }
+"#;
+
+const TEST_DATA_3: &str = r#"
 1 [ 7, 2 ] { a }
 1 [ 9, 5 ] { ab, c }
 1 [ 2, 4 ] { ced }
@@ -310,9 +324,9 @@ fn test_fake_chain_write() {
     println!("{:#?}", test_chain1);
 
     let param = Parameter {
-        time_wins: vec![2, 4],
+        time_wins: vec![2, 3],
         id_tree_fanout: 2,
-        max_id_num: 16,
+        max_id_num: 32,
         bplus_tree_fanout: 3,
         num_dim: 2,
     };
@@ -322,7 +336,8 @@ fn test_fake_chain_write() {
 }
 
 #[test]
-fn test_fake_chain_read_basic() {
+fn test_fake_chain_read_basic() -> Result<()> {
+    init_tracing_subscriber("debug")?;
     let param = Parameter {
         time_wins: vec![4],
         id_tree_fanout: 4,
@@ -330,7 +345,7 @@ fn test_fake_chain_read_basic() {
         bplus_tree_fanout: 4,
         num_dim: 2,
     };
-    let test_chain = build_chain(TEST_DATA_2, &param).unwrap();
+    let test_chain = build_chain(TEST_DATA_3, &param).unwrap();
     let query1_param_data = json!({
         "start_blk": 2,
         "end_blk": 4,
@@ -343,7 +358,7 @@ fn test_fake_chain_read_basic() {
         },
     });
     let query1_param: QueryParam<u32> = serde_json::from_value(query1_param_data).unwrap();
-    let (res, vo) = query_basic(&test_chain, query1_param, 4, &PUB_KEY).unwrap();
+    let ((res, vo), _time)= query_basic(&test_chain, query1_param, 4, &PUB_KEY).unwrap();
     println!("results for query 1: ");
     println!("{:#?}", res);
     verify(&test_chain, &res, vo, &PUB_KEY).unwrap();
@@ -360,9 +375,10 @@ fn test_fake_chain_read_basic() {
         },
     });
     let query2_param: QueryParam<u32> = serde_json::from_value(query2_param_data).unwrap();
-    let (res, vo) = query_basic(&test_chain, query2_param, 4, &PUB_KEY).unwrap();
+    let ((res, vo), _time) = query_basic(&test_chain, query2_param, 4, &PUB_KEY).unwrap();
     println!("results for query 2: ");
     println!("{:#?}", res);
     verify(&test_chain, &res, vo, &PUB_KEY).unwrap();
     assert_eq!(1, 1);
+    Ok(())
 }

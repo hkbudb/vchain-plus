@@ -16,7 +16,9 @@ use crate::{
     digest::{Digest, Digestible},
 };
 use anyhow::{bail, Result};
+use howlong::{ProcessDuration};
 use std::{collections::HashMap, iter::FromIterator, num::NonZeroU64};
+use tracing::{debug, info};
 
 pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     blk_height: Height,
@@ -25,7 +27,9 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     mut chain: T,
     param: &Parameter,
     pk: &AccPublicKey,
-) -> Result<BlockHead> {
+) -> Result<(BlockHead, ProcessDuration)> {
+    debug!("Building block {:?}...", blk_height);
+    let timer = howlong::ProcessCPUTimer::new();
     let mut block_head = BlockHead {
         blk_height,
         prev_hash,
@@ -214,6 +218,8 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
 
     chain.write_block_content(blk_height, &block_content)?;
     chain.write_block_head(blk_height, &block_head)?;
+    let time = timer.elapsed();
+    info!("Time elapsed : {:?}, CPU usage is {:.2}.", time, time.cpu_usage());
 
-    Ok(block_head)
+    Ok((block_head, time))
 }

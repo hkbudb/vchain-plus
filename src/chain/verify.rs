@@ -14,15 +14,22 @@ use crate::{
 use anyhow::{bail, ensure, Result};
 use hash::{ads_hash, bplus_roots_hash};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing};
+use tracing::info;
 use std::collections::{BTreeMap, HashMap};
+
+pub struct VerifyInfo {
+    //vo_size: usize,
+    verify_time: String,
+}
 
 pub fn verify<K: Num, T: ReadInterface<K = K>>(
     chain: T,
     res: &HashMap<ObjId, Object<K>>,
     vo: VO<K>,
     pk: &AccPublicKey,
-) -> Result<()> {
+) -> Result<VerifyInfo> {
     // verify dag, including range query and set operation
+    let timer = howlong::ProcessCPUTimer::new();
     let vo_dag_struct = vo.vo_dag;
     let vo_dag = vo_dag_struct.dag;
     let vo_output_sets = vo_dag_struct.output_sets;
@@ -281,8 +288,15 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
             "ADS root hash not matched for height {:?}!. The target hash is {:?} but the computed hash is {:?}", height, expect_ads_root_hash, ads_root_hash
         );
     }
-
-    Ok(())
+    let time = timer.elapsed();
+    //let bytes = bincode::serialize(&vo).unwrap();
+    //let vo_size = len(bytes);
+    let verify_time = VerifyInfo {
+        //vo_size,
+        verify_time: time.to_string(),
+    };
+    info!("Verification time: {:?}", time);
+    Ok(verify_time)
 }
 
 #[cfg(test)]
