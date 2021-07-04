@@ -15,10 +15,9 @@ use crate::{
     },
     digest::{Digest, Digestible},
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use howlong::ProcessDuration;
 use std::{collections::HashMap, iter::FromIterator, num::NonZeroU64};
-use tracing::{debug, info};
 
 pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     blk_height: Height,
@@ -28,7 +27,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     param: &Parameter,
     pk: &AccPublicKey,
 ) -> Result<(BlockHead, ProcessDuration)> {
-    debug!("Building block {:?}...", blk_height);
+    info!("Building block {}...", blk_height);
     let timer = howlong::ProcessCPUTimer::new();
     let mut block_head = BlockHead {
         blk_height,
@@ -44,7 +43,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
         BlockContent::default()
     };
     let multi_ads = pre_blk_content.ads.read_adses();
-    let time_wins = &param.time_wins;
+    let time_wins = &param.time_win_sizes;
 
     // id tree ctx
     let id_tree_root = pre_blk_content.id_tree_root;
@@ -67,17 +66,14 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
         let trie_root = if let Some(block_ads) = multi_ads.get(&k) {
             block_ads.trie_root
         } else {
-            //bail!("Cannot find ADS for time window {}!", k);
             TrieRoot::default()
         };
         let mut trie_ctx = trie_tree::write::WriteContext::new(&chain, trie_root);
         for (idx, obj_hash) in pre_k_blk_obj_hashes.iter().enumerate() {
             let raw_obj = chain.read_object(*obj_hash)?;
-            let obj_id_num = if let Some(id_num) = pre_k_blk_obj_id_nums.get(idx) {
-                id_num
-            } else {
-                bail!("Cannot find object id number!");
-            };
+            let obj_id_num = pre_k_blk_obj_id_nums
+                .get(idx)
+                .context("Cannot find object id number!")?;
             for key in &raw_obj.keyword_data {
                 trie_ctx.delete(key.clone(), ObjId(*obj_id_num), pk)?;
             }
@@ -98,17 +94,14 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
                     );
                 }
             } else {
-                //bail!("Cannot find ADS for time window {}!", k);
                 BPlusTreeRoot::default()
             };
             let mut bplus_ctx = bplus_tree::write::WriteContext::new(&chain, bplus_tree_root);
             for (idx, obj_hash) in pre_k_blk_obj_hashes.iter().enumerate() {
                 let raw_obj = chain.read_object(*obj_hash)?;
-                let obj_id_num = if let Some(id_num) = pre_k_blk_obj_id_nums.get(idx) {
-                    id_num
-                } else {
-                    bail!("Cannot find object id number!");
-                };
+                let obj_id_num = pre_k_blk_obj_id_nums
+                    .get(idx)
+                    .context("Cannot find object id number!")?;
                 if let Some(num_data) = raw_obj.num_data.get(dim) {
                     bplus_ctx.delete(
                         *num_data,
@@ -219,11 +212,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     chain.write_block_content(blk_height, &block_content)?;
     chain.write_block_head(blk_height, &block_head)?;
     let time = timer.elapsed();
-    info!(
-        "Time elapsed : {:?}, CPU usage is {:.2}.",
-        time,
-        time.cpu_usage()
-    );
+    info!("Time elapsed : {}.", time);
 
     Ok((block_head, time))
 }

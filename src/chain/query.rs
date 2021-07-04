@@ -1,10 +1,7 @@
-pub mod hash;
 pub mod query_obj;
 pub mod query_param;
 pub mod query_plan;
 
-use self::query_param::QueryParam;
-use super::verify::vo::VoDag;
 use crate::{
     acc::{
         compute_set_operation_final, compute_set_operation_intermediate, ops::Op, AccPublicKey, Set,
@@ -19,18 +16,19 @@ use crate::{
         trie_tree,
         verify::vo::{
             MerkleProof, VOBlkRtNode, VOFinalDiff, VOFinalIntersec, VOFinalUnion, VOInterDiff,
-            VOInterIntersec, VOInterUnion, VOKeywordNode, VONode, VORangeNode, VO,
+            VOInterIntersec, VOInterUnion, VOKeywordNode, VONode, VORangeNode, VoDag, VO,
         },
     },
     digest::{Digest, Digestible},
+    utils::Time,
 };
-use anyhow::{bail, Result};
+use anyhow::{Context, Result};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
+use query_param::QueryParam;
 use query_plan::QueryPlan;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
-use tracing::info;
 
 #[allow(clippy::type_complexity)]
 fn query_final<K: Num, T: ReadInterface<K = K>>(
@@ -64,22 +62,14 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     time_win_map.insert(n.blk_height, n.time_win);
                     match &n.set {
                         Some((set, acc)) => {
-                            let bplus_p = if let Some(proofs) = qp_bplus_proofs.get(&n.blk_height) {
-                                if let Some(proof) = proofs.get(&n.dim) {
-                                    proof
-                                } else {
-                                    bail!(
-                                        "Cannot find the bplus tree proof at dim {:?}, height {:?}",
-                                        n.dim,
-                                        n.blk_height
-                                    );
-                                }
-                            } else {
-                                bail!(
-                                    "Cannot find the bplus tree proof map at height {:?}",
-                                    n.blk_height
-                                );
-                            };
+                            let proofs = qp_bplus_proofs.get(&n.blk_height).context(format!(
+                                "Cannot find the bplus tree proof map at height {:?}",
+                                n.blk_height
+                            ))?;
+                            let bplus_p = proofs.get(&n.dim).context(format!(
+                                "Cannot find the bplus tree proof at dim {}, height {}",
+                                n.dim, n.blk_height
+                            ))?;
                             let vo_range_node = VORangeNode {
                                 range: n.range,
                                 blk_height: n.blk_height,
@@ -174,11 +164,9 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                             }
                             None => {
                                 let blk_content = chain.read_block_content(n.blk_height)?;
-                                acc = if let Some(acc_val) = blk_content.read_acc() {
-                                    acc_val
-                                } else {
-                                    bail!("The block does not have acc value");
-                                };
+                                acc = blk_content
+                                    .read_acc()
+                                    .context("The block does not have acc value")?;
                             }
                         }
                         let vo_blk_rt_node = VOBlkRtNode {
@@ -193,11 +181,9 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         let blk_content = chain.read_block_content(n.blk_height)?;
                         let obj_id_nums = blk_content.read_obj_id_nums();
                         let set = Set::from_iter(obj_id_nums.into_iter());
-                        let acc = if let Some(acc_val) = blk_content.read_acc() {
-                            acc_val
-                        } else {
-                            bail!("The block does not have acc value");
-                        };
+                        let acc = blk_content
+                            .read_acc()
+                            .context("The block does not have acc value")?;
                         let vo_blk_root = VOBlkRtNode {
                             blk_height: n.blk_height,
                             acc,
@@ -212,47 +198,30 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     for idx in qp_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let qp_c_idx1 = if let Some(v) = child_idxs.get(1) {
-                        v
-                    } else {
-                        bail!("Cannot find the first qp child idx of union");
-                    };
-                    let vo_c_idx1 = if let Some(idx) = idx_map.get(&qp_c_idx1) {
-                        idx
-                    } else {
-                        bail!("Cannot find the first vo node idx of Union in idx_map");
-                    };
-                    let vo_c1 = if let Some(node) = vo_dag.node_weight(*vo_c_idx1) {
-                        node
-                    } else {
-                        bail!("Cannot find the first child vo node in vo_dag");
-                    };
-                    let c1_set = if let Some(s) = set_map.get(vo_c_idx1) {
-                        s
-                    } else {
-                        bail!("Cannot find the set in set_map");
-                    };
-
-                    let qp_c_idx2 = if let Some(v) = child_idxs.get(0) {
-                        v
-                    } else {
-                        bail!("Cannot find the second qp child idx of union");
-                    };
-                    let vo_c_idx2 = if let Some(idx) = idx_map.get(&qp_c_idx2) {
-                        idx
-                    } else {
-                        bail!("Cannot find the vo node idx of Union in idx_map");
-                    };
-                    let vo_c2 = if let Some(node) = vo_dag.node_weight(*vo_c_idx2) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child vo node in vo_dag");
-                    };
-                    let c2_set = if let Some(s) = set_map.get(vo_c_idx2) {
-                        s
-                    } else {
-                        bail!("Cannot find the set in set_map");
-                    };
+                    let qp_c_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first qp child idx of union")?;
+                    let vo_c_idx1 = idx_map
+                        .get(&qp_c_idx1)
+                        .context("Cannot find the first vo node idx of Union in idx_map")?;
+                    let vo_c1 = vo_dag
+                        .node_weight(*vo_c_idx1)
+                        .context("Cannot find the first child vo node in vo_dag")?;
+                    let c1_set = set_map
+                        .get(vo_c_idx1)
+                        .context("Cannot find the set in set_map")?;
+                    let qp_c_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot find the second qp child idx of union")?;
+                    let vo_c_idx2 = idx_map
+                        .get(&qp_c_idx2)
+                        .context("Cannot find the vo node idx of Union in idx_map")?;
+                    let vo_c2 = vo_dag
+                        .node_weight(*vo_c_idx2)
+                        .context("Cannot find the second child vo node in vo_dag")?;
+                    let c2_set = set_map
+                        .get(vo_c_idx2)
+                        .context("Cannot find the set in set_map")?;
 
                     if !qp_outputs.contains(&idx) {
                         let (res_set, res_acc, inter_proof) = compute_set_operation_intermediate(
@@ -288,47 +257,30 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     for idx in qp_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let qp_c_idx1 = if let Some(v) = child_idxs.get(1) {
-                        v
-                    } else {
-                        bail!("Cannot find the first qp child idx of intersection");
-                    };
-                    let vo_c_idx1 = if let Some(idx) = idx_map.get(&qp_c_idx1) {
-                        idx
-                    } else {
-                        bail!("Cannot find the first vo node idx of Intersec in idx_map");
-                    };
-                    let vo_c1 = if let Some(node) = vo_dag.node_weight(*vo_c_idx1) {
-                        node
-                    } else {
-                        bail!("Cannot find the first child vo node in vo_dag");
-                    };
-                    let c1_set = if let Some(s) = set_map.get(vo_c_idx1) {
-                        s
-                    } else {
-                        bail!("Cannot find the set in set_map");
-                    };
-
-                    let qp_c_idx2 = if let Some(v) = child_idxs.get(0) {
-                        v
-                    } else {
-                        bail!("Cannot find the second qp child idx of intersection");
-                    };
-                    let vo_c_idx2 = if let Some(idx) = idx_map.get(&qp_c_idx2) {
-                        idx
-                    } else {
-                        bail!("Cannot find the vo node idx of Intersec in idx_map");
-                    };
-                    let vo_c2 = if let Some(node) = vo_dag.node_weight(*vo_c_idx2) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child vo node in vo_dag");
-                    };
-                    let c2_set = if let Some(s) = set_map.get(vo_c_idx2) {
-                        s
-                    } else {
-                        bail!("Cannot find the set in set_map");
-                    };
+                    let qp_c_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first qp child idx of intersection")?;
+                    let vo_c_idx1 = idx_map
+                        .get(&qp_c_idx1)
+                        .context("Cannot find the first vo node idx of Intersec in idx_map")?;
+                    let vo_c1 = vo_dag
+                        .node_weight(*vo_c_idx1)
+                        .context("Cannot find the first child vo node in vo_dag")?;
+                    let c1_set = set_map
+                        .get(vo_c_idx1)
+                        .context("Cannot find the set in set_map")?;
+                    let qp_c_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot find the second qp child idx of intersection")?;
+                    let vo_c_idx2 = idx_map
+                        .get(&qp_c_idx2)
+                        .context("Cannot find the vo node idx of Intersec in idx_map")?;
+                    let vo_c2 = vo_dag
+                        .node_weight(*vo_c_idx2)
+                        .context("Cannot find the second child vo node in vo_dag")?;
+                    let c2_set = set_map
+                        .get(vo_c_idx2)
+                        .context("Cannot find the set in set_map")?;
 
                     if !qp_outputs.contains(&idx) {
                         let (res_set, res_acc, inter_proof) = compute_set_operation_intermediate(
@@ -364,47 +316,31 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     for idx in qp_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let qp_c_idx1 = if let Some(v) = child_idxs.get(1) {
-                        v
-                    } else {
-                        bail!("Cannot find the first qp child idx of difference");
-                    };
-                    let vo_c_idx1 = if let Some(idx) = idx_map.get(&qp_c_idx1) {
-                        idx
-                    } else {
-                        bail!("Cannot find the first vo node idx of Difference in idx_map");
-                    };
-                    let vo_c1 = if let Some(node) = vo_dag.node_weight(*vo_c_idx1) {
-                        node
-                    } else {
-                        bail!("Cannot find the first child vo node in vo_dag");
-                    };
-                    let c1_set = if let Some(s) = set_map.get(vo_c_idx1) {
-                        s
-                    } else {
-                        bail!("Cannot find the set in set_map");
-                    };
+                    let qp_c_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first qp child idx of difference")?;
+                    let vo_c_idx1 = idx_map
+                        .get(&qp_c_idx1)
+                        .context("Cannot find the first vo node idx of Difference in idx_map")?;
+                    let vo_c1 = vo_dag
+                        .node_weight(*vo_c_idx1)
+                        .context("Cannot find the first child vo node in vo_dag")?;
+                    let c1_set = set_map
+                        .get(vo_c_idx1)
+                        .context("Cannot find the set in set_map")?;
 
-                    let qp_c_idx2 = if let Some(v) = child_idxs.get(0) {
-                        v
-                    } else {
-                        bail!("Cannot second the first qp child idx of difference");
-                    };
-                    let vo_c_idx2 = if let Some(idx) = idx_map.get(&qp_c_idx2) {
-                        idx
-                    } else {
-                        bail!("Cannot find the vo node idx of Difference in idx_map");
-                    };
-                    let vo_c2 = if let Some(node) = vo_dag.node_weight(*vo_c_idx2) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child vo node in vo_dag");
-                    };
-                    let c2_set = if let Some(s) = set_map.get(vo_c_idx2) {
-                        s
-                    } else {
-                        bail!("Cannot find the set in set_map");
-                    };
+                    let qp_c_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot second the first qp child idx of difference")?;
+                    let vo_c_idx2 = idx_map
+                        .get(&qp_c_idx2)
+                        .context("Cannot find the vo node idx of Difference in idx_map")?;
+                    let vo_c2 = vo_dag
+                        .node_weight(*vo_c_idx2)
+                        .context("Cannot find the second child vo node in vo_dag")?;
+                    let c2_set = set_map
+                        .get(vo_c_idx2)
+                        .context("Cannot find the set in set_map")?;
 
                     if !qp_outputs.contains(&idx) {
                         let (res_set, res_acc, inter_proof) = compute_set_operation_intermediate(
@@ -452,24 +388,14 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     let id_tree_fanout = param.id_tree_fanout;
     let mut vo_ouput_sets = HashMap::<NodeIndex, Set>::new();
     for idx in qp_outputs {
-        let vo_idx = if let Some(idx) = idx_map.get(&idx) {
-            idx
-        } else {
-            bail!("Cannot find idx in idx_map");
-        };
-        let set = if let Some(s) = set_map.get(vo_idx) {
-            s
-        } else {
-            bail!("Cannot find set in set_map");
-        };
+        let vo_idx = idx_map.get(&idx).context("Cannot find idx in idx_map")?;
+        let set = set_map.get(vo_idx).context("Cannot find set in set_map")?;
         vo_ouput_sets.insert(*vo_idx, set.clone());
         for i in set.iter() {
             let obj_id = ObjId(*i);
-            let obj_hash = if let Some(d) = id_tree_ctx.query(obj_id, max_id_num, id_tree_fanout)? {
-                d
-            } else {
-                bail!("Cannot find object");
-            };
+            let obj_hash = id_tree_ctx
+                .query(obj_id, max_id_num, id_tree_fanout)?
+                .context("Cannot find object")?;
             let obj = chain.read_object(obj_hash)?;
             obj_map.insert(obj_id, obj);
         }
@@ -515,29 +441,25 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QueryTime {
-    pub(crate) param_to_q: String,
-    pub(crate) q_to_qp: String,
-    pub(crate) process_qp: String,
+    pub(crate) param_to_q: Time,
+    pub(crate) q_to_qp: Time,
+    pub(crate) process_qp: Time,
 }
 
 #[allow(clippy::type_complexity)]
 pub fn query<K: Num, T: ReadInterface<K = K>>(
     chain: T,
     query_param: QueryParam<K>,
-    optimized: bool,
     pk: &AccPublicKey,
 ) -> Result<((HashMap<ObjId, Object<K>>, VO<K>), QueryTime)> {
     let timer = howlong::ProcessCPUTimer::new();
-    let time_win: u64;
-    if !optimized {
-        let chain_param = chain.get_parameter()?;
-        time_win = *chain_param
-            .time_wins
-            .get(0)
-            .expect("No time window provided in this blockchain");
-    } else {
-        todo!()
-    }
+    let chain_param = chain.get_parameter()?;
+    // todo choose proper time_window
+    let time_win = *chain_param
+        .time_win_sizes
+        .get(0)
+        .context("No time window provided in this blockchain")?;
+
     let query = query_param.into_query_basic(time_win)?;
     let time1 = timer.elapsed();
     let timer = howlong::ProcessCPUTimer::new();
@@ -547,12 +469,12 @@ pub fn query<K: Num, T: ReadInterface<K = K>>(
     let res = query_final(chain, query_plan, pk)?;
     let time3 = timer.elapsed();
     let time = QueryTime {
-        param_to_q: time1.to_string(),
-        q_to_qp: time2.to_string(),
-        process_qp: time3.to_string(),
+        param_to_q: Time::from(time1),
+        q_to_qp: Time::from(time2),
+        process_qp: Time::from(time3),
     };
-    info!("Stage1: {:?}, CPU usage: {:.2}.", time1, time1.cpu_usage());
-    info!("Stage2: {:?}, CPU usage: {:.2}.", time2, time2.cpu_usage());
-    info!("Stage3: {:?}, CPU usage: {:.2}.", time3, time3.cpu_usage());
+    info!("Stage1: {}", time1);
+    info!("Stage2: {}", time2);
+    info!("Stage3: {}", time3);
     Ok((res, time))
 }

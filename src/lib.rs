@@ -1,4 +1,6 @@
 #![cfg_attr(not(test), warn(clippy::unwrap_used))]
+
+#[macro_use]
 extern crate tracing;
 
 pub mod acc;

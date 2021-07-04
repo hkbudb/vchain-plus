@@ -4,7 +4,7 @@ use super::{
     Digest, IdTreeInternalId, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader, ObjId,
 };
 use crate::digest::Digestible;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 pub fn query_without_proof(
     n_k: usize,
@@ -75,25 +75,22 @@ fn inner_query_id_tree(
                 break;
             }
             IdTreeNode::NonLeaf(n) => {
-                if let Some(child_idx) = cur_path_rev.pop() {
-                    if let (Some(child_id), Some(child_hash)) =
-                        (n.get_child_id(child_idx), n.get_child_hash(child_idx))
-                    {
-                        let sub_node = node_loader.load_node(*child_id)?;
-                        let mut sub_proof = Box::new(SubProof::from_hash(*child_id, *child_hash));
-                        let sub_proof_ptr = &mut *sub_proof as *mut _;
-                        let mut non_leaf =
-                            IdTreeNonLeaf::from_hashes(n.child_hashes.clone(), n.child_ids.clone());
-                        *non_leaf.get_child_mut(child_idx) = Some(sub_proof);
-                        unsafe {
-                            *cur_proof = SubProof::from_non_leaf(non_leaf);
-                        }
-                        cur_node = sub_node;
-                        cur_proof = sub_proof_ptr;
-                        continue;
+                let child_idx = cur_path_rev.pop().context("Invalid obj_id")?;
+                if let (Some(child_id), Some(child_hash)) =
+                    (n.get_child_id(child_idx), n.get_child_hash(child_idx))
+                {
+                    let sub_node = node_loader.load_node(*child_id)?;
+                    let mut sub_proof = Box::new(SubProof::from_hash(*child_id, *child_hash));
+                    let sub_proof_ptr = &mut *sub_proof as *mut _;
+                    let mut non_leaf =
+                        IdTreeNonLeaf::from_hashes(n.child_hashes.clone(), n.child_ids.clone());
+                    *non_leaf.get_child_mut(child_idx) = Some(sub_proof);
+                    unsafe {
+                        *cur_proof = SubProof::from_non_leaf(non_leaf);
                     }
-                } else {
-                    bail!("Invalid obj_id");
+                    cur_node = sub_node;
+                    cur_proof = sub_proof_ptr;
+                    continue;
                 }
                 let non_leaf =
                     IdTreeNonLeaf::from_hashes(n.child_hashes.clone(), n.child_ids.clone());

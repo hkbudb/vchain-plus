@@ -10,18 +10,18 @@ use crate::{
     acc::AccPublicKey,
     chain::traits::Num,
     digest::{Digest, Digestible},
+    utils::Time,
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{ensure, Context, Result};
 use hash::{ads_hash, bplus_roots_hash};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-use tracing::info;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerifyInfo {
     vo_size: usize,
-    verify_time: String,
+    verify_time: Time,
 }
 
 pub fn verify<K: Num, T: ReadInterface<K = K>>(
@@ -58,11 +58,9 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
                     }
                 }
                 vo::VONode::Keyword(n) => {
-                    let proof = if let Some(p) = trie_proofs.get(&n.blk_height) {
-                        p
-                    } else {
-                        bail!("Cannot find trie proof in VO");
-                    };
+                    let proof = trie_proofs
+                        .get(&n.blk_height)
+                        .context("Cannot find trie proof in VO")?;
                     proof.verify_acc(n.acc, n.keyword.clone(), pk)?;
                 }
                 vo::VONode::BlkRt(_) => {}
@@ -71,26 +69,18 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
                     for idx in vo_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let child_idx1 = if let Some(v) = child_idxs.get(1) {
-                        v
-                    } else {
-                        bail!("Cannot find the first child idx of intermediate union");
-                    };
-                    let child1 = if let Some(node) = vo_dag.node_weight(*child_idx1) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
-                    let child_idx2 = if let Some(v) = child_idxs.get(0) {
-                        v
-                    } else {
-                        bail!("Cannot find the second child idx of intermediate union");
-                    };
-                    let child2 = if let Some(node) = vo_dag.node_weight(*child_idx2) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
+                    let child_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first child idx of intermediate union")?;
+                    let child1 = vo_dag
+                        .node_weight(*child_idx1)
+                        .context("Cannot find the second child node in vo_dag")?;
+                    let child_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot find the second child idx of intermediate union")?;
+                    let child2 = vo_dag
+                        .node_weight(*child_idx2)
+                        .context("Cannot find the second child node in vo_dag")?;
                     n.proof
                         .verify(child1.get_acc()?, child2.get_acc()?, &n.acc, pk)?;
                 }
@@ -99,31 +89,21 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
                     for idx in vo_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let child_idx1 = if let Some(v) = child_idxs.get(1) {
-                        v
-                    } else {
-                        bail!("Cannot find the first child idx of final union");
-                    };
-                    let child1 = if let Some(node) = vo_dag.node_weight(*child_idx1) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
-                    let child_idx2 = if let Some(v) = child_idxs.get(0) {
-                        v
-                    } else {
-                        bail!("Cannot find the second child idx of final union");
-                    };
-                    let child2 = if let Some(node) = vo_dag.node_weight(*child_idx2) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
-                    let final_set = if let Some(set) = vo_output_sets.get(&idx) {
-                        set
-                    } else {
-                        bail!("Cannot find set in VO output sets");
-                    };
+                    let child_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first child idx of final union")?;
+                    let child1 = vo_dag
+                        .node_weight(*child_idx1)
+                        .context("Cannot find the second child node in vo_dag")?;
+                    let child_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot find the second child idx of final union")?;
+                    let child2 = vo_dag
+                        .node_weight(*child_idx2)
+                        .context("Cannot find the second child node in vo_dag")?;
+                    let final_set = vo_output_sets
+                        .get(&idx)
+                        .context("Cannot find set in VO output sets")?;
                     n.proof
                         .verify(child1.get_acc()?, child2.get_acc()?, final_set, pk)?;
                 }
@@ -132,26 +112,18 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
                     for idx in vo_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let child_idx1 = if let Some(v) = child_idxs.get(1) {
-                        v
-                    } else {
-                        bail!("Cannot find the first child idx of intermediate intersection");
-                    };
-                    let child1 = if let Some(node) = vo_dag.node_weight(*child_idx1) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
-                    let child_idx2 = if let Some(v) = child_idxs.get(0) {
-                        v
-                    } else {
-                        bail!("Cannot find the second child idx of intermediate intersection");
-                    };
-                    let child2 = if let Some(node) = vo_dag.node_weight(*child_idx2) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
+                    let child_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first child idx of intermediate intersection")?;
+                    let child1 = vo_dag
+                        .node_weight(*child_idx1)
+                        .context("Cannot find the second child node in vo_dag")?;
+                    let child_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot find the second child idx of intermediate intersection")?;
+                    let child2 = vo_dag
+                        .node_weight(*child_idx2)
+                        .context("Cannot find the second child node in vo_dag")?;
                     n.proof
                         .verify(child1.get_acc()?, child2.get_acc()?, &n.acc, pk)?;
                 }
@@ -160,31 +132,21 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
                     for idx in vo_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let child_idx1 = if let Some(v) = child_idxs.get(1) {
-                        v
-                    } else {
-                        bail!("Cannot find the first child idx of final intersection");
-                    };
-                    let child1 = if let Some(node) = vo_dag.node_weight(*child_idx1) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
-                    let child_idx2 = if let Some(v) = child_idxs.get(0) {
-                        v
-                    } else {
-                        bail!("Cannot find the second child idx of final intersection");
-                    };
-                    let child2 = if let Some(node) = vo_dag.node_weight(*child_idx2) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
-                    let final_set = if let Some(set) = vo_output_sets.get(&idx) {
-                        set
-                    } else {
-                        bail!("Cannot find set in VO output sets");
-                    };
+                    let child_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first child idx of final intersection")?;
+                    let child1 = vo_dag
+                        .node_weight(*child_idx1)
+                        .context("Cannot find the second child node in vo_dag")?;
+                    let child_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot find the second child idx of final intersection")?;
+                    let child2 = vo_dag
+                        .node_weight(*child_idx2)
+                        .context("Cannot find the second child node in vo_dag")?;
+                    let final_set = vo_output_sets
+                        .get(&idx)
+                        .context("Cannot find set in VO output sets")?;
                     n.proof
                         .verify(child1.get_acc()?, child2.get_acc()?, final_set, pk)?;
                 }
@@ -193,26 +155,18 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
                     for idx in vo_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let child_idx1 = if let Some(v) = child_idxs.get(1) {
-                        v
-                    } else {
-                        bail!("Cannot find the first child idx of intermediate difference");
-                    };
-                    let child1 = if let Some(node) = vo_dag.node_weight(*child_idx1) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
-                    let child_idx2 = if let Some(v) = child_idxs.get(0) {
-                        v
-                    } else {
-                        bail!("Cannot find the second child idx of intermediate difference");
-                    };
-                    let child2 = if let Some(node) = vo_dag.node_weight(*child_idx2) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
+                    let child_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first child idx of intermediate difference")?;
+                    let child1 = vo_dag
+                        .node_weight(*child_idx1)
+                        .context("Cannot find the second child node in vo_dag")?;
+                    let child_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot find the second child idx of intermediate difference")?;
+                    let child2 = vo_dag
+                        .node_weight(*child_idx2)
+                        .context("Cannot find the second child node in vo_dag")?;
                     n.proof
                         .verify(child1.get_acc()?, child2.get_acc()?, &n.acc, pk)?;
                 }
@@ -221,31 +175,21 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
                     for idx in vo_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let child_idx1 = if let Some(v) = child_idxs.get(1) {
-                        v
-                    } else {
-                        bail!("Cannot find the first child idx of final difference");
-                    };
-                    let child1 = if let Some(node) = vo_dag.node_weight(*child_idx1) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
-                    let child_idx2 = if let Some(v) = child_idxs.get(0) {
-                        v
-                    } else {
-                        bail!("Cannot find the second child idx of final difference");
-                    };
-                    let child2 = if let Some(node) = vo_dag.node_weight(*child_idx2) {
-                        node
-                    } else {
-                        bail!("Cannot find the second child node in vo_dag");
-                    };
-                    let final_set = if let Some(set) = vo_output_sets.get(&idx) {
-                        set
-                    } else {
-                        bail!("Cannot find set in VO output sets");
-                    };
+                    let child_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first child idx of final difference")?;
+                    let child1 = vo_dag
+                        .node_weight(*child_idx1)
+                        .context("Cannot find the second child node in vo_dag")?;
+                    let child_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot find the second child idx of final difference")?;
+                    let child2 = vo_dag
+                        .node_weight(*child_idx2)
+                        .context("Cannot find the second child node in vo_dag")?;
+                    let final_set = vo_output_sets
+                        .get(&idx)
+                        .context("Cannot find set in VO output sets")?;
                     n.proof
                         .verify(child1.get_acc()?, child2.get_acc()?, final_set, pk)?;
                 }
@@ -269,17 +213,11 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
     let mut merkle_proofs = vo.merkle_proofs;
     for (height, (time_win, bplus_hashes)) in bplus_roots {
         let bplus_root_hash = bplus_roots_hash(bplus_hashes.into_iter());
-        let trie_proof = if let Some(p) = trie_proofs.get(&height) {
-            p
-        } else {
-            bail!("Cannot find trie proof");
-        };
+        let trie_proof = trie_proofs.get(&height).context("Cannot find trie proof")?;
         let hash = ads_hash(bplus_root_hash, trie_proof.root_hash());
-        let merkle_proof = if let Some(m_p) = merkle_proofs.get_mut(&height) {
-            m_p
-        } else {
-            bail!("Cannot find merkle proof");
-        };
+        let merkle_proof = merkle_proofs
+            .get_mut(&height)
+            .context("Cannot find merkle proof")?;
         merkle_proof.insert_ads_hash(time_win, hash);
         let id_root_hash = match merkle_proof.id_tree_root_hash {
             Some(d) => d,
@@ -295,14 +233,14 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
     let time = timer.elapsed();
     let verify_time = VerifyInfo {
         vo_size,
-        verify_time: time.to_string(),
+        verify_time: time.into(),
     };
-    info!("Verification time: {:?}", time);
+    info!("Verification time: {}", time);
     Ok(verify_time)
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     #[test]
     fn test_graph() {
         use petgraph::{EdgeDirection::Outgoing, Graph};

@@ -21,7 +21,6 @@ use once_cell::sync::Lazy;
 use rand::{prelude::*, rngs::StdRng};
 use serde_json::json;
 use std::collections::HashMap;
-//use howlong::{ProcessCUPTimer, ProcessDuration};
 
 const Q: u64 = 40;
 static SEC_KEY: Lazy<AccSecretKeyWithPowCache> = Lazy::new(|| {
@@ -320,7 +319,7 @@ const TEST_DATA_3: &str = r#"
 #[test]
 fn test_fake_chain_write() {
     let param = Parameter {
-        time_wins: vec![2],
+        time_win_sizes: vec![2],
         id_tree_fanout: 2,
         max_id_num: 16,
         bplus_tree_fanout: 3,
@@ -330,7 +329,7 @@ fn test_fake_chain_write() {
     println!("{:#?}", test_chain1);
 
     let param = Parameter {
-        time_wins: vec![2, 3],
+        time_win_sizes: vec![2, 3],
         id_tree_fanout: 2,
         max_id_num: 32,
         bplus_tree_fanout: 3,
@@ -345,7 +344,7 @@ fn test_fake_chain_write() {
 fn test_fake_chain_read_basic() -> Result<()> {
     init_tracing_subscriber("debug")?;
     let param = Parameter {
-        time_wins: vec![4],
+        time_win_sizes: vec![4],
         id_tree_fanout: 4,
         max_id_num: 32,
         bplus_tree_fanout: 4,
@@ -364,7 +363,7 @@ fn test_fake_chain_read_basic() -> Result<()> {
         },
     });
     let query1_param: QueryParam<u32> = serde_json::from_value(query1_param_data).unwrap();
-    let ((res, vo), _time) = query(&test_chain, query1_param, false, &PUB_KEY).unwrap();
+    let ((res, vo), _time) = query(&test_chain, query1_param, &PUB_KEY).unwrap();
     println!("results for query 1: ");
     println!("{:#?}", res);
     verify(&test_chain, &res, vo, &PUB_KEY).unwrap();
@@ -381,7 +380,7 @@ fn test_fake_chain_read_basic() -> Result<()> {
         },
     });
     let query2_param: QueryParam<u32> = serde_json::from_value(query2_param_data).unwrap();
-    let ((res, vo), _time) = query(&test_chain, query2_param, false, &PUB_KEY).unwrap();
+    let ((res, vo), _time) = query(&test_chain, query2_param, &PUB_KEY).unwrap();
     println!("results for query 2: ");
     println!("{:#?}", res);
     verify(&test_chain, &res, vo, &PUB_KEY).unwrap();

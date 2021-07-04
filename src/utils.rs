@@ -3,7 +3,9 @@ use crate::chain::query::query_param::QueryParam;
 use crate::chain::{block::Height, object::Object, traits::Num};
 use anyhow::{Context, Error, Result};
 use ark_serialize::Read;
+use howlong::ProcessDuration;
 use rand::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use std::error::Error as StdError;
 use std::fs;
 use std::path::PathBuf;
@@ -162,6 +164,23 @@ pub fn init_tracing_subscriber(default_level: &str) -> Result<()> {
         .with_env_filter(filter)
         .try_init()
         .map_err(Error::msg)
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct Time {
+    real: u64,
+    user: u64,
+    sys: u64,
+}
+
+impl From<ProcessDuration> for Time {
+    fn from(p_duration: ProcessDuration) -> Self {
+        Self {
+            real: p_duration.real.as_micros() as u64,
+            user: p_duration.user.as_micros() as u64,
+            sys: p_duration.system.as_micros() as u64,
+        }
+    }
 }
 
 #[cfg(test)]

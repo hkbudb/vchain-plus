@@ -4,7 +4,7 @@ use crate::{
     chain::{bplus_tree::BPlusTreeRoot, trie_tree::TrieRoot},
     digest::Digest,
 };
-use anyhow::{bail, Result};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -46,25 +46,16 @@ impl BlockMultiADS {
 
     pub(crate) fn read_bplus_root(&self, time_win: u64, dim: usize) -> Result<BPlusTreeRoot> {
         let blk_ads = self.0.get(&time_win);
-        if let Some(ads) = blk_ads {
-            let bplus_root_opt = ads.bplus_tree_roots.get(dim);
-            if let Some(root) = bplus_root_opt {
-                Ok(*root)
-            } else {
-                bail!("Cannot find the bplus tree root at dimension {}", dim)
-            }
-        } else {
-            bail!("Cannot find the ADS in time window {}", time_win)
-        }
+        let ads = blk_ads.context(format!("Cannot find the ADS in time window {}", time_win))?;
+        Ok(*ads.bplus_tree_roots.get(dim).context(format!(
+            "Cannot find the bplus tree root at dimension {}",
+            dim
+        ))?)
     }
 
     pub(crate) fn read_trie_root(&self, time_win: u64) -> Result<TrieRoot> {
         let blk_ads = self.0.get(&time_win);
-        if let Some(ads) = blk_ads {
-            Ok(ads.trie_root)
-        } else {
-            bail!("Cannot find trie root in time window {}", time_win)
-        }
+        Ok(blk_ads.context(format!("Cannot find trie root in time window {}", time_win))?.trie_root)
     }
 
     pub(crate) fn set_multi_trie_roots<'a>(
