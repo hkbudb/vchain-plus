@@ -1,5 +1,3 @@
-//! handles hash digests, including hashing, digest concatenation then hash
-
 use core::fmt;
 use serde::{
     de::{Deserializer, SeqAccess, Visitor},
@@ -9,8 +7,8 @@ use serde::{
 
 pub const DIGEST_LEN: usize = 32;
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Default)] // Debug is for readability
-pub struct Digest(pub [u8; DIGEST_LEN]); // a tuple (with one element) whose first element is an array whose len is DIGEST_LEN
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct Digest(pub [u8; DIGEST_LEN]);
 
 impl fmt::Display for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -43,9 +41,7 @@ impl Digest {
 
 // Ref: https://github.com/slowli/hex-buffer-serde
 
-// special implementation
 impl Serialize for Digest {
-    // convert an obj to binary array (bin) for storing or transmission
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -61,7 +57,6 @@ impl Serialize for Digest {
 }
 
 impl<'de> Deserialize<'de> for Digest {
-    // binary array to obj
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
