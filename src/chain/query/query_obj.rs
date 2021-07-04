@@ -9,7 +9,7 @@ use crate::chain::{
     traits::Num,
     trie_tree,
 };
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -70,7 +70,10 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
         }
     };
     q_inputs.reverse();
-    let qp_output_elm = q_inputs.last().cloned().context("Input query graph is empty")?;
+    let qp_output_elm = q_inputs
+        .last()
+        .cloned()
+        .context("Input query graph is empty")?;
     let mut idx_map = HashMap::<NodeIndex, NodeIndex>::new();
     let mut qp_inputs = Vec::<NodeIndex>::new();
     let qp_outputs = vec![qp_output_elm];
