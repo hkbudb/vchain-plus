@@ -31,7 +31,7 @@ struct Opt {
 }
 
 fn main() -> Result<()> {
-    init_tracing_subscriber("debug")?;
+    init_tracing_subscriber("info")?;
     let opts = Opt::from_args();
     let query_path = opts.query;
     let query_params = load_query_param_from_file(&query_path)?;
@@ -41,12 +41,12 @@ fn main() -> Result<()> {
     let pk = KeyPair::load_pk(&opts.pk_path)?;
     let mut query_info = Vec::new();
     for (i, q) in query_params.into_iter().enumerate() {
-        debug!("Processing query {}...", i);
+        info!("Processing query {}...", i);
         let timer = howlong::ProcessCPUTimer::new();
         let ((res, vo), time) = query(&chain, q, &pk)?;
         let total_time = timer.elapsed();
         info!("Total time elapsed: {}", total_time);
-        debug!("Processing verification for query {}...", i);
+        info!("Processing verification for query {}...", i);
         let verify_info = verify(&chain, &res, vo, &pk)?;
         let res = json!({
             "total_time": Time::from(total_time),

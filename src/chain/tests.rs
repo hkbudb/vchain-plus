@@ -342,7 +342,7 @@ fn test_fake_chain_write() {
 
 #[test]
 fn test_fake_chain_read_basic() -> Result<()> {
-    init_tracing_subscriber("debug")?;
+    init_tracing_subscriber("info")?;
     let param = Parameter {
         time_win_sizes: vec![4],
         id_tree_fanout: 4,

@@ -104,7 +104,7 @@ fn build_chain(
 }
 
 fn main() -> Result<()> {
-    init_tracing_subscriber("vchain_plus::chain::bplus_tree=info,warn")?;
+    init_tracing_subscriber("info")?;
     let opts = Opt::from_args();
     let param = Parameter {
         time_win_sizes: opts.time_win_sizes,

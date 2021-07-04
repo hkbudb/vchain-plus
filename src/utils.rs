@@ -157,9 +157,9 @@ impl KeyPair {
     }
 }
 
-pub fn init_tracing_subscriber(default_level: &str) -> Result<()> {
+pub fn init_tracing_subscriber(directives: &str) -> Result<()> {
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(default_level.to_string()));
+        .unwrap_or_else(|_| EnvFilter::new(directives.to_string()));
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .try_init()
