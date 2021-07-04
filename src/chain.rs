@@ -15,7 +15,7 @@ pub const MAX_INLINE_FANOUT: usize = 16;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Parameter {
-    pub time_wins: Vec<u64>,
+    pub time_win_sizes: Vec<u64>,
     pub id_tree_fanout: usize,
     pub max_id_num: usize,
     pub bplus_tree_fanout: usize,
