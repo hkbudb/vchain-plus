@@ -1,20 +1,18 @@
+#[macro_use]
+extern crate tracing;
+
 use anyhow::Result;
 use serde_json::json;
 use std::{fs, path::PathBuf};
 use structopt::StructOpt;
-use tracing::{debug, info};
 use vchain_plus::{
     chain::{query::query, verify::verify},
-    utils::{init_tracing_subscriber, load_query_param_from_file, KeyPair},
+    utils::{init_tracing_subscriber, load_query_param_from_file, KeyPair, Time},
     SimChain,
 };
 
 #[derive(StructOpt, Debug)]
 struct Opt {
-    /// activate optimize mode
-    #[structopt(short, long)]
-    optimized: bool,
-
     /// pk path
     #[structopt(short = "-p", long, parse(from_os_str))]
     pk_path: PathBuf,
@@ -39,24 +37,19 @@ fn main() -> Result<()> {
     let query_params = load_query_param_from_file(&query_path)?;
     let db_path = opts.input;
     let chain = SimChain::open(&db_path)?;
-    let optimized = opts.optimized;
     let res_path = opts.result;
     let pk = KeyPair::load_pk(&opts.pk_path)?;
     let mut query_info = Vec::new();
     for (i, q) in query_params.into_iter().enumerate() {
         debug!("Processing query {}...", i);
         let timer = howlong::ProcessCPUTimer::new();
-        let ((res, vo), time) = query(&chain, q, optimized, &pk)?;
+        let ((res, vo), time) = query(&chain, q, &pk)?;
         let total_time = timer.elapsed();
-        info!(
-            "Total time elapsed: {:?}, CPU usage: {:.2}",
-            total_time,
-            total_time.cpu_usage()
-        );
+        info!("Total time elapsed: {}", total_time);
         debug!("Processing verification for query {}...", i);
         let verify_info = verify(&chain, &res, vo, &pk)?;
         let res = json!({
-            "total_time": total_time.to_string(),
+            "total_time": Time::from(total_time),
             "query_time": time,
             "verify_info": verify_info,
         });

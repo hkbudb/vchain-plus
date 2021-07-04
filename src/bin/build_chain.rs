@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate tracing;
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -5,7 +8,6 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
-use tracing::info;
 use vchain_plus::utils::{init_tracing_subscriber, KeyPair};
 use vchain_plus::{
     chain::{
@@ -15,7 +17,7 @@ use vchain_plus::{
         Parameter,
     },
     digest::{Digest, Digestible},
-    utils::load_raw_obj_from_file,
+    utils::{load_raw_obj_from_file, Time},
     SimChain,
 };
 
@@ -23,7 +25,7 @@ use vchain_plus::{
 struct Opt {
     /// time windows
     #[structopt(short = "-t", long)]
-    time_wins: Vec<u64>,
+    time_win_sizes: Vec<u64>,
 
     /// id tree fanout
     #[structopt(short = "-f", long)]
@@ -61,7 +63,7 @@ struct Opt {
 #[derive(Debug, Serialize, Deserialize)]
 struct BuildTime {
     blk_height: Height,
-    build_time: String,
+    build_time: Time,
 }
 
 fn build_chain(
@@ -87,17 +89,13 @@ fn build_chain(
         prev_hash = blk_head.to_digest();
         time_set.push(BuildTime {
             blk_height,
-            build_time: duration.to_string(),
+            build_time: duration.into(),
         });
     }
     let time = timer.elapsed();
-    info!(
-        "Block building finished. Time elapsed: {:?}, CPU usage: {:.2}",
-        time,
-        time.cpu_usage()
-    );
+    info!("Block building finished. Time elapsed: {}", time);
     let res = json!({
-        "total_time": time.to_string(),
+        "total_time": Time::from(time),
         "time_set": time_set,
     });
     let s = serde_json::to_string_pretty(&res)?;
@@ -106,10 +104,10 @@ fn build_chain(
 }
 
 fn main() -> Result<()> {
-    init_tracing_subscriber("debug")?;
+    init_tracing_subscriber("vchain_plus::chain::bplus_tree=info,warn")?;
     let opts = Opt::from_args();
     let param = Parameter {
-        time_wins: opts.time_wins,
+        time_win_sizes: opts.time_win_sizes,
         id_tree_fanout: opts.id_fanout,
         max_id_num: opts.max_id,
         bplus_tree_fanout: opts.bplus_fanout,
