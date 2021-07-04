@@ -2,10 +2,9 @@ pub mod block_ads;
 pub mod build;
 pub mod hash;
 
-use super::id_tree::IdTreeRoot;
 use crate::{
     acc::AccValue,
-    create_id_type,
+    chain::id_tree::IdTreeRoot,
     digest::{Digest, Digestible},
 };
 use block_ads::BlockMultiADS;
@@ -13,7 +12,25 @@ use hash::block_head_hash;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroU64;
 
-create_id_type!(Height);
+#[derive(
+    Debug,
+    Default,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    derive_more::Deref,
+    derive_more::DerefMut,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
+)]
+pub struct Height(pub u64);
 
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct BlockContent {
