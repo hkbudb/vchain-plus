@@ -1,8 +1,7 @@
-use super::query_obj::Query;
 use crate::chain::{
     block::Height,
     query::query_obj::{
-        BlkRtNode, DiffNode, IntersecNode, KeywordNode, QueryNode, RangeNode, UnionNode,
+        BlkRtNode, DiffNode, IntersecNode, KeywordNode, Query, QueryNode, RangeNode, UnionNode,
     },
     range::Range,
     traits::Num,

@@ -1,10 +1,10 @@
-use super::{
-    super::{hash::trie_non_leaf_proof_hash, split_at_common_prefix2},
-    sub_proof::SubProof,
-    TrieNodeId,
-};
 use crate::{
     acc::{AccPublicKey, AccValue, Set},
+    chain::trie_tree::{
+        hash::trie_non_leaf_proof_hash,
+        proof::{sub_proof::SubProof, TrieNodeId},
+        split_at_common_prefix2,
+    },
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};

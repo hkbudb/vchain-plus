@@ -1,5 +1,5 @@
-use super::MAX_INLINE_FANOUT;
 use crate::{
+    chain::MAX_INLINE_FANOUT,
     create_id_type,
     digest::{Digest, Digestible},
 };
@@ -8,6 +8,7 @@ use hash::{id_tree_leaf_hash, id_tree_non_leaf_hash, id_tree_root_hash};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::num::NonZeroU64;
+
 create_id_type!(IdTreeNodeId);
 create_id_type!(IdTreeInternalId);
 

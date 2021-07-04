@@ -1,7 +1,10 @@
-use super::hash::{block_ads_hash, block_multi_ads_hash};
 use crate::digest::Digestible;
 use crate::{
-    chain::{bplus_tree::BPlusTreeRoot, trie_tree::TrieRoot},
+    chain::{
+        block::hash::{block_ads_hash, block_multi_ads_hash},
+        bplus_tree::BPlusTreeRoot,
+        trie_tree::TrieRoot,
+    },
     digest::Digest,
 };
 use anyhow::{Context, Result};
@@ -55,7 +58,9 @@ impl BlockMultiADS {
 
     pub(crate) fn read_trie_root(&self, time_win: u64) -> Result<TrieRoot> {
         let blk_ads = self.0.get(&time_win);
-        Ok(blk_ads.context(format!("Cannot find trie root in time window {}", time_win))?.trie_root)
+        Ok(blk_ads
+            .context(format!("Cannot find trie root in time window {}", time_win))?
+            .trie_root)
     }
 
     pub(crate) fn set_multi_trie_roots<'a>(

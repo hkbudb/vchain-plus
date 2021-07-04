@@ -1,22 +1,22 @@
 pub mod hash;
 pub mod vo;
 
-use self::{
-    hash::{id_tree_root_hash, obj_hash},
-    vo::VO,
-};
-use super::{block::Height, id_tree::ObjId, object::Object, traits::ReadInterface};
 use crate::{
     acc::AccPublicKey,
-    chain::traits::Num,
+    chain::{
+        traits::Num,
+        {block::Height, id_tree::ObjId, object::Object, traits::ReadInterface},
+    },
     digest::{Digest, Digestible},
     utils::Time,
 };
 use anyhow::{ensure, Context, Result};
 use hash::{ads_hash, bplus_roots_hash};
+use hash::{id_tree_root_hash, obj_hash};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
+use vo::VO;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerifyInfo {

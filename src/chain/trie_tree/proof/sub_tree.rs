@@ -1,5 +1,7 @@
-use super::super::TrieNodeId;
-use crate::digest::{Digest, Digestible};
+use crate::{
+    chain::trie_tree::TrieNodeId,
+    digest::{Digest, Digestible},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

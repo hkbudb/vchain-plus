@@ -1,9 +1,11 @@
-use super::{
-    split_at_common_prefix2, AccValue, Digest, Digestible, Set, TrieLeafNode, TrieNode, TrieNodeId,
-    TrieNodeLoader, TrieNonLeafNode, TrieRoot,
-};
 use crate::acc::AccPublicKey;
-use crate::chain::id_tree::ObjId;
+use crate::chain::{
+    id_tree::ObjId,
+    trie_tree::{
+        split_at_common_prefix2, AccValue, Digest, Digestible, Set, TrieLeafNode, TrieNode,
+        TrieNodeId, TrieNodeLoader, TrieNonLeafNode, TrieRoot,
+    },
+};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

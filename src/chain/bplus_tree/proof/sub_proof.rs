@@ -1,10 +1,13 @@
-use super::{
-    leaf::BPlusTreeLeaf, non_leaf::BPlusTreeNonLeaf, res_sub_tree::BPlusTreeResSubTree,
-    sub_tree::BPlusTreeSubTree,
-};
 use crate::{
     acc::{set::Set, AccPublicKey, AccValue},
-    chain::{range::Range, traits::Num},
+    chain::{
+        bplus_tree::proof::{
+            leaf::BPlusTreeLeaf, non_leaf::BPlusTreeNonLeaf, res_sub_tree::BPlusTreeResSubTree,
+            sub_tree::BPlusTreeSubTree,
+        },
+        range::Range,
+        traits::Num,
+    },
     digest::{Digest, Digestible},
 };
 use anyhow::{anyhow, ensure, Result};

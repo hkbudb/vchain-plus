@@ -1,5 +1,7 @@
-use super::{block::Height, hash::object_hash, traits::Num};
-use crate::digest::{Digest, Digestible};
+use crate::{
+    chain::{block::Height, hash::object_hash, traits::Num},
+    digest::{Digest, Digestible},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 

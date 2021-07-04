@@ -1,5 +1,7 @@
-use super::{hash::range_hash, traits::Num};
-use crate::digest::{Digest, Digestible};
+use crate::{
+    chain::{hash::range_hash, traits::Num},
+    digest::{Digest, Digestible},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]

@@ -1,5 +1,5 @@
-use super::super::tests::PUB_KEY;
 use super::{
+    super::tests::PUB_KEY,
     proof::sub_proof::SubProof,
     read::range_query,
     write::{Apply, WriteContext},

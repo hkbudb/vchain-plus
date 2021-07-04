@@ -1,7 +1,8 @@
-use super::{sub_proof::SubProof, sub_tree::IdTreeSubTree};
 use crate::{
     chain::id_tree::{
-        hash::id_tree_non_leaf_proof_hash, IdTreeInternalId, IdTreeNodeId, MAX_INLINE_FANOUT,
+        hash::id_tree_non_leaf_proof_hash,
+        proof::{sub_proof::SubProof, sub_tree::IdTreeSubTree},
+        IdTreeInternalId, IdTreeNodeId, MAX_INLINE_FANOUT,
     },
     digest::{Digest, Digestible},
 };

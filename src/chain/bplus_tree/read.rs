@@ -1,10 +1,14 @@
-use super::{
-    proof::{sub_proof::SubProof, Proof},
-    BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader,
-};
 use crate::{
     acc::{AccPublicKey, AccValue, Set},
-    chain::{range::Range, traits::Num, MAX_INLINE_FANOUT},
+    chain::{
+        bplus_tree::{
+            proof::{sub_proof::SubProof, Proof},
+            BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader,
+        },
+        range::Range,
+        traits::Num,
+        MAX_INLINE_FANOUT,
+    },
     digest::{Digest, Digestible},
 };
 use anyhow::{bail, Result};
@@ -34,7 +38,7 @@ fn inner_range_query<K: Num>(
     range: Range<K>,
     pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, SubProof<K>)> {
-    use super::proof::{
+    use crate::chain::bplus_tree::proof::{
         leaf::BPlusTreeLeaf, non_leaf::BPlusTreeNonLeaf, res_sub_tree::BPlusTreeResSubTree,
     };
 

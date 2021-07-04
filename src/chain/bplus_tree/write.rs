@@ -1,10 +1,15 @@
-use super::{
-    BPlusTreeLeafNode, BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader, BPlusTreeNonLeafNode,
-    BPlusTreeRoot, Digest, Digestible,
-};
 use crate::{
     acc::{AccPublicKey, AccValue, Set},
-    chain::{id_tree::ObjId, range::Range, traits::Num, MAX_INLINE_FANOUT},
+    chain::{
+        bplus_tree::{
+            BPlusTreeLeafNode, BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader,
+            BPlusTreeNonLeafNode, BPlusTreeRoot, Digest, Digestible,
+        },
+        id_tree::ObjId,
+        range::Range,
+        traits::Num,
+        MAX_INLINE_FANOUT,
+    },
 };
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};

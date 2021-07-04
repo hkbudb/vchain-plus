@@ -1,9 +1,11 @@
-use super::{
-    proof::{sub_proof::SubProof, Proof},
-    write::fanout_nary_rev,
-    Digest, IdTreeInternalId, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader, ObjId,
+use crate::{
+    chain::id_tree::{
+        proof::{sub_proof::SubProof, Proof},
+        write::fanout_nary_rev,
+        Digest, IdTreeInternalId, IdTreeNode, IdTreeNodeId, IdTreeNodeLoader, ObjId,
+    },
+    digest::Digestible,
 };
-use crate::digest::Digestible;
 use anyhow::{anyhow, bail, Context, Result};
 
 pub fn query_without_proof(

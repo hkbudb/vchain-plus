@@ -1,4 +1,4 @@
-use super::{
+use crate::chain::id_tree::{
     Digest, Digestible, IdTreeInternalId, IdTreeLeafNode, IdTreeNode, IdTreeNodeId,
     IdTreeNodeLoader, IdTreeNonLeafNode, IdTreeRoot, ObjId,
 };

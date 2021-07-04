@@ -1,5 +1,7 @@
-use super::{super::trie_tree::TrieNodeId, proof::sub_proof::SubProof};
-use crate::digest::{blake2, Digest, Digestible};
+use crate::{
+    chain::trie_tree::{proof::sub_proof::SubProof, TrieNodeId},
+    digest::{blake2, Digest, Digestible},
+};
 
 #[inline]
 pub(crate) fn trie_leaf_hash(rest_hash: &Digest, acc_hash: &Digest) -> Digest {

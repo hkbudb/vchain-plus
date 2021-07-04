@@ -1,8 +1,12 @@
-use super::{super::hash::bplus_tree_non_leaf_proof_hash, sub_proof::SubProof};
 use crate::digest::Digest;
 use crate::{
     acc::AccValue,
-    chain::{range::Range, traits::Num, MAX_INLINE_FANOUT},
+    chain::{
+        bplus_tree::{hash::bplus_tree_non_leaf_proof_hash, proof::sub_proof::SubProof},
+        range::Range,
+        traits::Num,
+        MAX_INLINE_FANOUT,
+    },
     digest::Digestible,
 };
 use serde::{Deserialize, Serialize};

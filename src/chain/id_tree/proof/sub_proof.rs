@@ -1,6 +1,8 @@
-use super::{leaf::IdTreeLeaf, non_leaf::IdTreeNonLeaf, sub_tree::IdTreeSubTree};
 use crate::{
-    chain::id_tree::{IdTreeInternalId, IdTreeNodeId},
+    chain::id_tree::{
+        proof::{leaf::IdTreeLeaf, non_leaf::IdTreeNonLeaf, sub_tree::IdTreeSubTree},
+        IdTreeInternalId, IdTreeNodeId,
+    },
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};

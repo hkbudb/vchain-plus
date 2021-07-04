@@ -1,4 +1,3 @@
-use super::hash::merkle_proof_hash;
 use crate::{
     acc::{AccValue, FinalProof, IntermediateProof, Set},
     chain::{
@@ -8,6 +7,7 @@ use crate::{
         range::Range,
         traits::Num,
         trie_tree,
+        verify::hash::merkle_proof_hash,
     },
     digest::Digest,
 };

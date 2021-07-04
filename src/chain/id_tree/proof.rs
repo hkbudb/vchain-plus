@@ -1,12 +1,10 @@
 use crate::{
-    chain::id_tree::{write::fanout_nary_rev, IdTreeNodeId},
+    chain::id_tree::{write::fanout_nary_rev, IdTreeNodeId, ObjId},
     digest::{Digest, Digestible},
 };
 use anyhow::{ensure, Result};
 use serde::{Deserialize, Serialize};
 use sub_proof::SubProof;
-
-use super::ObjId;
 
 pub(crate) mod leaf;
 pub(crate) mod non_leaf;

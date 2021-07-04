@@ -1,7 +1,6 @@
-use super::super::hash::bplus_tree_leaf_proof_hash;
 use crate::{
     acc::AccValue,
-    chain::traits::Num,
+    chain::{bplus_tree::hash::bplus_tree_leaf_proof_hash, traits::Num},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};

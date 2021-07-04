@@ -1,5 +1,7 @@
-use super::{block::Height, range::Range, traits::Num};
-use crate::digest::{blake2, concat_digest, Digest, Digestible};
+use crate::{
+    chain::{block::Height, range::Range, traits::Num},
+    digest::{blake2, concat_digest, Digest, Digestible},
+};
 use std::collections::HashSet;
 
 #[inline]

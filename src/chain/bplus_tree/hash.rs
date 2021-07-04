@@ -1,5 +1,7 @@
-use super::super::{range::Range, traits::Num};
-use crate::digest::{blake2, concat_digest_ref, Digest, Digestible};
+use crate::{
+    chain::{range::Range, traits::Num},
+    digest::{blake2, concat_digest_ref, Digest, Digestible},
+};
 
 #[inline]
 pub(crate) fn bplus_tree_leaf_hash<K: Num>(num: K, acc_hash: &Digest) -> Digest {

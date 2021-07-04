@@ -1,6 +1,6 @@
-use super::TrieNodeId;
 use crate::{
     acc::{AccPublicKey, AccValue, Set},
+    chain::trie_tree::TrieNodeId,
     digest::{Digest, Digestible},
 };
 use anyhow::{ensure, Result};

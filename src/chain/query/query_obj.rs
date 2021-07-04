@@ -1,9 +1,8 @@
-use super::query_plan::QueryPlan;
 use crate::chain::{
     block::Height,
     bplus_tree,
     query::query_plan::{
-        QPBlkRtNode, QPDiff, QPIntersec, QPKeywordNode, QPNode, QPRangeNode, QPUnion,
+        QPBlkRtNode, QPDiff, QPIntersec, QPKeywordNode, QPNode, QPRangeNode, QPUnion, QueryPlan,
     },
     range::Range,
     traits::Num,

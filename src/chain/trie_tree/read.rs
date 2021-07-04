@@ -1,10 +1,9 @@
-use super::{
-    proof::{sub_proof::SubProof, Proof},
-    TrieNode, TrieNodeId, TrieNodeLoader,
-};
 use crate::{
     acc::{AccPublicKey, AccValue, Set},
-    chain::trie_tree::split_at_common_prefix2,
+    chain::trie_tree::{
+        proof::{sub_proof::SubProof, Proof},
+        split_at_common_prefix2, TrieNode, TrieNodeId, TrieNodeLoader,
+    },
     digest::{Digest, Digestible},
 };
 use anyhow::{anyhow, bail, Result};

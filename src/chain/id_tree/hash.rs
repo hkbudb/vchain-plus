@@ -1,5 +1,7 @@
-use super::super::id_tree::IdTreeInternalId;
-use crate::digest::{blake2, concat_digest_ref, Digest};
+use crate::{
+    chain::id_tree::IdTreeInternalId,
+    digest::{blake2, concat_digest_ref, Digest},
+};
 
 #[inline]
 pub(crate) fn id_tree_leaf_hash(obj_id: IdTreeInternalId, obj_hash: &Digest) -> Digest {

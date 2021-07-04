@@ -1,6 +1,6 @@
-use super::{range::Range, traits::Num, MAX_INLINE_FANOUT};
 use crate::{
     acc::{set::Set, AccValue},
+    chain::{range::Range, traits::Num, MAX_INLINE_FANOUT},
     create_id_type,
     digest::{Digest, Digestible},
 };
