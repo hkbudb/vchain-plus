@@ -17,6 +17,7 @@ use std::{
     str::FromStr,
 };
 use tracing_subscriber::EnvFilter;
+use memmap2::Mmap;
 
 #[macro_export]
 macro_rules! create_id_type {
@@ -143,13 +144,20 @@ impl KeyPair {
         bincode::serialize_into(&mut pk_f, &self.pk)?;
         Ok(())
     }
-
+/*
     pub fn load_pk(pk_path: &Path) -> Result<AccPublicKey> {
         let reader = BufReader::new(File::open(pk_path)?);
         let pk: AccPublicKey = bincode::deserialize_from(reader)?;
         Ok(pk)
     }
-
+*/
+    pub fn load_pk(pk_path: &Path) -> Result<AccPublicKey> {
+        let file = File::open(pk_path).expect("failed to open the file");
+        let mmap = unsafe { Mmap::map(&file).expect("failed to map the file") };
+        //let pk_cont: Vec<u8> = fs::read(&pk_path)?;
+        let pk: AccPublicKey = bincode::deserialize(&mmap[..])?;
+        Ok(pk)
+    }
     pub fn load_sk(sk_path: &Path) -> Result<AccSecretKey> {
         let sk_cont: Vec<u8> = fs::read(&sk_path)?;
         let sk: AccSecretKey = bincode::deserialize_from(&sk_cont[..])?;
