@@ -31,7 +31,7 @@ struct Opt {
 }
 
 fn main() -> Result<()> {
-    init_tracing_subscriber("debug")?;
+    init_tracing_subscriber("info")?;
     let opts = Opt::from_args();
     let query_path = opts.query;
     let query_params = load_query_param_from_file(&query_path)?;
