@@ -16,6 +16,20 @@ pub fn serialize<S: Serializer, T: CanonicalSerialize>(t: &T, s: S) -> Result<S:
     }
 }
 
+pub fn serialize_uncompressed<S: Serializer, T: CanonicalSerialize>(
+    t: &T,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    let mut buf = Vec::<u8>::new();
+    t.serialize_uncompressed(&mut buf)
+        .map_err(<S::Error as serde::ser::Error>::custom)?;
+    if s.is_human_readable() {
+        s.serialize_str(&hex::encode(&buf))
+    } else {
+        s.serialize_bytes(&buf)
+    }
+}
+
 pub fn deserialize<'de, D: Deserializer<'de>, T: CanonicalDeserialize>(
     d: D,
 ) -> Result<T, D::Error> {
@@ -58,6 +72,11 @@ pub fn deserialize<'de, D: Deserializer<'de>, T: CanonicalDeserialize>(
     }
 }
 
+pub mod uncompressed {
+    pub use super::deserialize;
+    pub use super::serialize_uncompressed as serialize;
+}
+
 #[cfg(test)]
 mod tests {
     use ark_bls12_381::{G1Affine, G2Affine};
@@ -69,6 +88,14 @@ mod tests {
         #[serde(with = "super")]
         f1: G1Affine,
         #[serde(with = "super")]
+        f2: G2Affine,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+    struct Bar {
+        #[serde(with = "super::uncompressed")]
+        f1: G1Affine,
+        #[serde(with = "super::uncompressed")]
         f2: G2Affine,
     }
 
@@ -85,5 +112,20 @@ mod tests {
 
         assert_eq!(serde_json::from_str::<Foo>(&json).unwrap(), foo);
         assert_eq!(bincode::deserialize::<Foo>(&bin[..]).unwrap(), foo);
+    }
+
+    #[test]
+    fn test_serde_uncompressed() {
+        #[allow(clippy::blacklisted_name)]
+        let bar = Bar {
+            f1: G1Affine::prime_subgroup_generator(),
+            f2: G2Affine::prime_subgroup_generator(),
+        };
+
+        let json = serde_json::to_string_pretty(&bar).unwrap();
+        let bin = bincode::serialize(&bar).unwrap();
+
+        assert_eq!(serde_json::from_str::<Bar>(&json).unwrap(), bar);
+        assert_eq!(bincode::deserialize::<Bar>(&bin[..]).unwrap(), bar);
     }
 }
