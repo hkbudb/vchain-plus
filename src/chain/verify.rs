@@ -27,18 +27,16 @@ pub struct VerifyInfo {
 fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     chain: &T,
     res: &HashMap<ObjId, Object<K>>,
-    vo: VO<K>,
+    vo: &VO<K>,
     pk: &AccPublicKey,
-) -> Result<usize> {
+) -> Result<()> {
     // verify dag, including range query and set operation
-    let bytes = bincode::serialize(&vo)?;
-    let vo_size = bytes.len();
-    let vo_dag_struct = vo.vo_dag;
-    let vo_dag = vo_dag_struct.dag;
-    let vo_output_sets = vo_dag_struct.output_sets;
+    let vo_dag_struct = &vo.vo_dag;
+    let vo_dag = &vo_dag_struct.dag;
+    let vo_output_sets = &vo_dag_struct.output_sets;
     let vo_dag_idxs = vo_dag.node_indices();
     let mut bplus_roots = HashMap::<Height, (u64, BTreeMap<usize, Digest>)>::new();
-    let trie_proofs = vo.trie_proofs;
+    let trie_proofs = &vo.trie_proofs;
     for idx in vo_dag_idxs {
         if let Some(node) = vo_dag.node_weight(idx) {
             match node {
@@ -197,7 +195,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     }
 
     // verify id tree
-    let id_tree_proof = vo.id_tree_proof;
+    let id_tree_proof = &vo.id_tree_proof;
     let param = chain.get_parameter()?;
     let max_id_num = param.max_id_num;
     let id_tree_fanout = param.id_tree_fanout;
@@ -209,46 +207,54 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     let id_tree_root_hash = id_tree_root_hash(vo.cur_obj_id.to_digest(), id_tree_root_node_hash);
 
     // verify merkle proof, including trie and block head hash
-    let mut merkle_proofs = vo.merkle_proofs;
+    let merkle_proofs = &vo.merkle_proofs;
     for (height, (time_win, bplus_hashes)) in bplus_roots {
         let bplus_root_hash = bplus_roots_hash(bplus_hashes.into_iter());
         let trie_proof = trie_proofs.get(&height).context("Cannot find trie proof")?;
         let hash = ads_hash(bplus_root_hash, trie_proof.root_hash());
         let merkle_proof = merkle_proofs
-            .get_mut(&height)
+            .get(&height)
             .context("Cannot find merkle proof")?;
-        merkle_proof.insert_ads_hash(time_win, hash);
         let id_root_hash = match merkle_proof.id_tree_root_hash {
             Some(d) => d,
             None => id_tree_root_hash,
         };
-        let ads_root_hash = merkle_proof.ads_root_hash(&id_root_hash);
+        let ads_root_hash =
+            merkle_proof.ads_root_hash(&id_root_hash, std::iter::once((&time_win, &hash)));
         let expect_ads_root_hash = chain.read_block_head(height)?.get_ads_root_hash();
         ensure!(
             ads_root_hash == expect_ads_root_hash,
             "ADS root hash not matched for height {:?}!. The target hash is {:?} but the computed hash is {:?}", height, expect_ads_root_hash, ads_root_hash
         );
     }
-    Ok(vo_size)
+    Ok(())
+}
+
+fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<usize> {
+    Ok(bincode::serialize(vo)?.len())
 }
 
 #[allow(clippy::type_complexity)]
-pub fn verify<K: Num, T: ReadInterface<K = K>>(
+pub fn verify<K: Num + Serialize, T: ReadInterface<K = K>>(
     chain: T,
     res: Vec<(HashMap<ObjId, Object<K>>, VO<K>)>,
     pk: &AccPublicKey,
 ) -> Result<VerifyInfo> {
     let timer = howlong::ProcessCPUTimer::new();
-    let mut total_vo_size = 0;
     let mut obj_num = 0;
-    for (res, vo) in res {
-        let vo_size = inner_verify(&chain, &res, vo, pk)?;
-        total_vo_size += vo_size;
+    for (res, vo) in &res {
+        inner_verify(&chain, res, vo, pk)?;
         obj_num += res.len();
         debug!("{:?}", res);
     }
     let time = Time::from(timer.elapsed());
     info!("Total number of result object returned: {}", obj_num);
+
+    let mut total_vo_size = 0;
+    for (_, vo) in &res {
+        total_vo_size += cal_vo_size(vo)?;
+    }
+
     Ok(VerifyInfo {
         vo_size: total_vo_size,
         verify_time: time,
