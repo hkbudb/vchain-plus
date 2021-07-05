@@ -79,61 +79,61 @@ pub struct AccPublicKey<E: PairingEngine> {
     /// q
     pub(crate) q: u64,
     /// g
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g: E::G1Affine,
     /// h
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h: E::G2Affine,
     /// h^\beta
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_beta: E::G2Affine,
     /// g^\gamma
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_gamma: E::G1Affine,
     /// h^\delta
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_delta: E::G2Affine,
     /// h^s
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_s: E::G2Affine,
     /// h^r
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_r: E::G2Affine,
     /// h^{s^q}
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_s_q: E::G2Affine,
     /// h^{r^q}
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_r_q: E::G2Affine,
     /// g^{s^i} i \in [q-1]
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_s_i: Vec<E::G1Affine>,
     /// g^{r^i} i \in [q-1]
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_r_i: Vec<E::G1Affine>,
     /// g^{\beta \cdot s^i} i \in [q-1]
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_beta_s_i: Vec<E::G1Affine>,
     /// g^{\beta \cdot r^i} i \in [q-1]
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_beta_r_i: Vec<E::G1Affine>,
     /// h^{r^i \cdot s^{q-i}} i \in [q-1]
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_r_s_i: Vec<E::G2Affine>,
     /// h^{s^i \cdot r^{q-i}} i \in [q-1]
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_s_r_i: Vec<E::G2Affine>,
     /// g^{\gamma \cdot r^i \cdot s^{q-i}} i \in [q-1]
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_gamma_r_s_i: Vec<E::G1Affine>,
     /// g^{\gamma \cdot s^i \cdot r^{q-i}} i \in [q-1]
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_gamma_s_r_i: Vec<E::G1Affine>,
     /// g^{r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_r_i_s_j: Vec<E::G1Affine>,
     /// g^{\delta r^i \cdot s^j} (i, j) \in ([2q-1] \ {q}) \times ([2q-1] \ {q})
-    #[serde(with = "super::serde_impl::uncompressed")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_delta_r_i_s_j: Vec<E::G1Affine>,
     _marker: PhantomData<E>,
 }

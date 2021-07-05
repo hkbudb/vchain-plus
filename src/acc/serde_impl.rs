@@ -58,12 +58,12 @@ pub fn deserialize<'de, D: Deserializer<'de>, T: CanonicalDeserialize>(
     }
 }
 
-pub mod uncompressed {
+pub mod unchecked {
     use super::*;
 
     pub fn serialize<S: Serializer, T: CanonicalSerialize>(t: &T, s: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::<u8>::new();
-        t.serialize_uncompressed(&mut buf)
+        t.serialize_unchecked(&mut buf)
             .map_err(<S::Error as serde::ser::Error>::custom)?;
         if s.is_human_readable() {
             s.serialize_str(&hex::encode(&buf))
@@ -89,7 +89,7 @@ pub mod uncompressed {
 
             fn visit_str<E: DeError>(self, value: &str) -> Result<T, E> {
                 let data = hex::decode(value).map_err(E::custom)?;
-                T::deserialize_uncompressed(&data[..]).map_err(E::custom)
+                T::deserialize_unchecked(&data[..]).map_err(E::custom)
             }
         }
 
@@ -103,7 +103,7 @@ pub mod uncompressed {
             }
 
             fn visit_bytes<E: DeError>(self, v: &[u8]) -> Result<T, E> {
-                T::deserialize_uncompressed(v).map_err(E::custom)
+                T::deserialize_unchecked(v).map_err(E::custom)
             }
         }
 
@@ -131,9 +131,9 @@ mod tests {
 
     #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
     struct Bar {
-        #[serde(with = "super::uncompressed")]
+        #[serde(with = "super::unchecked")]
         f1: G1Affine,
-        #[serde(with = "super::uncompressed")]
+        #[serde(with = "super::unchecked")]
         f2: G2Affine,
     }
 
@@ -153,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serde_uncompressed() {
+    fn test_serde_unchecked() {
         #[allow(clippy::blacklisted_name)]
         let bar = Bar {
             f1: G1Affine::prime_subgroup_generator(),
