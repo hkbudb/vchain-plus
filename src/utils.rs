@@ -7,10 +7,10 @@ use howlong::ProcessDuration;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::error::Error as StdError;
-use std::fs;
-use std::path::PathBuf;
-use std::str::FromStr;
 use std::{
+    fs,
+    path::PathBuf,
+    str::FromStr,
     collections::{BTreeMap, HashSet},
     fs::File,
     io::BufReader,
