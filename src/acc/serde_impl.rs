@@ -16,20 +16,6 @@ pub fn serialize<S: Serializer, T: CanonicalSerialize>(t: &T, s: S) -> Result<S:
     }
 }
 
-pub fn serialize_uncompressed<S: Serializer, T: CanonicalSerialize>(
-    t: &T,
-    s: S,
-) -> Result<S::Ok, S::Error> {
-    let mut buf = Vec::<u8>::new();
-    t.serialize_uncompressed(&mut buf)
-        .map_err(<S::Error as serde::ser::Error>::custom)?;
-    if s.is_human_readable() {
-        s.serialize_str(&hex::encode(&buf))
-    } else {
-        s.serialize_bytes(&buf)
-    }
-}
-
 pub fn deserialize<'de, D: Deserializer<'de>, T: CanonicalDeserialize>(
     d: D,
 ) -> Result<T, D::Error> {
@@ -73,8 +59,60 @@ pub fn deserialize<'de, D: Deserializer<'de>, T: CanonicalDeserialize>(
 }
 
 pub mod uncompressed {
-    pub use super::deserialize;
-    pub use super::serialize_uncompressed as serialize;
+    use super::*;
+
+    pub fn serialize<S: Serializer, T: CanonicalSerialize>(t: &T, s: S) -> Result<S::Ok, S::Error> {
+        let mut buf = Vec::<u8>::new();
+        t.serialize_uncompressed(&mut buf)
+            .map_err(<S::Error as serde::ser::Error>::custom)?;
+        if s.is_human_readable() {
+            s.serialize_str(&hex::encode(&buf))
+        } else {
+            s.serialize_bytes(&buf)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>, T: CanonicalDeserialize>(
+        d: D,
+    ) -> Result<T, D::Error> {
+        use core::fmt;
+        use serde::de::Error as DeError;
+
+        struct HexVisitor<T>(PhantomData<T>);
+
+        impl<'de, T: CanonicalDeserialize> Visitor<'de> for HexVisitor<T> {
+            type Value = T;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("T: CanonicalDeserialize")
+            }
+
+            fn visit_str<E: DeError>(self, value: &str) -> Result<T, E> {
+                let data = hex::decode(value).map_err(E::custom)?;
+                T::deserialize_uncompressed(&data[..]).map_err(E::custom)
+            }
+        }
+
+        struct BytesVisitor<T>(PhantomData<T>);
+
+        impl<'de, T: CanonicalDeserialize> Visitor<'de> for BytesVisitor<T> {
+            type Value = T;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("T: CanonicalDeserialize")
+            }
+
+            fn visit_bytes<E: DeError>(self, v: &[u8]) -> Result<T, E> {
+                T::deserialize_uncompressed(v).map_err(E::custom)
+            }
+        }
+
+        if d.is_human_readable() {
+            d.deserialize_str(HexVisitor(PhantomData))
+        } else {
+            d.deserialize_bytes(BytesVisitor(PhantomData))
+        }
+    }
 }
 
 #[cfg(test)]
