@@ -154,7 +154,6 @@ impl KeyPair {
     pub fn load_pk(pk_path: &Path) -> Result<AccPublicKey> {
         let file = File::open(pk_path).expect("failed to open the file");
         let mmap = unsafe { Mmap::map(&file).expect("failed to map the file") };
-        //let pk_cont: Vec<u8> = fs::read(&pk_path)?;
         let pk: AccPublicKey = bincode::deserialize(&mmap[..])?;
         Ok(pk)
     }
