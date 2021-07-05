@@ -7,7 +7,7 @@ use std::{fs, path::PathBuf};
 use structopt::StructOpt;
 use vchain_plus::{
     chain::{query::query, verify::verify},
-    utils::{init_tracing_subscriber, load_query_param_from_file, KeyPair, Time},
+    utils::{init_tracing_subscriber, load_query_param_from_file, KeyPair},
     SimChain,
 };
 
@@ -31,7 +31,7 @@ struct Opt {
 }
 
 fn main() -> Result<()> {
-    init_tracing_subscriber("info")?;
+    init_tracing_subscriber("debug")?;
     let opts = Opt::from_args();
     let query_path = opts.query;
     let query_params = load_query_param_from_file(&query_path)?;
@@ -42,14 +42,16 @@ fn main() -> Result<()> {
     let mut query_info = Vec::new();
     for (i, q) in query_params.into_iter().enumerate() {
         info!("Processing query {}...", i);
-        let timer = howlong::ProcessCPUTimer::new();
-        let ((res, vo), time) = query(&chain, q, &pk)?;
-        let total_time = timer.elapsed();
-        info!("Total time elapsed: {}", total_time);
+        let (results, time) = query(&chain, q, &pk)?;
+        info!("Total query time elapsed: {:?}", time);
+
         info!("Processing verification for query {}...", i);
-        let verify_info = verify(&chain, &res, vo, &pk)?;
+        let verify_info = verify(&chain, results, &pk)?;
+        info!(
+            "Total verification time elapsed: {:?}",
+            verify_info.verify_time
+        );
         let res = json!({
-            "total_time": Time::from(total_time),
             "query_time": time,
             "verify_info": verify_info,
         });

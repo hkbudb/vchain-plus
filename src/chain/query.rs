@@ -23,16 +23,16 @@ use crate::{
     utils::Time,
 };
 use anyhow::{Context, Result};
+use petgraph::dot::{Config, Dot};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_param::QueryParam;
 use query_plan::QueryPlan;
-use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 
 #[allow(clippy::type_complexity)]
 fn query_final<K: Num, T: ReadInterface<K = K>>(
-    chain: T,
+    chain: &T,
     query_plan: QueryPlan<K>,
     pk: &AccPublicKey,
 ) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
@@ -88,7 +88,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                                 .ads
                                 .read_bplus_root(n.time_win, n.dim)?;
                             let (set, acc, proof) = bplus_tree::read::range_query(
-                                &chain,
+                                chain,
                                 bplus_root.bplus_tree_root_id,
                                 n.range,
                                 pk,
@@ -135,7 +135,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                                     .ads
                                     .read_trie_root(n.time_win)?;
                                 let mut trie_ctx = trie_tree::read::ReadContext::new(
-                                    &chain,
+                                    chain,
                                     trie_root.trie_root_id,
                                 );
                                 let (s, a) = trie_ctx.query(n.keyword.clone(), pk)?;
@@ -382,7 +382,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
 
     let id_root = chain.read_block_content(qp_end_blk_height)?.id_tree_root;
     let cur_obj_id = id_root.get_cur_obj_id();
-    let mut id_tree_ctx = id_tree::read::ReadContext::new(&chain, id_root.get_id_tree_root_id());
+    let mut id_tree_ctx = id_tree::read::ReadContext::new(chain, id_root.get_id_tree_root_id());
     let param = chain.get_parameter()?;
     let max_id_num = param.max_id_num;
     let id_tree_fanout = param.id_tree_fanout;
@@ -439,11 +439,49 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     Ok((obj_map, vo))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct QueryTime {
-    pub(crate) param_to_q: Time,
-    pub(crate) q_to_qp: Time,
-    pub(crate) process_qp: Time,
+#[allow(clippy::type_complexity)]
+fn select_win_size<K: Num>(
+    mut win_sizes: Vec<u64>,
+    query_param: QueryParam<K>,
+) -> Result<Vec<(QueryParam<K>, Option<u64>, u64)>> {
+    let mut res = Vec::<(QueryParam<K>, Option<u64>, u64)>::new();
+    win_sizes.sort_unstable();
+    let mut cur_param = query_param;
+    let max = *win_sizes.last().context("No time window")?;
+    while cur_param.get_end() + 1 >= max + cur_param.get_start() {
+        let new_param =
+            cur_param.copy_on_write(cur_param.get_start(), cur_param.get_start() + max - 1);
+        res.push((new_param, None, max));
+        if cur_param.get_start() + max > cur_param.get_end() {
+            cur_param =
+                cur_param.copy_on_write(cur_param.get_start() + max - 1, cur_param.get_end());
+            if cur_param.get_end() == cur_param.get_start() {
+                return Ok(res);
+            }
+        } else {
+            cur_param = cur_param.copy_on_write(cur_param.get_start() + max, cur_param.get_end());
+        }
+    }
+    let cur_size = cur_param.get_end() - cur_param.get_start();
+
+    let mut idx = 0;
+    for (i, win_size) in win_sizes.iter().enumerate() {
+        if cur_size < *win_size {
+            idx = i;
+            break;
+        }
+    }
+    let higher = win_sizes.get(idx).context("Cannot find size")?;
+    let mut start_idx = 0;
+    let mut lower = *win_sizes.get(start_idx).context("No time window")?;
+    while cur_param.get_start() > lower
+        && cur_param.get_start() + higher > cur_param.get_end() + lower
+    {
+        start_idx += 1;
+        lower = *win_sizes.get(start_idx).context("No time window")?;
+    }
+    res.push((cur_param, Some(lower), *higher));
+    Ok(res)
 }
 
 #[allow(clippy::type_complexity)]
@@ -451,30 +489,173 @@ pub fn query<K: Num, T: ReadInterface<K = K>>(
     chain: T,
     query_param: QueryParam<K>,
     pk: &AccPublicKey,
-) -> Result<((HashMap<ObjId, Object<K>>, VO<K>), QueryTime)> {
+) -> Result<(Vec<(HashMap<ObjId, Object<K>>, VO<K>)>, Time)> {
     let timer = howlong::ProcessCPUTimer::new();
-    let chain_param = chain.get_parameter()?;
-    // todo choose proper time_window
-    let time_win = *chain_param
-        .time_win_sizes
-        .get(0)
-        .context("No time window provided in this blockchain")?;
+    let chain_param = &chain.get_parameter()?;
+    let chain_win_sizes = chain_param.time_win_sizes.clone();
+    let query_params = select_win_size(chain_win_sizes, query_param)?;
+    let mut result = Vec::<(HashMap<ObjId, Object<K>>, VO<K>)>::new();
+    for (q_param, s_win_size, e_win_size) in query_params {
+        let sub_timer = howlong::ProcessCPUTimer::new();
+        let query = q_param.into_query_basic(s_win_size, e_win_size)?;
+        debug!(
+            "query dag: {:?}",
+            Dot::with_config(&query.query_dag, &[Config::EdgeNoLabel])
+        );
+        let time = sub_timer.elapsed();
+        debug!("Stage1: {}", time);
+        let sub_timer = howlong::ProcessCPUTimer::new();
+        let query_plan = query_to_qp(query)?;
+        debug!(
+            "query plan dag: {:?}",
+            Dot::with_config(&query_plan.dag, &[Config::EdgeNoLabel])
+        );
+        let time = sub_timer.elapsed();
+        debug!("Stage2: {}", time);
+        let sub_timer = howlong::ProcessCPUTimer::new();
+        let res = query_final(&chain, query_plan, pk)?;
+        let time = sub_timer.elapsed();
+        debug!("Stage3: {}", time);
+        result.push(res);
+    }
+    let total_query_time = Time::from(timer.elapsed());
+    Ok((result, total_query_time))
+}
 
-    let query = query_param.into_query_basic(time_win)?;
-    let time1 = timer.elapsed();
-    let timer = howlong::ProcessCPUTimer::new();
-    let query_plan = query_to_qp(query)?;
-    let time2 = timer.elapsed();
-    let timer = howlong::ProcessCPUTimer::new();
-    let res = query_final(chain, query_plan, pk)?;
-    let time3 = timer.elapsed();
-    let time = QueryTime {
-        param_to_q: Time::from(time1),
-        q_to_qp: Time::from(time2),
-        process_qp: Time::from(time3),
+#[cfg(test)]
+mod tests {
+    use crate::chain::query::{
+        query_param::{Node, QueryParam},
+        select_win_size,
     };
-    info!("Stage1: {}", time1);
-    info!("Stage2: {}", time2);
-    info!("Stage3: {}", time3);
-    Ok((res, time))
+
+    #[test]
+    fn test_select_win_size() {
+        let query_param = QueryParam::<u32> {
+            start_blk: 1,
+            end_blk: 3,
+            range: vec![],
+            keyword_exp: Node::Input("a".to_string()),
+        };
+        let res = select_win_size(vec![4], query_param.clone()).unwrap();
+        let exp = vec![(query_param, Some(4), 4)];
+        assert_eq!(res, exp);
+        let query_param = QueryParam::<u32> {
+            start_blk: 1,
+            end_blk: 4,
+            range: vec![],
+            keyword_exp: Node::Input("a".to_string()),
+        };
+        let res = select_win_size(vec![4], query_param.clone()).unwrap();
+        let exp = vec![(query_param, None, 4)];
+        assert_eq!(res, exp);
+        let query_param = QueryParam::<u32> {
+            start_blk: 1,
+            end_blk: 5,
+            range: vec![],
+            keyword_exp: Node::Input("a".to_string()),
+        };
+        let res = select_win_size(vec![4], query_param).unwrap();
+        let exp = vec![
+            (
+                QueryParam::<u32> {
+                    start_blk: 1,
+                    end_blk: 4,
+                    range: vec![],
+                    keyword_exp: Node::Input("a".to_string()),
+                },
+                None,
+                4,
+            ),
+            (
+                QueryParam::<u32> {
+                    start_blk: 5,
+                    end_blk: 5,
+                    range: vec![],
+                    keyword_exp: Node::Input("a".to_string()),
+                },
+                Some(4),
+                4,
+            ),
+        ];
+        assert_eq!(res, exp);
+        let query_param = QueryParam::<u32> {
+            start_blk: 1,
+            end_blk: 6,
+            range: vec![],
+            keyword_exp: Node::Input("a".to_string()),
+        };
+        let res = select_win_size(vec![4, 8], query_param.clone()).unwrap();
+        let exp = vec![(query_param, Some(4), 8)];
+        assert_eq!(res, exp);
+        let query_param = QueryParam::<u32> {
+            start_blk: 1,
+            end_blk: 8,
+            range: vec![],
+            keyword_exp: Node::Input("a".to_string()),
+        };
+        let res = select_win_size(vec![4, 8], query_param.clone()).unwrap();
+        let exp = vec![(query_param, None, 8)];
+        assert_eq!(res, exp);
+        let query_param = QueryParam::<u32> {
+            start_blk: 1,
+            end_blk: 10,
+            range: vec![],
+            keyword_exp: Node::Input("a".to_string()),
+        };
+        let res = select_win_size(vec![4, 8], query_param).unwrap();
+        let exp = vec![
+            (
+                QueryParam::<u32> {
+                    start_blk: 1,
+                    end_blk: 8,
+                    range: vec![],
+                    keyword_exp: Node::Input("a".to_string()),
+                },
+                None,
+                8,
+            ),
+            (
+                QueryParam::<u32> {
+                    start_blk: 9,
+                    end_blk: 10,
+                    range: vec![],
+                    keyword_exp: Node::Input("a".to_string()),
+                },
+                Some(4),
+                4,
+            ),
+        ];
+        assert_eq!(res, exp);
+        let query_param = QueryParam::<u32> {
+            start_blk: 1,
+            end_blk: 16,
+            range: vec![],
+            keyword_exp: Node::Input("a".to_string()),
+        };
+        let res = select_win_size(vec![4, 8], query_param).unwrap();
+        let exp = vec![
+            (
+                QueryParam::<u32> {
+                    start_blk: 1,
+                    end_blk: 8,
+                    range: vec![],
+                    keyword_exp: Node::Input("a".to_string()),
+                },
+                None,
+                8,
+            ),
+            (
+                QueryParam::<u32> {
+                    start_blk: 9,
+                    end_blk: 16,
+                    range: vec![],
+                    keyword_exp: Node::Input("a".to_string()),
+                },
+                None,
+                8,
+            ),
+        ];
+        assert_eq!(res, exp);
+    }
 }

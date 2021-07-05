@@ -20,20 +20,19 @@ use vo::VO;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerifyInfo {
-    vo_size: usize,
-    verify_time: Time,
+    pub vo_size: usize,
+    pub verify_time: Time,
 }
 
-pub fn verify<K: Num, T: ReadInterface<K = K>>(
-    chain: T,
+fn inner_verify<K: Num, T: ReadInterface<K = K>>(
+    chain: &T,
     res: &HashMap<ObjId, Object<K>>,
     vo: VO<K>,
     pk: &AccPublicKey,
-) -> Result<VerifyInfo> {
+) -> Result<usize> {
     // verify dag, including range query and set operation
     let bytes = bincode::serialize(&vo)?;
     let vo_size = bytes.len();
-    let timer = howlong::ProcessCPUTimer::new();
     let vo_dag_struct = vo.vo_dag;
     let vo_dag = vo_dag_struct.dag;
     let vo_output_sets = vo_dag_struct.output_sets;
@@ -230,13 +229,30 @@ pub fn verify<K: Num, T: ReadInterface<K = K>>(
             "ADS root hash not matched for height {:?}!. The target hash is {:?} but the computed hash is {:?}", height, expect_ads_root_hash, ads_root_hash
         );
     }
-    let time = timer.elapsed();
-    let verify_time = VerifyInfo {
-        vo_size,
-        verify_time: time.into(),
-    };
-    info!("Verification time: {}", time);
-    Ok(verify_time)
+    Ok(vo_size)
+}
+
+#[allow(clippy::type_complexity)]
+pub fn verify<K: Num, T: ReadInterface<K = K>>(
+    chain: T,
+    res: Vec<(HashMap<ObjId, Object<K>>, VO<K>)>,
+    pk: &AccPublicKey,
+) -> Result<VerifyInfo> {
+    let timer = howlong::ProcessCPUTimer::new();
+    let mut total_vo_size = 0;
+    let mut obj_num = 0;
+    for (res, vo) in res {
+        let vo_size = inner_verify(&chain, &res, vo, pk)?;
+        total_vo_size += vo_size;
+        obj_num += res.len();
+        debug!("{:?}", res);
+    }
+    let time = Time::from(timer.elapsed());
+    info!("Total number of result object returned: {}", obj_num);
+    Ok(VerifyInfo {
+        vo_size: total_vo_size,
+        verify_time: time,
+    })
 }
 
 #[cfg(test)]

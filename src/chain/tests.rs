@@ -363,10 +363,12 @@ fn test_fake_chain_read_basic() -> Result<()> {
         },
     });
     let query1_param: QueryParam<u32> = serde_json::from_value(query1_param_data).unwrap();
-    let ((res, vo), _time) = query(&test_chain, query1_param, &PUB_KEY).unwrap();
+    let (results, _time) = query(&test_chain, query1_param, &PUB_KEY).unwrap();
     println!("results for query 1: ");
-    println!("{:#?}", res);
-    verify(&test_chain, &res, vo, &PUB_KEY).unwrap();
+    for (res, _vo) in &results {
+        println!("{:#?}", res);
+    }
+    verify(&test_chain, results, &PUB_KEY).unwrap();
 
     let query2_param_data = json!({
         "start_blk": 1,
@@ -380,10 +382,12 @@ fn test_fake_chain_read_basic() -> Result<()> {
         },
     });
     let query2_param: QueryParam<u32> = serde_json::from_value(query2_param_data).unwrap();
-    let ((res, vo), _time) = query(&test_chain, query2_param, &PUB_KEY).unwrap();
+    let (results, _time) = query(&test_chain, query2_param, &PUB_KEY).unwrap();
     println!("results for query 2: ");
-    println!("{:#?}", res);
-    verify(&test_chain, &res, vo, &PUB_KEY).unwrap();
+    for (res, _vo) in &results {
+        println!("{:#?}", res);
+    }
+    verify(&test_chain, results, &PUB_KEY).unwrap();
     assert_eq!(1, 1);
     Ok(())
 }

@@ -11,34 +11,54 @@ use petgraph::{graph::NodeIndex, Graph};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-enum Node {
+pub(crate) enum Node {
     And(Box<AndNode>),
     Or(Box<OrNode>),
     Not(Box<NotNode>),
     Input(String),
 }
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct AndNode(Node, Node);
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub(crate) struct AndNode(Node, Node);
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct OrNode(Node, Node);
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub(crate) struct OrNode(Node, Node);
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct NotNode(Node);
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub(crate) struct NotNode(Node);
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct QueryParam<K: Num> {
-    start_blk: u64,
-    end_blk: u64,
-    range: Vec<Range<K>>,
-    keyword_exp: Node,
+    pub(crate) start_blk: u64,
+    pub(crate) end_blk: u64,
+    pub(crate) range: Vec<Range<K>>,
+    pub(crate) keyword_exp: Node,
 }
 
 impl<K: Num> QueryParam<K> {
-    pub fn into_query_basic(self, time_win: u64) -> Result<Query<K>> {
+    pub fn get_start(&self) -> u64 {
+        self.start_blk
+    }
+
+    pub fn get_end(&self) -> u64 {
+        self.end_blk
+    }
+
+    pub fn copy_on_write(&self, new_start_blk: u64, new_end_blk: u64) -> Self {
+        Self {
+            start_blk: new_start_blk,
+            end_blk: new_end_blk,
+            range: self.range.clone(),
+            keyword_exp: self.keyword_exp.clone(),
+        }
+    }
+    pub fn into_query_basic(
+        self,
+        start_win_size: Option<u64>,
+        end_win_size: u64,
+    ) -> Result<Query<K>> {
         let end_blk_height = Height(self.end_blk);
         let keyword_exp = self.keyword_exp;
         let mut query_dag = Graph::<QueryNode<K>, ()>::new();
@@ -67,7 +87,7 @@ impl<K: Num> QueryParam<K> {
                         idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                             keyword: s.to_string(),
                             blk_height: end_blk_height,
-                            time_win,
+                            time_win: end_win_size,
                         }));
                         idx_map.insert(s.to_string(), idx1);
                     }
@@ -87,7 +107,7 @@ impl<K: Num> QueryParam<K> {
                         idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                             keyword: s.to_string(),
                             blk_height: end_blk_height,
-                            time_win,
+                            time_win: end_win_size,
                         }));
                         idx_map.insert(s.to_string(), idx2);
                     }
@@ -116,7 +136,7 @@ impl<K: Num> QueryParam<K> {
                         idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                             keyword: s.to_string(),
                             blk_height: end_blk_height,
-                            time_win,
+                            time_win: end_win_size,
                         }));
                         idx_map.insert(s.to_string(), idx1);
                     }
@@ -136,7 +156,7 @@ impl<K: Num> QueryParam<K> {
                         idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                             keyword: s.to_string(),
                             blk_height: end_blk_height,
-                            time_win,
+                            time_win: end_win_size,
                         }));
                         idx_map.insert(s.to_string(), idx2);
                     }
@@ -168,7 +188,7 @@ impl<K: Num> QueryParam<K> {
                         c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                             keyword: s.to_string(),
                             blk_height: end_blk_height,
-                            time_win,
+                            time_win: end_win_size,
                         }));
                         idx_map.insert(s.to_string(), c_idx);
                     }
@@ -180,7 +200,7 @@ impl<K: Num> QueryParam<K> {
                 let idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                     keyword: s,
                     blk_height: end_blk_height,
-                    time_win,
+                    time_win: end_win_size,
                 }));
                 keyword_root_idx = idx;
             }
@@ -209,7 +229,7 @@ impl<K: Num> QueryParam<K> {
                                 idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                                     keyword: s.to_string(),
                                     blk_height: end_blk_height,
-                                    time_win,
+                                    time_win: end_win_size,
                                 }));
                                 idx_map.insert(s.to_string(), idx1);
                             }
@@ -233,7 +253,7 @@ impl<K: Num> QueryParam<K> {
                                 idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                                     keyword: s.to_string(),
                                     blk_height: end_blk_height,
-                                    time_win,
+                                    time_win: end_win_size,
                                 }));
                                 idx_map.insert(s.to_string(), idx2);
                             }
@@ -264,7 +284,7 @@ impl<K: Num> QueryParam<K> {
                                 idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                                     keyword: s.to_string(),
                                     blk_height: end_blk_height,
-                                    time_win,
+                                    time_win: end_win_size,
                                 }));
                                 idx_map.insert(s.to_string(), idx1);
                             }
@@ -288,7 +308,7 @@ impl<K: Num> QueryParam<K> {
                                 idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                                     keyword: s.to_string(),
                                     blk_height: end_blk_height,
-                                    time_win,
+                                    time_win: end_win_size,
                                 }));
                                 idx_map.insert(s.to_string(), idx2);
                             }
@@ -322,7 +342,7 @@ impl<K: Num> QueryParam<K> {
                                 c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
                                     keyword: s.to_string(),
                                     blk_height: end_blk_height,
-                                    time_win,
+                                    time_win: end_win_size,
                                 }));
                                 idx_map.insert(s.to_string(), c_idx);
                             }
@@ -342,7 +362,7 @@ impl<K: Num> QueryParam<K> {
             let range_idx = query_dag.add_node(QueryNode::Range(RangeNode {
                 range: r,
                 blk_height: end_blk_height,
-                time_win,
+                time_win: end_win_size,
                 dim: i,
             }));
             if range_lock {
@@ -362,8 +382,7 @@ impl<K: Num> QueryParam<K> {
         query_dag.add_edge(intersec_idx, keyword_root_idx, ());
 
         let start_blk_height = Height(self.start_blk);
-        if start_blk_height.0 <= 1 || end_blk_height.0 - start_blk_height.0 >= time_win {
-        } else {
+        if start_win_size.is_some() && self.start_blk > 1 {
             let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
                 blk_height: Height(start_blk_height.0 - 1),
             }));
@@ -445,7 +464,7 @@ mod test {
     }
 
     #[test]
-    fn test_to_query_basic() {
+    fn test_to_query() {
         let data = json!({
             "start_blk": 1,
             "end_blk": 3,
@@ -459,7 +478,7 @@ mod test {
         });
         let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
         let time_win = 4;
-        let query = query_param.into_query_basic(time_win).unwrap();
+        let query = query_param.into_query_basic(None, time_win).unwrap();
         let mut expect_query_dag = Graph::<QueryNode<u32>, ()>::new();
         let idx_0 = expect_query_dag.add_node(QueryNode::Union(UnionNode {}));
         let idx_1 = expect_query_dag.add_node(QueryNode::Keyword(KeywordNode {
@@ -516,10 +535,5 @@ mod test {
             Dot::with_config(&expect_query_dag, &[Config::EdgeNoLabel])
         );
         assert_eq!(1, 1);
-        // let expect_query = Query {
-        //     end_blk_height: Height(3),
-        //     expect_query_dag,
-        // };
-        //assert_eq!(query, expect_query);
     }
 }
