@@ -79,8 +79,15 @@ fn build_chain(
     let mut chain = SimChain::create(db_path, param.clone())?;
     chain.set_parameter(param)?;
     let mut prev_hash = Digest::zero();
+    debug!("Start loading data");
     let raw_objs: BTreeMap<Height, Vec<Object<u32>>> = load_raw_obj_from_file(data_path)?;
+    debug!("Loading data finished");
+    debug!("Start loading public key");
+    let timer = howlong::ProcessCPUTimer::new();
     let pk = KeyPair::load_pk(pk_path)?;
+    debug!("Loading public key finished");
+    let time = timer.elapsed();
+    info!("Time for loading public key: {}", time);
     let mut time_set = Vec::<BuildTime>::new();
     let timer = howlong::ProcessCPUTimer::new();
     for (blk_height, objs) in raw_objs {
@@ -104,7 +111,7 @@ fn build_chain(
 }
 
 fn main() -> Result<()> {
-    init_tracing_subscriber("info")?;
+    init_tracing_subscriber("debug")?;
     let opts = Opt::from_args();
     let param = Parameter {
         time_win_sizes: opts.time_win_sizes,
