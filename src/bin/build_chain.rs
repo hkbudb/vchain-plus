@@ -24,28 +24,28 @@ use vchain_plus::{
 #[derive(StructOpt, Debug)]
 struct Opt {
     /// time windows
-    #[structopt(short = "-t", long)]
+    #[structopt(short, long)]
     time_win_sizes: Vec<u64>,
 
     /// id tree fanout
-    #[structopt(short = "-f", long)]
+    #[structopt(short, long)]
     id_fanout: usize,
 
     /// max id num
-    #[structopt(short = "-m", long)]
+    #[structopt(short, long)]
     max_id: usize,
 
     /// bplus tree fanout
-    #[structopt(short = "-b", long)]
+    #[structopt(short, long)]
     bplus_fanout: usize,
 
     /// dimension
-    #[structopt(short = "-d", long)]
+    #[structopt(short, long)]
     dim: usize,
 
-    /// pk path
-    #[structopt(short = "-p", long, parse(from_os_str))]
-    pk_path: PathBuf,
+    /// key path
+    #[structopt(short, long, parse(from_os_str))]
+    key_path: PathBuf,
 
     /// input path, should be a file
     #[structopt(short, long, parse(from_os_str))]
@@ -68,7 +68,7 @@ struct BuildTime {
 
 fn build_chain(
     data_path: &Path,
-    pk_path: &Path,
+    key_path: &Path,
     db_path: &Path,
     res_path: &Path,
     param: &Parameter,
@@ -84,7 +84,7 @@ fn build_chain(
     debug!("Loading data finished");
     debug!("Start loading public key");
     let timer = howlong::ProcessCPUTimer::new();
-    let pk = KeyPair::load_pk(pk_path)?;
+    let pk = KeyPair::load(key_path)?.pk;
     debug!("Loading public key finished");
     let time = timer.elapsed();
     info!("Time for loading public key: {}", time);
@@ -111,7 +111,7 @@ fn build_chain(
 }
 
 fn main() -> Result<()> {
-    init_tracing_subscriber("debug")?;
+    init_tracing_subscriber("info")?;
     let opts = Opt::from_args();
     let param = Parameter {
         time_win_sizes: opts.time_win_sizes,
@@ -122,7 +122,7 @@ fn main() -> Result<()> {
     };
     build_chain(
         &opts.input,
-        &opts.pk_path,
+        &opts.key_path,
         &opts.output,
         &opts.result,
         &param,

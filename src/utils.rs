@@ -1,23 +1,22 @@
-use crate::acc::{AccPublicKey, AccSecretKey};
-use crate::chain::query::query_param::QueryParam;
-use crate::chain::{block::Height, object::Object, traits::Num};
-use anyhow::{Context, Error, Result};
-use ark_serialize::Read;
+use crate::{
+    acc::{AccPublicKey, AccSecretKey},
+    chain::{block::Height, object::Object, query::query_param::QueryParam, traits::Num},
+};
+use anyhow::{ensure, Context, Error, Result};
 use howlong::ProcessDuration;
+use memmap2::Mmap;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::error::Error as StdError;
 use std::{
     collections::{BTreeMap, HashSet},
+    error::Error as StdError,
     fs,
     fs::File,
-    io::BufReader,
-    path::Path,
-    path::PathBuf,
+    io::{prelude::*, BufReader},
+    path::{Path, PathBuf},
     str::FromStr,
 };
 use tracing_subscriber::EnvFilter;
-use memmap2::Mmap;
 
 #[macro_export]
 macro_rules! create_id_type {
@@ -132,35 +131,34 @@ impl KeyPair {
         Self { sk, pk }
     }
 
-    pub fn save(self, path: PathBuf) -> Result<()> {
-        if !path.exists() {
-            fs::create_dir_all(path.clone())?;
-        }
-        let sk_path = path.join("sk");
-        let mut sk_f = File::create(&sk_path)?;
-        bincode::serialize_into(&mut sk_f, &self.sk)?;
-        let pk_path = path.join("pk");
-        let mut pk_f = File::create(&pk_path)?;
-        bincode::serialize_into(&mut pk_f, &self.pk)?;
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
+        let path = path.as_ref();
+        ensure!(!path.exists(), "{} already exists.", path.display());
+        fs::create_dir_all(&path)?;
+        let sk_f = File::create(&Self::sk_path(&path))?;
+        bincode::serialize_into(sk_f, &self.sk)?;
+        let pk_f = File::create(&Self::pk_path(&path))?;
+        bincode::serialize_into(pk_f, &self.pk)?;
         Ok(())
     }
-/*
-    pub fn load_pk(pk_path: &Path) -> Result<AccPublicKey> {
-        let reader = BufReader::new(File::open(pk_path)?);
-        let pk: AccPublicKey = bincode::deserialize_from(reader)?;
-        Ok(pk)
+
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let sk_file = File::open(Self::sk_path(&path))?;
+        let sk_reader = BufReader::new(sk_file);
+        let sk: AccSecretKey = bincode::deserialize_from(sk_reader)?;
+        let pk_file = File::open(Self::pk_path(&path))?;
+        let pk_data = unsafe { Mmap::map(&pk_file) }?;
+        let pk: AccPublicKey = bincode::deserialize(&pk_data[..])?;
+        Ok(Self { sk, pk })
     }
-*/
-    pub fn load_pk(pk_path: &Path) -> Result<AccPublicKey> {
-        let file = File::open(pk_path).expect("failed to open the file");
-        let mmap = unsafe { Mmap::map(&file).expect("failed to map the file") };
-        let pk: AccPublicKey = bincode::deserialize(&mmap[..])?;
-        Ok(pk)
+
+    fn sk_path(path: &Path) -> PathBuf {
+        path.join("sk")
     }
-    pub fn load_sk(sk_path: &Path) -> Result<AccSecretKey> {
-        let sk_cont: Vec<u8> = fs::read(&sk_path)?;
-        let sk: AccSecretKey = bincode::deserialize_from(&sk_cont[..])?;
-        Ok(sk)
+
+    fn pk_path(path: &Path) -> PathBuf {
+        path.join("pk")
     }
 }
 
@@ -198,10 +196,7 @@ mod tests {
         utils::load_raw_obj_from_str,
     };
     use serde_json::json;
-    use std::{
-        collections::BTreeMap,
-        path::{Path, PathBuf},
-    };
+    use std::{collections::BTreeMap, path::Path};
 
     #[test]
     fn test_create_id() {
@@ -279,20 +274,15 @@ mod tests {
 
     #[test]
     fn test_maintain_key() {
-        let path = PathBuf::from("./keys/test_key");
-        let sk_path = path.join("sk");
-        let pk_path = path.join("pk");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("key");
+
         let q: u64 = 10;
         let rng = rand::thread_rng();
         let key_pair = KeyPair::gen(q, rng);
-        key_pair.clone().save(path.clone()).unwrap();
+        key_pair.save(path.clone()).unwrap();
 
-        let read_pk = KeyPair::load_pk(&pk_path).unwrap();
-        let read_sk = KeyPair::load_sk(&sk_path).unwrap();
-        let read_key_pair = KeyPair {
-            sk: read_sk,
-            pk: read_pk,
-        };
+        let read_key_pair = KeyPair::load(&path).unwrap();
         assert_eq!(key_pair, read_key_pair);
     }
 }

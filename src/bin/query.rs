@@ -14,8 +14,8 @@ use vchain_plus::{
 #[derive(StructOpt, Debug)]
 struct Opt {
     /// pk path
-    #[structopt(short = "-p", long, parse(from_os_str))]
-    pk_path: PathBuf,
+    #[structopt(short, long, parse(from_os_str))]
+    key_path: PathBuf,
 
     /// input db path, should be a directory
     #[structopt(short, long, parse(from_os_str))]
@@ -38,7 +38,7 @@ fn main() -> Result<()> {
     let db_path = opts.input;
     let chain = SimChain::open(&db_path)?;
     let res_path = opts.result;
-    let pk = KeyPair::load_pk(&opts.pk_path)?;
+    let pk = KeyPair::load(&opts.key_path)?.pk;
     let mut query_info = Vec::new();
     for (i, q) in query_params.into_iter().enumerate() {
         info!("Processing query {}...", i);
