@@ -28,7 +28,7 @@ struct Opt {
     time_win_sizes: Vec<u64>,
 
     /// id tree fanout
-    #[structopt(short, long)]
+    #[structopt(long)]
     id_fanout: usize,
 
     /// max id num
