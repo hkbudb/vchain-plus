@@ -38,7 +38,7 @@ pub struct SimChain {
 
 impl SimChain {
     pub fn create(path: &Path, param: Parameter) -> Result<Self> {
-        fs::create_dir_all(path).context(format!("failed to create dir {:?}", path))?;
+        fs::create_dir_all(path).with_context(|| format!("failed to create dir {:?}", path))?;
         fs::write(
             path.join("param.json"),
             serde_json::to_string_pretty(&param)?,

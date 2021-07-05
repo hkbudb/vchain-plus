@@ -87,13 +87,13 @@ where
         let blk_height: Height = Height(
             split_str
                 .next()
-                .context(format!("failed to parse line {}", line))?
+                .with_context(|| format!("failed to parse line {}", line))?
                 .trim()
                 .parse()?,
         );
         let v_data: Vec<K> = split_str
             .next()
-            .context(format!("failed to parse line {}", line))?
+            .with_context(|| format!("failed to parse line {}", line))?
             .trim()
             .split(',')
             .map(|s| s.trim())
@@ -102,7 +102,7 @@ where
             .collect::<Result<_>>()?;
         let w_data: HashSet<String> = split_str
             .next()
-            .context(format!("failed to parse line {}", line))?
+            .with_context(|| format!("failed to parse line {}", line))?
             .trim()
             .replace('{', "")
             .replace('}', "")

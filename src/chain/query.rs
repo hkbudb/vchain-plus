@@ -62,14 +62,18 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     time_win_map.insert(n.blk_height, n.time_win);
                     match &n.set {
                         Some((set, acc)) => {
-                            let proofs = qp_bplus_proofs.get(&n.blk_height).context(format!(
-                                "Cannot find the bplus tree proof map at height {:?}",
-                                n.blk_height
-                            ))?;
-                            let bplus_p = proofs.get(&n.dim).context(format!(
-                                "Cannot find the bplus tree proof at dim {}, height {}",
-                                n.dim, n.blk_height
-                            ))?;
+                            let proofs = qp_bplus_proofs.get(&n.blk_height).with_context(|| {
+                                format!(
+                                    "Cannot find the bplus tree proof map at height {:?}",
+                                    n.blk_height
+                                )
+                            })?;
+                            let bplus_p = proofs.get(&n.dim).with_context(|| {
+                                format!(
+                                    "Cannot find the bplus tree proof at dim {}, height {}",
+                                    n.dim, n.blk_height
+                                )
+                            })?;
                             let vo_range_node = VORangeNode {
                                 range: n.range,
                                 blk_height: n.blk_height,
