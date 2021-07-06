@@ -81,6 +81,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
         fanout: usize,
         pk: &AccPublicKey,
     ) -> Result<()> {
+        debug!("inserting key: {:?}", key);
         let set = Set::from_single_element(obj_id.0);
         let new_acc = AccValue::from_set(&set, pk);
 
@@ -102,6 +103,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
         let mut temp_nodes: Vec<TempNode<K>> = Vec::new();
         let mut c_id: BPlusTreeNodeId = BPlusTreeNodeId::next_id();
 
+        debug!("start top-down process");
         'outer: loop {
             match cur_id_opt {
                 Some(id) => {
@@ -187,7 +189,6 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                 if right_flag {
                                     idx = child_len - 1;
                                     let child_node = self.get_node(child)?;
-                                    //.ok_or_else(|| anyhow!("Cannot find node"))?;
                                     match child_node.as_ref() {
                                         BPlusTreeNode::Leaf(_node) => {
                                             temp_nodes.push(TempNode::NonLeaf {
@@ -230,7 +231,6 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
 
                                 let child_id = child;
                                 let child_node = self.get_node(child)?;
-                                //.ok_or_else(|| anyhow!("Cannot find node"))?;
                                 match child_node.as_ref() {
                                     BPlusTreeNode::Leaf(child_n) => {
                                         if key <= child_n.num {
@@ -301,6 +301,8 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                 }
             }
         }
+
+        debug!("top-down finished");
 
         let mut new_root_id = BPlusTreeNodeId::next_id();
         let mut new_root_hash = Digest::zero();
@@ -440,6 +442,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
             }
             cur_tmp_len -= 1;
         }
+        debug!("bottom-up finished");
 
         self.apply.root.bplus_tree_root_id = Some(new_root_id);
         self.apply.root.bplus_tree_root_hash = new_root_hash;
@@ -568,6 +571,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
         let mut delete_flag = false;
         let mut merge_flag = false;
         let mut cur_tmp_len = temp_nodes.len();
+        let mut cur_range = Range::new(key, key);
 
         for node in temp_nodes.into_iter().rev() {
             match node {
@@ -680,7 +684,6 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                             l_n.child_hashes.clone();
 
                                                         let l_n_lower = l_n.range.get_low();
-                                                        let l_n_higher = l_n.range.get_high();
                                                         let l_n_c_size = l_n.child_ids.len();
                                                         let l_n_c0_inv_id =
                                                             l_n.child_ids[l_n_c_size - 1];
@@ -692,6 +695,8 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                             l_n.child_ids[l_n_c_size - 2];
                                                         let l_n_c1_inv =
                                                             self.get_node(l_n_c1_inv_id)?;
+                                                        let new_n_lower =
+                                                            l_n_c1_inv.as_ref().get_range_low();
                                                         let new_l_n_higher =
                                                             l_n_c1_inv.as_ref().get_range_high();
                                                         let new_l_n_range =
@@ -724,7 +729,8 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                                 let n_higher =
                                                                     n_r_c.as_ref().get_range_high();
                                                                 let new_n_range = Range::new(
-                                                                    l_n_higher, n_higher,
+                                                                    new_n_lower,
+                                                                    n_higher,
                                                                 );
                                                                 let new_n_set = &n.data_set
                                                                     | l_n_c0_inv.get_set();
@@ -884,10 +890,10 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                             let mut new_l_n_c_hashes = l_n.child_hashes.clone();
 
                                             let l_n_lower = l_n.range.get_low();
-                                            let l_n_higher = l_n.range.get_high();
                                             let l_n_c_size = l_n.child_ids.len();
                                             let l_n_c0_inv_id = l_n.child_ids[l_n_c_size - 1];
                                             let l_n_c0_inv = self.get_node(l_n_c0_inv_id)?;
+                                            let new_n_low = l_n_c0_inv.as_ref().get_range_low();
                                             let l_n_c0_inv_acc = l_n_c0_inv.as_ref().get_node_acc();
                                             let l_n_c1_inv_id = l_n.child_ids[l_n_c_size - 2];
                                             let l_n_c1_inv = self.get_node(l_n_c1_inv_id)?;
@@ -916,7 +922,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                     let n_r_c = self.get_node(n_r_c_id)?;
                                                     let n_higher = n_r_c.as_ref().get_range_high();
                                                     let new_n_range =
-                                                        Range::new(l_n_higher, n_higher);
+                                                        Range::new(new_n_low, n_higher);
                                                     let new_n_set =
                                                         &n.data_set | l_n_c0_inv.get_set();
                                                     let mut new_n_c_ids = n.child_ids.clone();
@@ -969,13 +975,18 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                 BPlusTreeNode::NonLeaf(n) => {
                                                     let mut new_n_ids = n.child_ids.clone();
                                                     let mut new_n_hashes = n.child_hashes.clone();
-                                                    let new_n_higher = n.range.get_high();
+
+                                                    let n_c_size = n.child_ids.len();
+                                                    let n_r_c_id = n.child_ids[n_c_size - 1];
+                                                    let n_r_c = self.get_node(n_r_c_id)?;
+                                                    let n_higher = n_r_c.as_ref().get_range_high();
+
                                                     let n_acc = n.data_set_acc;
                                                     let new_n_set = &n.data_set | &l_n.data_set;
                                                     l_n_ids.append(&mut new_n_ids);
                                                     l_n_hashes.append(&mut new_n_hashes);
                                                     let new_n_range =
-                                                        Range::new(new_n_lower, new_n_higher);
+                                                        Range::new(new_n_lower, n_higher);
                                                     let (new_n_id, new_n_hash) = self
                                                         .write_non_leaf(BPlusTreeNonLeafNode::new(
                                                             new_n_range,
@@ -1005,6 +1016,11 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                         node.child_hashes.remove(idx);
                         delete_flag = false;
                     } else {
+                        if key == node.range.get_low() {
+                            node.range.set_low(cur_range.get_low());
+                        } else if key == node.range.get_high() {
+                            node.range.set_high(cur_range.get_high());
+                        }
                         *node
                             .get_child_id_mut(idx)
                             .ok_or_else(|| anyhow!("Cannot find child id"))? = new_root_id;
@@ -1059,6 +1075,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                 }
                             }
                         }
+                        cur_range = node.range;
                         let (id, hash) = self.write_non_leaf(node);
                         new_root_id = id;
                         new_root_hash = hash;

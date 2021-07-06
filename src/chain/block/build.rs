@@ -37,14 +37,17 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     let mut block_content = BlockContent::new(blk_height, prev_hash);
     let max_id_num = param.max_id_num;
     let mut blk_multi_ads: BlockMultiADS = BlockMultiADS::default();
+    debug!("trying to get pre_k-th block content");
     let pre_blk_content = if blk_height.0 > 1 {
         chain.read_block_content(Height(blk_height.0 - 1))?
     } else {
         BlockContent::default()
     };
+
     let multi_ads = pre_blk_content.ads.read_adses();
     let time_wins = &param.time_win_sizes;
 
+    debug!("initializing tree ctxes");
     // id tree ctx
     let id_tree_root = pre_blk_content.id_tree_root;
     let mut id_tree_ctx = id_tree::write::WriteContext::new(&chain, id_tree_root);
@@ -79,10 +82,15 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
             }
         }
         trie_ctxes.push((k, trie_ctx));
+        debug!("finish trie delete from pre_k-th block");
 
         //bplus tree part
         let mut bplus_ctx_vec = Vec::<bplus_tree::write::WriteContext<K, T>>::new();
         for dim in 0..param.num_dim {
+            debug!(
+                "processing bplus tree delete from pre_k-th block for dim {}",
+                dim
+            );
             let bplus_tree_root = if let Some(block_ads) = multi_ads.get(&k) {
                 if let Some(bplus_root) = block_ads.bplus_tree_roots.get(dim) {
                     *bplus_root
@@ -114,35 +122,44 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
             bplus_ctx_vec.push(bplus_ctx);
         }
         bplus_ctxes.push((k, bplus_ctx_vec));
+        debug!("finish bplus tree delete from pre_k-th block");
     }
 
     let mut obj_hashes = Vec::<Digest>::new();
     let mut obj_id_nums = Vec::<NonZeroU64>::new();
 
+    debug!("start inserting");
     for obj in &raw_objs {
+        debug!("inserting for obj {:?}", obj);
         // build id tree
         let obj_hash = obj.to_digest();
         let obj_id = id_tree_ctx.insert(obj_hash, max_id_num as usize, param.id_tree_fanout)?;
+        debug!("inserting for id tree finished");
         // build trie
         for (_k, trie_ctx) in &mut trie_ctxes {
             for key in &obj.keyword_data {
                 trie_ctx.insert(key.to_string(), obj_id, &pk)?;
             }
         }
+        debug!("inserting for trie finished");
         // build bplus tree
         for (_k, bplus_ctx_vec) in &mut bplus_ctxes {
             for (dim, bplus_ctx) in bplus_ctx_vec.iter_mut().enumerate() {
+                debug!("processing dim {}", dim);
                 if let Some(key) = obj.num_data.get(dim) {
                     bplus_ctx.insert(*key, obj_id, param.bplus_tree_fanout, &pk)?;
                 }
             }
         }
+        debug!("inserting for bplus tree finished");
         obj_hashes.push(obj.to_digest());
         obj_id_nums.push(obj_id.0);
     }
+    debug!("finish tree insert");
 
     // handle id tree changes
     let id_tree_changes = id_tree_ctx.changes();
+    debug!("finish id tree ctx change update");
 
     // handle trie changes
     let mut new_trie_nodes = Vec::<HashMap<TrieNodeId, TrieNode>>::new();
@@ -153,6 +170,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
         new_trie_nodes.push(trie_changes.nodes);
     }
     blk_multi_ads.set_multi_trie_roots(new_trie_roots.iter());
+    debug!("finish trie ctx change update");
 
     // handle bplus tree changes
     let mut new_bplus_roots = Vec::<(u64, Vec<BPlusTreeRoot>)>::new();
@@ -167,6 +185,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
         new_bplus_roots.push((k, new_bplus_roots_dim));
     }
     blk_multi_ads.set_multi_bplus_roots(new_bplus_roots.iter());
+    debug!("finish bplus tree ctx change update");
 
     // write nodes to chain
     for (id, node) in id_tree_changes.nodes {
@@ -182,10 +201,13 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
             chain.write_bplus_tree_node(id, &node)?;
         }
     }
+    debug!("finish writing nodes to chain");
+
     // write objs to chain
     for obj in raw_objs {
         chain.write_object(obj.to_digest(), &obj)?;
     }
+    debug!("finish writing objects to chain");
 
     let obj_root_hash = obj_root_hash(obj_hashes.iter());
     let id_set_root_hash = obj_id_nums_hash(obj_id_nums.iter());

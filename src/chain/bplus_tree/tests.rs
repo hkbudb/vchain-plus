@@ -12,6 +12,7 @@ use crate::{
     digest::{Digest, Digestible},
 };
 use anyhow::{bail, Result};
+use rand::Rng;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::num::NonZeroU64;
@@ -152,6 +153,96 @@ fn test_read() {
         range_query(&test_b_tree, test_b_tree.root_id, query_range, &PUB_KEY).unwrap();
     let res_digest = p.verify(query_range, acc, &PUB_KEY).unwrap();
     assert_eq!(root_digest, res_digest);
+}
+
+#[test]
+fn test_rich() {
+    let mut test_b_tree = TestBPlusTree::<u32>::new();
+    let mut test_b_tree_root = BPlusTreeRoot::default();
+    set_root_id(&mut test_b_tree_root, test_b_tree.root_id);
+    let mut ctx = WriteContext::new(&mut test_b_tree, test_b_tree_root);
+    for _i in 0..3000 {
+        let mut rng = rand::thread_rng();
+        let v: u32 = rng.gen_range(0..3000);
+        unsafe {
+            ctx.insert(
+                v,
+                ObjId(NonZeroU64::new_unchecked(1 as u64)),
+                FANOUT,
+                &PUB_KEY,
+            )
+            .unwrap();
+        }
+    }
+}
+
+#[test]
+fn test_delete_bug() {
+    let mut test_b_tree = TestBPlusTree::<u32>::new();
+    let mut test_b_tree_root = BPlusTreeRoot::default();
+    set_root_id(&mut test_b_tree_root, test_b_tree.root_id);
+    let mut ctx = WriteContext::new(&mut test_b_tree, test_b_tree_root);
+    unsafe {
+        ctx.insert(
+            1,
+            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            FANOUT,
+            &PUB_KEY,
+        )
+        .unwrap();
+        ctx.insert(
+            3,
+            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            FANOUT,
+            &PUB_KEY,
+        )
+        .unwrap();
+        ctx.insert(
+            5,
+            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            FANOUT,
+            &PUB_KEY,
+        )
+        .unwrap();
+        ctx.insert(
+            7,
+            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            FANOUT,
+            &PUB_KEY,
+        )
+        .unwrap();
+        ctx.insert(
+            9,
+            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            FANOUT,
+            &PUB_KEY,
+        )
+        .unwrap();
+        ctx.insert(
+            2,
+            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            FANOUT,
+            &PUB_KEY,
+        )
+        .unwrap();
+        ctx.delete(
+            9,
+            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            FANOUT,
+            &PUB_KEY,
+        )
+        .unwrap();
+        ctx.delete(
+            1,
+            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            FANOUT,
+            &PUB_KEY,
+        )
+        .unwrap();
+    }
+    let changes = ctx.changes();
+    test_b_tree.apply(changes);
+    assert_eq!(1, 1);
 }
 
 #[test]
