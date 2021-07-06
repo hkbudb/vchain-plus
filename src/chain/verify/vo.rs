@@ -110,16 +110,16 @@ pub struct MerkleProof {
 }
 
 impl MerkleProof {
-    pub(crate) fn ads_root_hash<'a>(
-        &'a self,
+    pub(crate) fn ads_root_hash(
+        &self,
         id_tree_root_hash: &Digest,
-        ads_hash: impl Iterator<Item = (&'a u64, &'a Digest)>,
+        rest_ads_hashes: impl Iterator<Item = (u64, Digest)>,
     ) -> Digest {
-        merkle_proof_hash(
-            &self.id_set_root_hash,
-            id_tree_root_hash,
-            self.ads_hashes.iter().chain(ads_hash),
-        )
+        let mut ads_hashes = self.ads_hashes.clone();
+        for (time_win, hash) in rest_ads_hashes {
+            ads_hashes.insert(time_win, hash);
+        }
+        merkle_proof_hash(&self.id_set_root_hash, id_tree_root_hash, ads_hashes.iter())
     }
 }
 

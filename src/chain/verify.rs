@@ -220,7 +220,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
             None => id_tree_root_hash,
         };
         let ads_root_hash =
-            merkle_proof.ads_root_hash(&id_root_hash, std::iter::once((&time_win, &hash)));
+            merkle_proof.ads_root_hash(&id_root_hash, std::iter::once((time_win, hash)));
         let expect_ads_root_hash = chain.read_block_head(height)?.get_ads_root_hash();
         ensure!(
             ads_root_hash == expect_ads_root_hash,
