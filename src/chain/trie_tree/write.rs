@@ -320,14 +320,14 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     cur_key = rest_cur_key;
                                 }
                                 None => {
-                                    return Err(anyhow!("Key not found for trie"));
+                                    return Err(anyhow!("Cannot find trie node"));
                                 }
                             }
                         }
                     }
                 }
                 None => {
-                    bail!("Cannot find node");
+                    bail!("Cannot find trie node");
                 }
             }
         }
