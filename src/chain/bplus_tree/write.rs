@@ -501,7 +501,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                 temp_nodes.push(TempNode::Leaf { id, hash, is_empty });
                                 break;
                             } else {
-                                return Err(anyhow!("Key not found"));
+                                return Err(anyhow!("Key not found for bplus tree"));
                             }
                         }
                         BPlusTreeNode::NonLeaf(n) => {
@@ -555,7 +555,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                     }
                                 }
                             } else {
-                                return Err(anyhow!("Key not found"));
+                                return Err(anyhow!("Key not found for bplus tree"));
                             }
                         }
                     }
