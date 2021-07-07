@@ -106,7 +106,7 @@ impl ReadInterface for &SimChain {
         let data = self
             .bplus_tree_db
             .get(bplus_tree_node_id.to_le_bytes())?
-            .context("failed read to bplus tree tree node")?;
+            .context("failed to read bplus tree node")?;
         Ok(bincode::deserialize::<BPlusTreeNode<Self::K>>(&data[..])?)
     }
     fn read_trie_node(&self, trie_node_id: TrieNodeId) -> Result<TrieNode> {
@@ -158,7 +158,7 @@ impl ReadInterface for &mut SimChain {
         let data = self
             .bplus_tree_db
             .get(bplus_tree_node_id.to_le_bytes())?
-            .context("failed read to bplus tree tree node")?;
+            .context("failed to read bplus tree node")?;
         Ok(bincode::deserialize::<BPlusTreeNode<Self::K>>(&data[..])?)
     }
     fn read_trie_node(&self, trie_node_id: TrieNodeId) -> Result<TrieNode> {
