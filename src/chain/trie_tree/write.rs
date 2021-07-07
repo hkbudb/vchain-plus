@@ -296,7 +296,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                 temp_nodes.push(TempNode::Leaf { id, hash, is_empty });
                                 break;
                             } else {
-                                return Err(anyhow!("Key not found for trie"));
+                                return Err(anyhow!("Key {} not found for trie", cur_key));
                             }
                         }
                         TrieNode::NonLeaf(n) => {
