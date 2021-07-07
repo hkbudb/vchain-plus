@@ -11,7 +11,7 @@ use crate::{
         MAX_INLINE_FANOUT,
     },
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{
@@ -501,7 +501,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                 temp_nodes.push(TempNode::Leaf { id, hash, is_empty });
                                 break;
                             } else {
-                                return Err(anyhow!("Key not found for bplus tree"));
+                                return Ok(());
                             }
                         }
                         BPlusTreeNode::NonLeaf(n) => {
@@ -555,7 +555,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                     }
                                 }
                             } else {
-                                return Err(anyhow!("Key not found for bplus tree"));
+                                return Ok(());
                             }
                         }
                     }
@@ -566,7 +566,11 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
             }
         }
 
-        let mut new_root_id = BPlusTreeNodeId::next_id();
+        let mut new_root_id = self
+            .apply
+            .root
+            .bplus_tree_root_id
+            .context("Previous bplus tree root is none")?;
         let mut new_root_hash = Digest::zero();
         let mut delete_flag = false;
         let mut merge_flag = false;
