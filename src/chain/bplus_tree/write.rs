@@ -86,6 +86,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
         let new_acc = AccValue::from_set(&set, pk);
 
         let mut cur_id_opt = self.apply.root.bplus_tree_root_id;
+        debug!("bplus tree root id: {:?}", cur_id_opt);
         let mut insert_flag = false;
         let mut update_flag = false;
 
@@ -264,6 +265,8 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                 hash: new_leaf_hash,
                                             });
                                             break 'outer;
+                                        } else {
+                                            debug!("infinite loop");
                                         }
                                     }
                                     BPlusTreeNode::NonLeaf(child_n) => {
@@ -461,6 +464,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
         fanout: usize,
         pk: &AccPublicKey,
     ) -> Result<()> {
+        debug!("delete key: {:?}", key);
         let set = Set::from_single_element(obj_id.0);
         let delta_acc = AccValue::from_set(&set, pk);
         let mut cur_id_opt = self.apply.root.bplus_tree_root_id;
@@ -486,6 +490,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                     let cur_node = self.get_node(id)?;
                     match cur_node.as_ref() {
                         BPlusTreeNode::Leaf(n) => {
+                            debug!("===========leaf reached");
                             let set_dif = (&n.data_set) / (&set);
                             let old_acc = n.data_set_acc;
                             if n.num == key {
@@ -501,7 +506,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                 temp_nodes.push(TempNode::Leaf { id, hash, is_empty });
                                 break;
                             } else {
-                                return Ok(());
+                                return Err(anyhow!("key not matched at leaf"));
                             }
                         }
                         BPlusTreeNode::NonLeaf(n) => {
@@ -555,7 +560,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                     }
                                 }
                             } else {
-                                return Ok(());
+                                return Err(anyhow!("key not in range at non leaf node"));
                             }
                         }
                     }
@@ -575,14 +580,17 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
         let mut delete_flag = false;
         let mut merge_flag = false;
         let mut cur_tmp_len = temp_nodes.len();
+        debug!("length of temp_node: {}", cur_tmp_len);
         let mut cur_range = Range::new(key, key);
 
         for node in temp_nodes.into_iter().rev() {
             match node {
                 TempNode::Leaf { id, hash, is_empty } => {
                     if is_empty {
+                        debug!("leaf is empty");
                         delete_flag = true;
                     } else {
+                        debug!("leaf is not empty");
                         new_root_id = id;
                         new_root_hash = hash;
                         delete_flag = false;
@@ -590,8 +598,10 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                 }
                 TempNode::NonLeaf { mut node, idx } => {
                     if merge_flag {
+                        debug!("non leaf needs merge or borrow");
                         match node.child_ids.get(idx + 1) {
                             Some(id) => {
+                                // has right sib
                                 let r_sib = self.get_node(*id)?;
                                 match r_sib.as_ref() {
                                     BPlusTreeNode::Leaf(_r_n) => {}
@@ -599,6 +609,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                         if r_n.child_ids.len()
                                             > (fanout as f32 / 2_f32).ceil() as usize
                                         {
+                                            // borrow from right
                                             let mut new_r_n_c_ids = r_n.child_ids.clone();
                                             let mut new_r_n_c_hashes = r_n.child_hashes.clone();
 
@@ -671,6 +682,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                 }
                                             }
                                         } else if idx > 0 {
+                                            // right cannot lend, has left sib
                                             let id = node
                                                 .child_ids
                                                 .get(idx - 1)
@@ -682,6 +694,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                     if l_n.child_ids.len()
                                                         > (fanout as f32 / 2_f32).ceil() as usize
                                                     {
+                                                        // borrow from left
                                                         let mut new_l_n_c_ids =
                                                             l_n.child_ids.clone();
                                                         let mut new_l_n_c_hashes =
@@ -786,6 +799,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                             }
                                                         }
                                                     } else {
+                                                        // merge right
                                                         let mut r_n_ids = r_n.child_ids.clone();
                                                         let mut r_n_hashes =
                                                             r_n.child_hashes.clone();
@@ -837,6 +851,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                 }
                                             }
                                         } else {
+                                            // no left sib, merge right
                                             let mut r_n_ids = r_n.child_ids.clone();
                                             let mut r_n_hashes = r_n.child_hashes.clone();
                                             let r_n_acc = r_n.data_set_acc;
@@ -879,6 +894,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                 }
                             }
                             None => {
+                                // no right sib, must has left sib
                                 let l_sib_id = node
                                     .child_ids
                                     .get(idx - 1)
@@ -890,6 +906,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                         if l_n.child_ids.len()
                                             > (fanout as f32 / 2_f32).ceil() as usize
                                         {
+                                            // borrow from left
                                             let mut new_l_n_c_ids = l_n.child_ids.clone();
                                             let mut new_l_n_c_hashes = l_n.child_hashes.clone();
 
@@ -967,6 +984,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                 }
                                             }
                                         } else {
+                                            // merge left
                                             let mut l_n_ids = l_n.child_ids.clone();
                                             let mut l_n_hashes = l_n.child_hashes.clone();
 
@@ -1016,10 +1034,11 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                             }
                         }
                     } else if delete_flag {
+                        debug!("non leaf delete flag is true");
                         node.child_ids.remove(idx);
                         node.child_hashes.remove(idx);
-                        delete_flag = false;
                     } else {
+                        debug!("non leaf does not need to delete or merge");
                         if key == node.range.get_low() {
                             node.range.set_low(cur_range.get_low());
                         } else if key == node.range.get_high() {
@@ -1038,9 +1057,18 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                     }
 
                     if node.child_ids.len() < (fanout as f32 / 2_f32).ceil() as usize {
+                        debug!("maybe need merge or borrow next round");
                         if cur_tmp_len == 1 {
+                            debug!("no need since it is level1");
                             merge_flag = false;
                             if node.child_ids.len() == 1 {
+                                debug!("break since it has only one child");
+                                if delete_flag {
+                                    let child_id = node.child_ids[0];
+                                    let child_n = self.get_node(child_id)?;
+                                    new_root_id = child_id;
+                                    new_root_hash = child_n.as_ref().to_digest();
+                                }
                                 break;
                             } else {
                                 let (id, hash) = self.write_non_leaf(node);
@@ -1048,6 +1076,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                 new_root_hash = hash;
                             }
                         } else {
+                            debug!("need since it is not level1");
                             merge_flag = true;
                             let (id, hash) = self.write_non_leaf(node);
                             new_root_id = id;
@@ -1055,6 +1084,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                             self.outdated.insert(new_root_id);
                         }
                     } else {
+                        debug!("not merge or borrow next round");
                         if key == node.range.get_low() {
                             let sib_id = node.child_ids[0];
                             let sib_n = self.get_node(sib_id)?;
@@ -1085,14 +1115,17 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                         new_root_hash = hash;
                         merge_flag = false;
                     }
+                    delete_flag = false;
                 }
             }
             cur_tmp_len -= 1;
         }
 
         self.apply.root.bplus_tree_root_id = Some(new_root_id);
+        debug!("root after delete: {:?}", new_root_id);
         self.apply.root.bplus_tree_root_hash = new_root_hash;
         for id in self.outdated.drain() {
+            debug!("id {:?} inside outdated", id);
             self.apply.nodes.remove(&id);
         }
         Ok(())
