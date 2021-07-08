@@ -71,7 +71,10 @@ impl ReadInterface for &FakeChain {
         self.bplus_tree_nodes
             .get(&bplus_tree_node_id)
             .cloned()
-            .context("failed to read bplus tree node")
+            .context(format!(
+                "failed to read bplus tree node with id {:?}",
+                bplus_tree_node_id
+            ))
     }
     fn read_trie_node(&self, trie_node_id: TrieNodeId) -> Result<TrieNode> {
         self.trie_nodes
@@ -117,7 +120,10 @@ impl ReadInterface for &mut FakeChain {
         self.bplus_tree_nodes
             .get(&bplus_tree_node_id)
             .cloned()
-            .context("failed to read bplus tree node")
+            .context(format!(
+                "failed to read bplus tree node with id {:?}",
+                bplus_tree_node_id
+            ))
     }
     fn read_trie_node(&self, trie_node_id: TrieNodeId) -> Result<TrieNode> {
         self.trie_nodes

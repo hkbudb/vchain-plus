@@ -217,7 +217,7 @@ mod tests {
             "keyword_exp": {
                 "or": [
                     {"input": "a"},
-                    {"not": {"input": "b"}}
+                    {"input": "b"}
                 ]
             }
         });
