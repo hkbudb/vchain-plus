@@ -5,16 +5,16 @@ use super::{
     write::{Apply, WriteContext},
     BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader,
 };
-use crate::chain::bplus_tree::BPlusTreeRoot;
 use crate::chain::id_tree::ObjId;
+use crate::{chain::bplus_tree::BPlusTreeRoot, utils::init_tracing_subscriber};
 use crate::{
     chain::{range::Range, traits::Num},
     digest::{Digest, Digestible},
 };
 use anyhow::{bail, Result};
 use rand::Rng;
-use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::collections::{BTreeMap, HashMap};
 use std::num::NonZeroU64;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
@@ -156,12 +156,12 @@ fn test_read() {
 }
 
 #[test]
-fn test_rich() {
+fn test_insert_rich() {
     let mut test_b_tree = TestBPlusTree::<u32>::new();
     let mut test_b_tree_root = BPlusTreeRoot::default();
     set_root_id(&mut test_b_tree_root, test_b_tree.root_id);
     let mut ctx = WriteContext::new(&mut test_b_tree, test_b_tree_root);
-    for _i in 0..3000 {
+    for _i in 0..6000 {
         let mut rng = rand::thread_rng();
         let v: u32 = rng.gen_range(0..3000);
         unsafe {
@@ -174,6 +174,78 @@ fn test_rich() {
             .unwrap();
         }
     }
+}
+
+// time consuming test, ignored
+#[test]
+#[ignore]
+fn test_update_rich() {
+    init_tracing_subscriber("info").unwrap();
+    let blk_size = 4;
+    let time_win_size = 4;
+    let blk_num = 30000;
+    let mut test_b_tree = TestBPlusTree::<u32>::new();
+    let mut test_b_tree_root = BPlusTreeRoot::default();
+    set_root_id(&mut test_b_tree_root, test_b_tree.root_id);
+    let mut ctx = WriteContext::new(&mut test_b_tree, test_b_tree_root);
+    let mut db = BTreeMap::<u32, Vec<u32>>::new();
+    let mut rng = rand::thread_rng();
+    let mut obj_id: u64 = 1;
+    info!("creating blocks...");
+    for i in 0..blk_num {
+        let mut vec = Vec::<u32>::new();
+        for _ in 0..blk_size {
+            vec.push(rng.gen_range(1..100));
+        }
+        db.insert(i, vec);
+    }
+
+    info!("start building blocks");
+    for i in 0..blk_num {
+        info!("building blk with blk id: {}", i);
+        if i > time_win_size {
+            // delete
+            let vec = db.get(&(i - time_win_size)).unwrap();
+            for key in vec {
+                info!("delete key {}", key);
+                if obj_id == 0 {
+                    obj_id = 1;
+                }
+                unsafe {
+                    ctx.delete(
+                        *key,
+                        ObjId(NonZeroU64::new_unchecked(obj_id as u64)),
+                        FANOUT,
+                        &PUB_KEY,
+                    )
+                    .unwrap();
+                }
+                obj_id = (obj_id + 1) % 35;
+            }
+        }
+
+        // insert
+        let vec = db.get(&i).unwrap();
+        for key in vec {
+            info!("insert key {}", key);
+            if obj_id == 0 {
+                obj_id = 1;
+            }
+            unsafe {
+                ctx.insert(
+                    *key,
+                    ObjId(NonZeroU64::new_unchecked(obj_id as u64)),
+                    FANOUT,
+                    &PUB_KEY,
+                )
+                .unwrap();
+            }
+            obj_id = (obj_id + 1) % 35;
+        }
+    }
+    let changes = ctx.changes();
+    test_b_tree.apply(changes);
+    assert_eq!(1, 1);
 }
 
 #[test]
