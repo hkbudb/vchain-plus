@@ -4,7 +4,8 @@ pub mod query_plan;
 
 use crate::{
     acc::{
-        compute_set_operation_final, compute_set_operation_intermediate, ops::Op, AccPublicKey, Set,
+        compute_set_operation_final, compute_set_operation_intermediate, ops::Op, AccPublicKey,
+        AccValue, Set,
     },
     chain::{
         block::{hash::obj_id_nums_hash, Height},
@@ -27,8 +28,11 @@ use petgraph::dot::{Config, Dot};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_param::QueryParam;
 use query_plan::QueryPlan;
-use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
+use std::{
+    collections::{BTreeMap, HashMap},
+    num::NonZeroU64,
+};
 
 #[allow(clippy::type_complexity)]
 fn query_final<K: Num, T: ReadInterface<K = K>>(
@@ -182,12 +186,21 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         set_map.insert(vo_idx, set.clone());
                     }
                     None => {
-                        let blk_content = chain.read_block_content(n.blk_height)?;
-                        let obj_id_nums = blk_content.read_obj_id_nums();
-                        let set = Set::from_iter(obj_id_nums.into_iter());
-                        let acc = blk_content
-                            .read_acc()
-                            .context("The block does not have acc value")?;
+                        let mut acc = AccValue::from_set(&Set::new(), pk);
+                        let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
+                        for i in 0..n.time_win {
+                            if n.blk_height.0 > i {
+                                let blk_content =
+                                    chain.read_block_content(Height(n.blk_height.0 - i))?;
+                                let mut obj_id_nums = blk_content.read_obj_id_nums();
+                                total_obj_id_nums.append(&mut obj_id_nums);
+                                let sub_acc = blk_content
+                                    .read_acc()
+                                    .context("The block does not have acc value")?;
+                                acc = acc + sub_acc;
+                            }
+                        }
+                        let set = Set::from_iter(total_obj_id_nums.into_iter());
                         let vo_blk_root = VOBlkRtNode {
                             blk_height: n.blk_height,
                             acc,

@@ -168,10 +168,6 @@ impl<K: Num> QueryParam<K> {
             Node::Not(n) => {
                 let idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                 keyword_root_idx = idx;
-                let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
-                    blk_height: end_blk_height,
-                }));
-                query_dag.add_edge(idx, blk_rt_idx, ());
                 let NotNode(c) = *n;
                 let c_idx: NodeIndex;
                 match &c {
@@ -194,6 +190,11 @@ impl<K: Num> QueryParam<K> {
                     }
                 }
                 query_dag.add_edge(idx, c_idx, ());
+                let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
+                    blk_height: end_blk_height,
+                    time_win: end_win_size,
+                }));
+                query_dag.add_edge(idx, blk_rt_idx, ());
                 queue.push_back((c, c_idx));
             }
             Node::Input(s) => {
@@ -319,12 +320,12 @@ impl<K: Num> QueryParam<K> {
                     queue.push_back((c2, idx2));
                 }
                 (Node::Not(n), idx) => {
-                    let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
-                        blk_height: end_blk_height,
-                    }));
-                    query_dag.add_edge(idx, blk_rt_idx, ());
                     let NotNode(c) = *n;
                     let c_idx: NodeIndex;
+                    let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
+                        blk_height: end_blk_height,
+                        time_win: end_win_size,
+                    }));
                     match &c {
                         Node::And(_) => {
                             c_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
@@ -349,6 +350,7 @@ impl<K: Num> QueryParam<K> {
                         }
                     }
                     query_dag.add_edge(idx, c_idx, ());
+                    query_dag.add_edge(idx, blk_rt_idx, ());
                     queue.push_back((c, c_idx));
                 }
                 (Node::Input(_), _idx) => {}
@@ -381,14 +383,16 @@ impl<K: Num> QueryParam<K> {
         query_dag.add_edge(intersec_idx, range_root_idx, ());
         query_dag.add_edge(intersec_idx, keyword_root_idx, ());
 
-        let start_blk_height = Height(self.start_blk);
-        if start_win_size.is_some() && self.start_blk > 1 {
-            let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
-                blk_height: Height(start_blk_height.0 - 1),
-            }));
-            let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
-            query_dag.add_edge(diff_idx, blk_rt_idx, ());
-            query_dag.add_edge(diff_idx, intersec_idx, ());
+        if let Some(size) = start_win_size {
+            if self.start_blk > 1 {
+                let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
+                    blk_height: Height(self.start_blk - 1),
+                    time_win: size,
+                }));
+                let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                query_dag.add_edge(diff_idx, blk_rt_idx, ());
+                query_dag.add_edge(diff_idx, intersec_idx, ());
+            }
         }
         let res_query = Query {
             end_blk_height,
@@ -401,17 +405,14 @@ impl<K: Num> QueryParam<K> {
 #[cfg(test)]
 mod test {
     use crate::chain::{
-        block::Height,
         query::{
-            query_obj::{
-                BlkRtNode, DiffNode, IntersecNode, KeywordNode, QueryNode, RangeNode, UnionNode,
-            },
             query_param::{Node, NotNode, OrNode, QueryParam},
+            select_win_size,
         },
         range::Range,
     };
     use petgraph::dot::{Config, Dot};
-    use petgraph::Graph;
+
     use serde_json::json;
 
     #[test]
@@ -466,8 +467,8 @@ mod test {
     #[test]
     fn test_to_query() {
         let data = json!({
-            "start_blk": 1,
-            "end_blk": 3,
+            "start_blk": 2,
+            "end_blk": 4,
             "range": [(1, 5), (2, 8)],
             "keyword_exp": {
                 "or": [
@@ -477,63 +478,61 @@ mod test {
             },
         });
         let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
-        let time_win = 4;
-        let query = query_param.into_query_basic(None, time_win).unwrap();
-        let mut expect_query_dag = Graph::<QueryNode<u32>, ()>::new();
-        let idx_0 = expect_query_dag.add_node(QueryNode::Union(UnionNode {}));
-        let idx_1 = expect_query_dag.add_node(QueryNode::Keyword(KeywordNode {
-            keyword: "a".to_string(),
-            blk_height: Height(3),
-            time_win,
-        }));
-        expect_query_dag.add_edge(idx_0, idx_1, ());
-        let idx_2 = expect_query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
-        expect_query_dag.add_edge(idx_0, idx_2, ());
-        let idx_3 = expect_query_dag.add_node(QueryNode::Keyword(KeywordNode {
-            keyword: "b".to_string(),
-            blk_height: Height(3),
-            time_win,
-        }));
-        expect_query_dag.add_edge(idx_2, idx_3, ());
-        let idx_4 = expect_query_dag.add_node(QueryNode::Keyword(KeywordNode {
-            keyword: "c".to_string(),
-            blk_height: Height(3),
-            time_win,
-        }));
-        expect_query_dag.add_edge(idx_2, idx_4, ());
-        let idx_5 = expect_query_dag.add_node(QueryNode::Range(RangeNode {
-            range: Range::<u32>::new(1, 5),
-            blk_height: Height(3),
-            time_win,
-            dim: 0,
-        }));
-        let idx_6 = expect_query_dag.add_node(QueryNode::Range(RangeNode {
-            range: Range::<u32>::new(2, 8),
-            blk_height: Height(3),
-            time_win,
-            dim: 1,
-        }));
-        let idx_7 = expect_query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
-        expect_query_dag.add_edge(idx_7, idx_5, ());
-        expect_query_dag.add_edge(idx_7, idx_6, ());
-        let idx_8 = expect_query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
-        expect_query_dag.add_edge(idx_8, idx_7, ());
-        expect_query_dag.add_edge(idx_8, idx_0, ());
-        let idx_9 = expect_query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
-            blk_height: Height(1),
-        }));
-        let idx_10 = expect_query_dag.add_node(QueryNode::Diff(DiffNode {}));
-        expect_query_dag.add_edge(idx_10, idx_9, ());
-        expect_query_dag.add_edge(idx_10, idx_8, ());
+        let time_wins: Vec<u64> = vec![4];
+        let query_params = select_win_size(time_wins, query_param).unwrap();
+        for (q_param, s_win_size, e_win_size) in query_params {
+            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let query_dag = query.query_dag;
+            println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
+        }
+        println!("======================");
+        let data = json!({
+            "start_blk": 2,
+            "end_blk": 8,
+            "range": [(1, 5)],
+            "keyword_exp": {"input": "a"},
+        });
+        let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
+        let time_wins: Vec<u64> = vec![4];
+        let query_params = select_win_size(time_wins, query_param).unwrap();
+        for (q_param, s_win_size, e_win_size) in query_params {
+            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let query_dag = query.query_dag;
+            println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
+        }
+        println!("======================");
+        let data = json!({
+            "start_blk": 1,
+            "end_blk": 3,
+            "range": [(10, 15)],
+            "keyword_exp": {"input": "a"},
+        });
+        let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
+        let time_wins: Vec<u64> = vec![4];
+        let query_params = select_win_size(time_wins, query_param).unwrap();
+        for (q_param, s_win_size, e_win_size) in query_params {
+            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let query_dag = query.query_dag;
+            println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
+        }
+        println!("======================");
+        let data = json!({
+            "start_blk": 2,
+            "end_blk": 4,
+            "range": [(10, 15)],
+            "keyword_exp": {
+                "not": {"input": "a"}
+            },
+        });
+        let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
+        let time_wins: Vec<u64> = vec![4];
+        let query_params = select_win_size(time_wins, query_param).unwrap();
+        for (q_param, s_win_size, e_win_size) in query_params {
+            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let query_dag = query.query_dag;
+            println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
+        }
 
-        let query_dag = query.query_dag;
-        println!("computed");
-        println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
-        println!("expect");
-        println!(
-            "{:?}",
-            Dot::with_config(&expect_query_dag, &[Config::EdgeNoLabel])
-        );
         assert_eq!(1, 1);
     }
 }

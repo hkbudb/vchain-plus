@@ -36,6 +36,7 @@ pub struct QPKeywordNode {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QPBlkRtNode {
     pub(crate) blk_height: Height,
+    pub(crate) time_win: u64,
     pub(crate) set: Option<Set>,
     pub(crate) acc: Option<AccValue>,
 }

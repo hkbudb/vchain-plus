@@ -41,6 +41,7 @@ pub struct KeywordNode {
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct BlkRtNode {
     pub(crate) blk_height: Height,
+    pub(crate) time_win: u64,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -106,6 +107,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                 QueryNode::BlkRt(n) => {
                     let qp_blk_rt_node = QPBlkRtNode {
                         blk_height: n.blk_height,
+                        time_win: n.time_win,
                         set: None,
                         acc: None,
                     };
