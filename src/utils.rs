@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_load_query_param() {
-        let input = Path::new("./data/query/test.json");
+        let input = Path::new("./data/query/test1.json");
         let res = load_query_param_from_file(input).unwrap();
         let param1_data = json!({
             "start_blk": 1,
