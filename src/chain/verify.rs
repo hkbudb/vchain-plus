@@ -37,12 +37,13 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     let vo_dag_idxs = vo_dag.node_indices();
     let mut bplus_roots = HashMap::<Height, (u64, BTreeMap<usize, Digest>)>::new();
     let trie_proofs = &vo.trie_proofs;
+    let mut time_win_map = HashMap::<Height, u64>::new();
     for idx in vo_dag_idxs {
         if let Some(node) = vo_dag.node_weight(idx) {
             match node {
                 vo::VONode::Range(n) => {
+                    time_win_map.insert(n.blk_height, n.time_win);
                     let res_digest = n.proof.verify(n.range, n.acc, pk)?;
-
                     match bplus_roots.get_mut(&n.blk_height) {
                         Some((_time_win, btree_map)) => {
                             btree_map.insert(n.dim, res_digest);
@@ -55,12 +56,15 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                     }
                 }
                 vo::VONode::Keyword(n) => {
+                    time_win_map.insert(n.blk_height, n.time_win);
                     let proof = trie_proofs
                         .get(&n.blk_height)
                         .context("Cannot find trie proof in VO")?;
                     proof.verify_acc(n.acc, n.keyword.clone(), pk)?;
                 }
-                vo::VONode::BlkRt(_) => {}
+                vo::VONode::BlkRt(n) => {
+                    time_win_map.insert(n.blk_height, n.time_win);
+                }
                 vo::VONode::InterUnion(n) => {
                     let mut child_idxs = Vec::<NodeIndex>::new();
                     for idx in vo_dag.neighbors_directed(idx, Outgoing) {
@@ -208,25 +212,28 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
 
     // verify merkle proof, including trie and block head hash
     let merkle_proofs = &vo.merkle_proofs;
-    for (height, (time_win, bplus_hashes)) in bplus_roots {
-        let bplus_root_hash = bplus_roots_hash(bplus_hashes.into_iter());
-        let trie_proof = trie_proofs.get(&height).context("Cannot find trie proof")?;
-        let hash = ads_hash(bplus_root_hash, trie_proof.root_hash());
-        let merkle_proof = merkle_proofs
-            .get(&height)
-            .context("Cannot find merkle proof")?;
-        let id_root_hash = match merkle_proof.id_tree_root_hash {
-            Some(d) => d,
-            None => id_tree_root_hash,
-        };
-        let ads_root_hash =
-            merkle_proof.ads_root_hash(&id_root_hash, std::iter::once((time_win, hash)));
-        let expect_ads_root_hash = chain.read_block_head(height)?.get_ads_root_hash();
-        ensure!(
-            ads_root_hash == expect_ads_root_hash,
-            "ADS root hash not matched for height {:?}!. The target hash is {:?} but the computed hash is {:?}", height, expect_ads_root_hash, ads_root_hash
-        );
+    for (height, time_win) in time_win_map {
+        if let Some((_win_size, bplus_hashes)) = bplus_roots.get(&height) {
+            let bplus_root_hash = bplus_roots_hash(bplus_hashes.into_iter());
+            let trie_proof = trie_proofs.get(&height).context("Cannot find trie proof")?;
+            let hash = ads_hash(bplus_root_hash, trie_proof.root_hash());
+            let merkle_proof = merkle_proofs
+                .get(&height)
+                .context("Cannot find merkle proof")?;
+            let id_root_hash = match merkle_proof.id_tree_root_hash {
+                Some(d) => d,
+                None => id_tree_root_hash,
+            };
+            let ads_root_hash =
+                merkle_proof.ads_root_hash(&id_root_hash, std::iter::once((time_win, hash)));
+            let expect_ads_root_hash = chain.read_block_head(height)?.get_ads_root_hash();
+            ensure!(
+                ads_root_hash == expect_ads_root_hash,
+                "ADS root hash not matched for height {:?}!. The target hash is {:?} but the computed hash is {:?}", height, expect_ads_root_hash, ads_root_hash
+            );
+        }
     }
+
     Ok(())
 }
 

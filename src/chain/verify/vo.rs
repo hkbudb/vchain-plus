@@ -66,6 +66,7 @@ pub struct VOKeywordNode {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOBlkRtNode {
     pub(crate) blk_height: Height,
+    pub(crate) time_win: u64,
     pub(crate) acc: AccValue,
 }
 

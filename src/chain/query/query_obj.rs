@@ -70,13 +70,14 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
         }
     };
     q_inputs.reverse();
-    let qp_output_elm = q_inputs
+    let q_output_elm = q_inputs
         .last()
         .cloned()
         .context("Input query graph is empty")?;
     let mut idx_map = HashMap::<NodeIndex, NodeIndex>::new();
     let mut qp_inputs = Vec::<NodeIndex>::new();
-    let qp_outputs = vec![qp_output_elm];
+    let q_outputs = vec![q_output_elm];
+    let mut qp_outputs = Vec::<NodeIndex>::new();
 
     for idx in q_inputs {
         if let Some(node) = query_dag.node_weight(idx) {
@@ -156,6 +157,10 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                 }
             }
         }
+    }
+
+    for q_idx in &q_outputs {
+        qp_outputs.push(*idx_map.get(q_idx).context("index map not matched")?);
     }
 
     let qp_trie_proofs = HashMap::<Height, trie_tree::proof::Proof>::new();

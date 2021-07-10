@@ -163,53 +163,58 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         }
                     }
                 }
-                QPNode::BlkRt(n) => match &n.set {
-                    Some(set) => {
-                        let acc;
-                        match n.acc {
-                            Some(acc_val) => {
-                                acc = acc_val;
+                QPNode::BlkRt(n) => {
+                    time_win_map.insert(n.blk_height, n.time_win);
+                    match &n.set {
+                        Some(set) => {
+                            let acc;
+                            match n.acc {
+                                Some(acc_val) => {
+                                    acc = acc_val;
+                                }
+                                None => {
+                                    let blk_content = chain.read_block_content(n.blk_height)?;
+                                    acc = blk_content
+                                        .read_acc()
+                                        .context("The block does not have acc value")?;
+                                }
                             }
-                            None => {
-                                let blk_content = chain.read_block_content(n.blk_height)?;
-                                acc = blk_content
-                                    .read_acc()
-                                    .context("The block does not have acc value")?;
-                            }
+                            let vo_blk_rt_node = VOBlkRtNode {
+                                blk_height: n.blk_height,
+                                time_win: n.time_win,
+                                acc,
+                            };
+                            let vo_idx = vo_dag.add_node(VONode::BlkRt(vo_blk_rt_node));
+                            idx_map.insert(idx, vo_idx);
+                            set_map.insert(vo_idx, set.clone());
                         }
-                        let vo_blk_rt_node = VOBlkRtNode {
-                            blk_height: n.blk_height,
-                            acc,
-                        };
-                        let vo_idx = vo_dag.add_node(VONode::BlkRt(vo_blk_rt_node));
-                        idx_map.insert(idx, vo_idx);
-                        set_map.insert(vo_idx, set.clone());
-                    }
-                    None => {
-                        let mut acc = AccValue::from_set(&Set::new(), pk);
-                        let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
-                        for i in 0..n.time_win {
-                            if n.blk_height.0 > i {
-                                let blk_content =
-                                    chain.read_block_content(Height(n.blk_height.0 - i))?;
-                                let mut obj_id_nums = blk_content.read_obj_id_nums();
-                                total_obj_id_nums.append(&mut obj_id_nums);
-                                let sub_acc = blk_content
-                                    .read_acc()
-                                    .context("The block does not have acc value")?;
-                                acc = acc + sub_acc;
+                        None => {
+                            let mut acc = AccValue::from_set(&Set::new(), pk);
+                            let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
+                            for i in 0..n.time_win {
+                                if n.blk_height.0 > i {
+                                    let blk_content =
+                                        chain.read_block_content(Height(n.blk_height.0 - i))?;
+                                    let mut obj_id_nums = blk_content.read_obj_id_nums();
+                                    total_obj_id_nums.append(&mut obj_id_nums);
+                                    let sub_acc = blk_content
+                                        .read_acc()
+                                        .context("The block does not have acc value")?;
+                                    acc = acc + sub_acc;
+                                }
                             }
+                            let set = Set::from_iter(total_obj_id_nums.into_iter());
+                            let vo_blk_root = VOBlkRtNode {
+                                blk_height: n.blk_height,
+                                time_win: n.time_win,
+                                acc,
+                            };
+                            let vo_idx = vo_dag.add_node(VONode::BlkRt(vo_blk_root));
+                            idx_map.insert(idx, vo_idx);
+                            set_map.insert(vo_idx, set);
                         }
-                        let set = Set::from_iter(total_obj_id_nums.into_iter());
-                        let vo_blk_root = VOBlkRtNode {
-                            blk_height: n.blk_height,
-                            acc,
-                        };
-                        let vo_idx = vo_dag.add_node(VONode::BlkRt(vo_blk_root));
-                        idx_map.insert(idx, vo_idx);
-                        set_map.insert(vo_idx, set);
                     }
-                },
+                }
                 QPNode::Union(_) => {
                     let mut child_idxs = Vec::<NodeIndex>::new();
                     for idx in qp_dag.neighbors_directed(idx, Outgoing) {
@@ -396,6 +401,19 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
         let trie_proof = trie_ctx.into_proof();
         trie_proofs.insert(height, trie_proof);
     }
+    if trie_proofs.is_empty() {
+        debug!("no keyword query");
+        let end_win_size = time_win_map
+            .get(&qp_end_blk_height)
+            .context("Cannot find end blk height")?;
+        let trie_root = chain
+            .read_block_content(qp_end_blk_height)?
+            .ads
+            .read_trie_root(*end_win_size)?;
+        let end_trie_ctx = trie_tree::read::ReadContext::new(chain, trie_root.trie_root_id);
+        let end_trie_proof = end_trie_ctx.into_proof();
+        trie_proofs.insert(qp_end_blk_height, end_trie_proof);
+    }
 
     let id_root = chain.read_block_content(qp_end_blk_height)?.id_tree_root;
     let cur_obj_id = id_root.get_cur_obj_id();
@@ -418,6 +436,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
         }
     }
     let id_tree_proof = id_tree_ctx.into_proof();
+
     for (height, time_win) in time_win_map {
         let blk_content = chain.read_block_content(height)?;
         let obj_id_nums = blk_content.read_obj_id_nums();
@@ -552,7 +571,7 @@ mod tests {
             start_blk: 1,
             end_blk: 3,
             range: vec![],
-            keyword_exp: Node::Input("a".to_string()),
+            keyword_exp: Some(Node::Input("a".to_string())),
         };
         let res = select_win_size(vec![4], query_param.clone()).unwrap();
         let exp = vec![(query_param, Some(4), 4)];
@@ -561,7 +580,7 @@ mod tests {
             start_blk: 1,
             end_blk: 4,
             range: vec![],
-            keyword_exp: Node::Input("a".to_string()),
+            keyword_exp: Some(Node::Input("a".to_string())),
         };
         let res = select_win_size(vec![4], query_param.clone()).unwrap();
         let exp = vec![(query_param, None, 4)];
@@ -570,7 +589,7 @@ mod tests {
             start_blk: 1,
             end_blk: 5,
             range: vec![],
-            keyword_exp: Node::Input("a".to_string()),
+            keyword_exp: Some(Node::Input("a".to_string())),
         };
         let res = select_win_size(vec![4], query_param).unwrap();
         let exp = vec![
@@ -579,7 +598,7 @@ mod tests {
                     start_blk: 1,
                     end_blk: 4,
                     range: vec![],
-                    keyword_exp: Node::Input("a".to_string()),
+                    keyword_exp: Some(Node::Input("a".to_string())),
                 },
                 None,
                 4,
@@ -589,7 +608,7 @@ mod tests {
                     start_blk: 5,
                     end_blk: 5,
                     range: vec![],
-                    keyword_exp: Node::Input("a".to_string()),
+                    keyword_exp: Some(Node::Input("a".to_string())),
                 },
                 Some(4),
                 4,
@@ -600,7 +619,7 @@ mod tests {
             start_blk: 1,
             end_blk: 6,
             range: vec![],
-            keyword_exp: Node::Input("a".to_string()),
+            keyword_exp: Some(Node::Input("a".to_string())),
         };
         let res = select_win_size(vec![4, 8], query_param.clone()).unwrap();
         let exp = vec![(query_param, Some(4), 8)];
@@ -609,7 +628,7 @@ mod tests {
             start_blk: 1,
             end_blk: 8,
             range: vec![],
-            keyword_exp: Node::Input("a".to_string()),
+            keyword_exp: Some(Node::Input("a".to_string())),
         };
         let res = select_win_size(vec![4, 8], query_param.clone()).unwrap();
         let exp = vec![(query_param, None, 8)];
@@ -618,7 +637,7 @@ mod tests {
             start_blk: 1,
             end_blk: 10,
             range: vec![],
-            keyword_exp: Node::Input("a".to_string()),
+            keyword_exp: Some(Node::Input("a".to_string())),
         };
         let res = select_win_size(vec![4, 8], query_param).unwrap();
         let exp = vec![
@@ -627,7 +646,7 @@ mod tests {
                     start_blk: 1,
                     end_blk: 8,
                     range: vec![],
-                    keyword_exp: Node::Input("a".to_string()),
+                    keyword_exp: Some(Node::Input("a".to_string())),
                 },
                 None,
                 8,
@@ -637,7 +656,7 @@ mod tests {
                     start_blk: 9,
                     end_blk: 10,
                     range: vec![],
-                    keyword_exp: Node::Input("a".to_string()),
+                    keyword_exp: Some(Node::Input("a".to_string())),
                 },
                 Some(4),
                 4,
@@ -648,7 +667,7 @@ mod tests {
             start_blk: 1,
             end_blk: 16,
             range: vec![],
-            keyword_exp: Node::Input("a".to_string()),
+            keyword_exp: Some(Node::Input("a".to_string())),
         };
         let res = select_win_size(vec![4, 8], query_param).unwrap();
         let exp = vec![
@@ -657,7 +676,7 @@ mod tests {
                     start_blk: 1,
                     end_blk: 8,
                     range: vec![],
-                    keyword_exp: Node::Input("a".to_string()),
+                    keyword_exp: Some(Node::Input("a".to_string())),
                 },
                 None,
                 8,
@@ -667,7 +686,7 @@ mod tests {
                     start_blk: 9,
                     end_blk: 16,
                     range: vec![],
-                    keyword_exp: Node::Input("a".to_string()),
+                    keyword_exp: Some(Node::Input("a".to_string())),
                 },
                 None,
                 8,
