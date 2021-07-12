@@ -214,7 +214,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     let merkle_proofs = &vo.merkle_proofs;
     for (height, time_win) in time_win_map {
         if let Some((_win_size, bplus_hashes)) = bplus_roots.get(&height) {
-            let bplus_root_hash = bplus_roots_hash(bplus_hashes.into_iter());
+            let bplus_root_hash = bplus_roots_hash(bplus_hashes.iter());
             let trie_proof = trie_proofs.get(&height).context("Cannot find trie proof")?;
             let hash = ads_hash(bplus_root_hash, trie_proof.root_hash());
             let merkle_proof = merkle_proofs
