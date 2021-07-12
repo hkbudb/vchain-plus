@@ -22,7 +22,7 @@ pub struct QPRangeNode<K: Num> {
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
     pub(crate) dim: usize,
-    pub(crate) set: Option<(Set, AccValue)>,
+    pub(crate) set: Option<(Set, AccValue, u32, u32)>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,30 +30,30 @@ pub struct QPKeywordNode {
     pub(crate) keyword: String,
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
-    pub(crate) set: Option<(Set, AccValue)>,
+    pub(crate) set: Option<(Set, AccValue, u32, u32)>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QPBlkRtNode {
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
-    pub(crate) set: Option<Set>,
+    pub(crate) set: Option<(Set, u32, u32)>,
     pub(crate) acc: Option<AccValue>,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct QPUnion {
-    pub(crate) set: Option<Set>,
+    pub(crate) set: Option<(Set, u32, u32)>,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct QPIntersec {
-    pub(crate) set: Option<Set>,
+    pub(crate) set: Option<(Set, u32, u32)>,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct QPDiff {
-    pub(crate) set: Option<Set>,
+    pub(crate) set: Option<(Set, u32, u32)>,
 }
 
 pub struct QueryPlan<K: Num> {

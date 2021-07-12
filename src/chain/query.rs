@@ -65,7 +65,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                 QPNode::Range(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
                     match &n.set {
-                        Some((set, acc)) => {
+                        Some((set, acc, _, _)) => {
                             let proofs = qp_bplus_proofs.get(&n.blk_height).with_context(|| {
                                 format!(
                                     "Cannot find the bplus tree proof map at height {:?}",
@@ -118,7 +118,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                 QPNode::Keyword(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
                     match &n.set {
-                        Some((s, a)) => {
+                        Some((s, a, _, _)) => {
                             let vo_keyword_node = VOKeywordNode {
                                 keyword: n.keyword.clone(),
                                 blk_height: n.blk_height,
@@ -166,7 +166,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                 QPNode::BlkRt(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
                     match &n.set {
-                        Some(set) => {
+                        Some((set, _, _)) => {
                             let acc;
                             match n.acc {
                                 Some(acc_val) => {
