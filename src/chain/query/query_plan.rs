@@ -64,3 +64,27 @@ pub struct QueryPlan<K: Num> {
     pub(crate) trie_proofs: HashMap<Height, trie_tree::proof::Proof>,
     pub(crate) bplus_proofs: HashMap<Height, HashMap<usize, bplus_tree::proof::Proof<K>>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use petgraph::{Graph, dot::{Config, Dot}};
+
+    #[test]
+    fn test_graph_remove() {
+        let mut graph = Graph::<u32, ()>::new();
+        let id0 = graph.add_node(0);
+        let id1 = graph.add_node(1);
+        let id2 = graph.add_node(2);
+        let id3 = graph.add_node(3);
+        let id4 = graph.add_node(4);
+        graph.extend_with_edges(&[
+            (id0, id1), (id0, id4),
+            (id1, id2), (id1, id3),
+        ]);
+        println!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
+        println!("after removing the root node");
+        graph.remove_node(id0);
+        println!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
+        assert_eq!(1, 1);
+    }
+}

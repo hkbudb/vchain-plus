@@ -431,7 +431,7 @@ impl<K: Num> QueryParam<K> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::chain::{
         query::{
             query_param::{Node, NotNode, OrNode, QueryParam},

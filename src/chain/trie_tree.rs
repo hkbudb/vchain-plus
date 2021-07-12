@@ -184,7 +184,7 @@ pub fn split_at_common_prefix2(a: &str, b: &str) -> (String, char, String, char,
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     #[test]
     fn test_common_prefix_len() {
         use super::common_prefix_len;
@@ -255,5 +255,3 @@ mod test {
     }
 }
 
-#[cfg(test)]
-mod tests;
