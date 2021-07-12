@@ -254,4 +254,3 @@ mod tests {
         assert_eq!(a.to_digest(), b.as_ref().to_digest());
     }
 }
-
