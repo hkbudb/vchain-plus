@@ -12,6 +12,7 @@ pub mod trie_tree;
 pub mod verify;
 
 pub const MAX_INLINE_FANOUT: usize = 16;
+pub const COST_COEFFICIENT: usize = 2;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Parameter {

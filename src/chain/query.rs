@@ -34,6 +34,8 @@ use std::{
     num::NonZeroU64,
 };
 
+use super::traits::ScanQueryInterface;
+
 #[allow(clippy::type_complexity)]
 fn query_final<K: Num, T: ReadInterface<K = K>>(
     chain: &T,
@@ -44,8 +46,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     let qp_inputs = query_plan.inputs;
     let qp_outputs = query_plan.outputs;
     let qp_dag = query_plan.dag;
-    let qp_trie_proofs = query_plan.trie_proofs;
-    let qp_bplus_proofs = query_plan.bplus_proofs;
     let qp_end_blk_height = query_plan.end_blk_height;
 
     let mut idx_map = HashMap::<NodeIndex, NodeIndex>::new();
@@ -56,164 +56,89 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     let mut time_win_map = HashMap::<Height, u64>::new();
     let mut merkle_proofs = HashMap::<Height, MerkleProof>::new();
 
-    for (h, p) in qp_trie_proofs.into_iter() {
-        trie_proofs.insert(h, p);
-    }
     for idx in qp_inputs {
         if let Some(node) = qp_dag.node_weight(idx) {
             match node {
                 QPNode::Range(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
-                    match &n.set {
-                        Some((set, acc, _, _)) => {
-                            let proofs = qp_bplus_proofs.get(&n.blk_height).with_context(|| {
-                                format!(
-                                    "Cannot find the bplus tree proof map at height {:?}",
-                                    n.blk_height
-                                )
-                            })?;
-                            let bplus_p = proofs.get(&n.dim).with_context(|| {
-                                format!(
-                                    "Cannot find the bplus tree proof at dim {}, height {}",
-                                    n.dim, n.blk_height
-                                )
-                            })?;
-                            let vo_range_node = VORangeNode {
-                                range: n.range,
-                                blk_height: n.blk_height,
-                                time_win: n.time_win,
-                                dim: n.dim,
-                                acc: *acc,
-                                proof: bplus_p.clone(),
-                            };
-                            let vo_idx = vo_dag.add_node(VONode::Range(vo_range_node));
-                            idx_map.insert(idx, vo_idx);
-                            set_map.insert(vo_idx, set.clone());
-                        }
-                        None => {
-                            let bplus_root = chain
-                                .read_block_content(n.blk_height)?
-                                .ads
-                                .read_bplus_root(n.time_win, n.dim)?;
-                            let (set, acc, proof) = bplus_tree::read::range_query(
-                                chain,
-                                bplus_root.bplus_tree_root_id,
-                                n.range,
-                                pk,
-                            )?;
-                            let vo_range_node = VORangeNode {
-                                range: n.range,
-                                blk_height: n.blk_height,
-                                time_win: n.time_win,
-                                dim: n.dim,
-                                acc,
-                                proof,
-                            };
-                            let vo_idx = vo_dag.add_node(VONode::Range(vo_range_node));
-                            idx_map.insert(idx, vo_idx);
-                            set_map.insert(vo_idx, set.clone());
-                        }
-                    }
+                    let bplus_root = chain
+                        .read_block_content(n.blk_height)?
+                        .ads
+                        .read_bplus_root(n.time_win, n.dim)?;
+                    let (set, acc, proof) = bplus_tree::read::range_query(
+                        chain,
+                        bplus_root.bplus_tree_root_id,
+                        n.range,
+                        pk,
+                    )?;
+                    let vo_range_node = VORangeNode {
+                        range: n.range,
+                        blk_height: n.blk_height,
+                        time_win: n.time_win,
+                        dim: n.dim,
+                        acc,
+                        proof,
+                    };
+                    let vo_idx = vo_dag.add_node(VONode::Range(vo_range_node));
+                    idx_map.insert(idx, vo_idx);
+                    set_map.insert(vo_idx, set.clone());
                 }
                 QPNode::Keyword(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
-                    match &n.set {
-                        Some((s, a, _, _)) => {
-                            let vo_keyword_node = VOKeywordNode {
-                                keyword: n.keyword.clone(),
-                                blk_height: n.blk_height,
-                                time_win: n.time_win,
-                                acc: *a,
-                            };
-                            let vo_idx = vo_dag.add_node(VONode::Keyword(vo_keyword_node));
-                            idx_map.insert(idx, vo_idx);
-                            set_map.insert(vo_idx, s.clone());
-                        }
-                        None => {
-                            let set;
-                            let acc;
-                            if let Some(ctx) = trie_ctxes.get_mut(&n.blk_height) {
-                                let trie_ctx = ctx;
-                                let (s, a) = trie_ctx.query(n.keyword.clone(), pk)?;
-                                set = s;
-                                acc = a;
-                            } else {
-                                let trie_root = chain
-                                    .read_block_content(n.blk_height)?
-                                    .ads
-                                    .read_trie_root(n.time_win)?;
-                                let mut trie_ctx = trie_tree::read::ReadContext::new(
-                                    chain,
-                                    trie_root.trie_root_id,
-                                );
-                                let (s, a) = trie_ctx.query(n.keyword.clone(), pk)?;
-                                set = s;
-                                acc = a;
-                                trie_ctxes.insert(n.blk_height, trie_ctx);
-                            }
-                            let vo_keyword_node = VOKeywordNode {
-                                keyword: n.keyword.clone(),
-                                blk_height: n.blk_height,
-                                time_win: n.time_win,
-                                acc,
-                            };
-                            let vo_idx = vo_dag.add_node(VONode::Keyword(vo_keyword_node));
-                            idx_map.insert(idx, vo_idx);
-                            set_map.insert(vo_idx, set.clone());
-                        }
+                    let set;
+                    let acc;
+                    if let Some(ctx) = trie_ctxes.get_mut(&n.blk_height) {
+                        let trie_ctx = ctx;
+                        let (s, a) = trie_ctx.query(n.keyword.clone(), pk)?;
+                        set = s;
+                        acc = a;
+                    } else {
+                        let trie_root = chain
+                            .read_block_content(n.blk_height)?
+                            .ads
+                            .read_trie_root(n.time_win)?;
+                        let mut trie_ctx =
+                            trie_tree::read::ReadContext::new(chain, trie_root.trie_root_id);
+                        let (s, a) = trie_ctx.query(n.keyword.clone(), pk)?;
+                        set = s;
+                        acc = a;
+                        trie_ctxes.insert(n.blk_height, trie_ctx);
                     }
+                    let vo_keyword_node = VOKeywordNode {
+                        keyword: n.keyword.clone(),
+                        blk_height: n.blk_height,
+                        time_win: n.time_win,
+                        acc,
+                    };
+                    let vo_idx = vo_dag.add_node(VONode::Keyword(vo_keyword_node));
+                    idx_map.insert(idx, vo_idx);
+                    set_map.insert(vo_idx, set.clone());
                 }
                 QPNode::BlkRt(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
-                    match &n.set {
-                        Some((set, _, _)) => {
-                            let acc;
-                            match n.acc {
-                                Some(acc_val) => {
-                                    acc = acc_val;
-                                }
-                                None => {
-                                    let blk_content = chain.read_block_content(n.blk_height)?;
-                                    acc = blk_content
-                                        .read_acc()
-                                        .context("The block does not have acc value")?;
-                                }
-                            }
-                            let vo_blk_rt_node = VOBlkRtNode {
-                                blk_height: n.blk_height,
-                                time_win: n.time_win,
-                                acc,
-                            };
-                            let vo_idx = vo_dag.add_node(VONode::BlkRt(vo_blk_rt_node));
-                            idx_map.insert(idx, vo_idx);
-                            set_map.insert(vo_idx, set.clone());
-                        }
-                        None => {
-                            let mut acc = AccValue::from_set(&Set::new(), pk);
-                            let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
-                            for i in 0..n.time_win {
-                                if n.blk_height.0 > i {
-                                    let blk_content =
-                                        chain.read_block_content(Height(n.blk_height.0 - i))?;
-                                    let mut obj_id_nums = blk_content.read_obj_id_nums();
-                                    total_obj_id_nums.append(&mut obj_id_nums);
-                                    let sub_acc = blk_content
-                                        .read_acc()
-                                        .context("The block does not have acc value")?;
-                                    acc = acc + sub_acc;
-                                }
-                            }
-                            let set = Set::from_iter(total_obj_id_nums.into_iter());
-                            let vo_blk_root = VOBlkRtNode {
-                                blk_height: n.blk_height,
-                                time_win: n.time_win,
-                                acc,
-                            };
-                            let vo_idx = vo_dag.add_node(VONode::BlkRt(vo_blk_root));
-                            idx_map.insert(idx, vo_idx);
-                            set_map.insert(vo_idx, set);
+                    let mut acc = AccValue::from_set(&Set::new(), pk);
+                    let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
+                    for i in 0..n.time_win {
+                        if n.blk_height.0 > i {
+                            let blk_content =
+                                chain.read_block_content(Height(n.blk_height.0 - i))?;
+                            let mut obj_id_nums = blk_content.read_obj_id_nums();
+                            total_obj_id_nums.append(&mut obj_id_nums);
+                            let sub_acc = blk_content
+                                .read_acc()
+                                .context("The block does not have acc value")?;
+                            acc = acc + sub_acc;
                         }
                     }
+                    let set = Set::from_iter(total_obj_id_nums.into_iter());
+                    let vo_blk_root = VOBlkRtNode {
+                        blk_height: n.blk_height,
+                        time_win: n.time_win,
+                        acc,
+                    };
+                    let vo_idx = vo_dag.add_node(VONode::BlkRt(vo_blk_root));
+                    idx_map.insert(idx, vo_idx);
+                    set_map.insert(vo_idx, set);
                 }
                 QPNode::Union(_) => {
                     let mut child_idxs = Vec::<NodeIndex>::new();
@@ -521,7 +446,7 @@ fn select_win_size<K: Num>(
 }
 
 #[allow(clippy::type_complexity)]
-pub fn query<K: Num, T: ReadInterface<K = K>>(
+pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
     chain: T,
     query_param: QueryParam<K>,
     pk: &AccPublicKey,
@@ -533,7 +458,7 @@ pub fn query<K: Num, T: ReadInterface<K = K>>(
     let mut result = Vec::<(HashMap<ObjId, Object<K>>, VO<K>)>::new();
     for (q_param, s_win_size, e_win_size) in query_params {
         let sub_timer = howlong::ProcessCPUTimer::new();
-        let query = q_param.into_query_basic(s_win_size, e_win_size)?;
+        let (query, set) = q_param.into_query_basic(s_win_size, e_win_size)?;
         debug!(
             "query dag: {:?}",
             Dot::with_config(&query.query_dag, &[Config::EdgeNoLabel])
@@ -541,13 +466,20 @@ pub fn query<K: Num, T: ReadInterface<K = K>>(
         let time = sub_timer.elapsed();
         debug!("Stage1: {}", time);
         let sub_timer = howlong::ProcessCPUTimer::new();
-        let query_plan = query_to_qp(query)?;
+        let mut query_plan = query_to_qp(query, set)?;
         debug!(
             "query plan dag: {:?}",
             Dot::with_config(&query_plan.dag, &[Config::EdgeNoLabel])
         );
         let time = sub_timer.elapsed();
         debug!("Stage2: {}", time);
+        let sub_timer = howlong::ProcessCPUTimer::new();
+        let cost = query_plan.estimate_cost(&chain)?;
+        let time = sub_timer.elapsed();
+        info!(
+            "cost estimate for the query plan: {}, time elapsed: {}",
+            cost, time
+        );
         let sub_timer = howlong::ProcessCPUTimer::new();
         let res = query_final(&chain, query_plan, pk)?;
         let time = sub_timer.elapsed();

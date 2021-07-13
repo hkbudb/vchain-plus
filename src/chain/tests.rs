@@ -3,7 +3,8 @@ use super::{
     bplus_tree::{BPlusTreeNode, BPlusTreeNodeId},
     id_tree::{IdTreeNode, IdTreeNodeId},
     object::Object,
-    traits::{ReadInterface, WriteInterface},
+    query::query_plan::{QPBlkRtNode, QPKeywordNode, QPRangeNode},
+    traits::{ReadInterface, ScanQueryInterface, WriteInterface},
     trie_tree::{TrieNode, TrieNodeId},
     Parameter,
 };
@@ -20,7 +21,7 @@ use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use rand::{prelude::*, rngs::StdRng};
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const Q: u64 = 40;
 static SEC_KEY: Lazy<AccSecretKeyWithPowCache> = Lazy::new(|| {
@@ -216,6 +217,54 @@ impl WriteInterface for &mut FakeChain {
     fn write_object(&mut self, obj_hash: Digest, obj: &Object<Self::K>) -> Result<()> {
         self.objects.insert(obj_hash, obj.clone());
         Ok(())
+    }
+}
+
+impl ScanQueryInterface for &FakeChain {
+    type K = u32;
+    fn range_query(&self, query: &QPRangeNode<u32>) -> Result<HashSet<Digest>> {
+        let mut res = HashSet::<Digest>::new();
+        for (hash, o) in &self.objects {
+            if o.blk_height <= query.blk_height
+                && Height(o.blk_height.0 + query.time_win) >= Height(query.blk_height.0 + 1)
+            {
+                let o_num_val = o.num_data.get(query.dim).with_context(|| {
+                    format!("Object does not have numerical value at dim {}", query.dim)
+                })?;
+                if query.range.is_in_range(*o_num_val) {
+                    res.insert(*hash);
+                }
+            }
+        }
+        Ok(res)
+    }
+
+    fn keyword_query(&self, query: &QPKeywordNode) -> Result<HashSet<Digest>> {
+        let mut res = HashSet::<Digest>::new();
+        for (hash, o) in &self.objects {
+            if o.blk_height <= query.blk_height
+                && Height(o.blk_height.0 + query.time_win) >= Height(query.blk_height.0 + 1)
+            {
+                for keyword in o.keyword_data.iter() {
+                    if keyword.clone() == query.keyword {
+                        res.insert(*hash);
+                    }
+                }
+            }
+        }
+        Ok(res)
+    }
+
+    fn root_query(&self, query: &QPBlkRtNode) -> Result<HashSet<Digest>> {
+        let mut res = HashSet::<Digest>::new();
+        for (hash, o) in &self.objects {
+            if o.blk_height <= query.blk_height
+                && Height(o.blk_height.0 + query.time_win) >= Height(query.blk_height.0 + 1)
+            {
+                res.insert(*hash);
+            }
+        }
+        Ok(res)
     }
 }
 

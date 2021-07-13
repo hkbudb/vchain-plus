@@ -1,15 +1,18 @@
-use crate::chain::{
-    block::Height,
-    query::query_obj::{
-        BlkRtNode, DiffNode, IntersecNode, KeywordNode, Query, QueryNode, RangeNode, UnionNode,
+use crate::{
+    chain::{
+        block::Height,
+        query::query_obj::{
+            BlkRtNode, DiffNode, IntersecNode, KeywordNode, Query, QueryNode, RangeNode, UnionNode,
+        },
+        range::Range,
+        traits::Num,
     },
-    range::Range,
-    traits::Num,
+    digest::Digest,
 };
 use anyhow::{bail, Result};
 use petgraph::{graph::NodeIndex, Graph};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -54,11 +57,13 @@ impl<K: Num> QueryParam<K> {
             keyword_exp: self.keyword_exp.clone(),
         }
     }
+
+    #[allow(clippy::type_complexity)]
     pub fn into_query_basic(
         self,
         start_win_size: Option<u64>,
         end_win_size: u64,
-    ) -> Result<Query<K>> {
+    ) -> Result<(Query<K>, HashMap<NodeIndex, HashSet<Digest>>)> {
         let end_blk_height = Height(self.end_blk);
         let keyword_exp_opt = self.keyword_exp;
         let mut query_dag = Graph::<QueryNode<K>, ()>::new();
@@ -426,7 +431,8 @@ impl<K: Num> QueryParam<K> {
             end_blk_height,
             query_dag,
         };
-        Ok(res_query)
+        let res_map = HashMap::<NodeIndex, HashSet<Digest>>::new();
+        Ok((res_query, res_map))
     }
 }
 
@@ -524,7 +530,7 @@ mod tests {
         let time_wins: Vec<u64> = vec![4];
         let query_params = select_win_size(time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
-            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let (query, _) = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
             println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
         }
@@ -539,7 +545,7 @@ mod tests {
         let time_wins: Vec<u64> = vec![4];
         let query_params = select_win_size(time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
-            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let (query, _) = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
             println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
         }
@@ -554,7 +560,7 @@ mod tests {
         let time_wins: Vec<u64> = vec![4];
         let query_params = select_win_size(time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
-            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let (query, _) = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
             println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
         }
@@ -571,7 +577,7 @@ mod tests {
         let time_wins: Vec<u64> = vec![4];
         let query_params = select_win_size(time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
-            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let (query, _) = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
             println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
         }

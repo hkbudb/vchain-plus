@@ -4,6 +4,7 @@ use crate::{
         bplus_tree::{BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader},
         id_tree::{IdTreeNode, IdTreeNodeId, IdTreeNodeLoader},
         object::Object,
+        query::query_plan::{QPBlkRtNode, QPKeywordNode, QPRangeNode},
         trie_tree::TrieNodeLoader,
         trie_tree::{TrieNode, TrieNodeId},
         Parameter,
@@ -12,7 +13,7 @@ use crate::{
 };
 use anyhow::Result;
 use core::str::FromStr;
-use std::fmt;
+use std::{collections::HashSet, fmt};
 
 pub trait Num:
     num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr
@@ -73,4 +74,11 @@ pub trait WriteInterface {
     ) -> Result<()>;
     fn write_trie_node(&mut self, n_id: TrieNodeId, node: &TrieNode) -> Result<()>;
     fn write_object(&mut self, obj_hash: Digest, obj: &Object<Self::K>) -> Result<()>;
+}
+
+pub trait ScanQueryInterface {
+    type K: Num;
+    fn range_query(&self, query: &QPRangeNode<Self::K>) -> Result<HashSet<Digest>>;
+    fn keyword_query(&self, query: &QPKeywordNode) -> Result<HashSet<Digest>>;
+    fn root_query(&self, query: &QPBlkRtNode) -> Result<HashSet<Digest>>;
 }

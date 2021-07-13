@@ -1,17 +1,18 @@
-use crate::chain::{
-    block::Height,
-    bplus_tree,
-    query::query_plan::{
-        QPBlkRtNode, QPDiff, QPIntersec, QPKeywordNode, QPNode, QPRangeNode, QPUnion, QueryPlan,
+use crate::{
+    chain::{
+        block::Height,
+        query::query_plan::{
+            QPBlkRtNode, QPDiff, QPIntersec, QPKeywordNode, QPNode, QPRangeNode, QPUnion, QueryPlan,
+        },
+        range::Range,
+        traits::Num,
     },
-    range::Range,
-    traits::Num,
-    trie_tree,
+    digest::Digest,
 };
 use anyhow::{bail, Context, Result};
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum QueryNode<K: Num> {
@@ -59,7 +60,10 @@ pub struct Query<K: Num> {
     pub(crate) query_dag: Graph<QueryNode<K>, ()>,
 }
 
-pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
+pub fn query_to_qp<K: Num>(
+    query: Query<K>,
+    set_map: HashMap<NodeIndex, HashSet<Digest>>,
+) -> Result<QueryPlan<K>> {
     let mut qp_dag = Graph::<QPNode<K>, ()>::new();
     let query_dag = query.query_dag;
     let query_end_blk_height = query.end_blk_height;
@@ -83,34 +87,42 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
         if let Some(node) = query_dag.node_weight(idx) {
             match node {
                 QueryNode::Range(n) => {
+                    let set = set_map
+                        .get(&idx)
+                        .map(|hash_set| (hash_set.clone(), 0_usize, 0_usize));
                     let qp_range_node = QPRangeNode {
                         range: n.range,
                         blk_height: n.blk_height,
                         time_win: n.time_win,
                         dim: n.dim,
-                        set: None,
+                        set,
                     };
                     let qp_idx = qp_dag.add_node(QPNode::Range(qp_range_node));
                     qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                 }
                 QueryNode::Keyword(n) => {
+                    let set = set_map
+                        .get(&idx)
+                        .map(|hash_set| (hash_set.clone(), 0_usize, 0_usize));
                     let qp_keyword_node = QPKeywordNode {
                         keyword: n.keyword.clone(),
                         blk_height: n.blk_height,
                         time_win: n.time_win,
-                        set: None,
+                        set,
                     };
                     let qp_idx = qp_dag.add_node(QPNode::Keyword(Box::new(qp_keyword_node)));
                     qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                 }
                 QueryNode::BlkRt(n) => {
+                    let set = set_map
+                        .get(&idx)
+                        .map(|hash_set| (hash_set.clone(), 0_usize, 0_usize));
                     let qp_blk_rt_node = QPBlkRtNode {
                         blk_height: n.blk_height,
                         time_win: n.time_win,
-                        set: None,
-                        acc: None,
+                        set,
                     };
                     let qp_idx = qp_dag.add_node(QPNode::BlkRt(Box::new(qp_blk_rt_node)));
                     qp_inputs.push(qp_idx);
@@ -163,15 +175,11 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
         qp_outputs.push(*idx_map.get(q_idx).context("index map not matched")?);
     }
 
-    let qp_trie_proofs = HashMap::<Height, trie_tree::proof::Proof>::new();
-    let qp_bplus_proofs = HashMap::<Height, HashMap<usize, bplus_tree::proof::Proof<K>>>::new();
     let qp = QueryPlan {
         end_blk_height: query_end_blk_height,
         inputs: qp_inputs,
         outputs: qp_outputs,
         dag: qp_dag,
-        trie_proofs: qp_trie_proofs,
-        bplus_proofs: qp_bplus_proofs,
     };
 
     Ok(qp)
