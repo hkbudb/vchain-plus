@@ -154,9 +154,10 @@ impl<K: Num> QueryPlan<K> {
                         let (s2, _, _) = qp_c2.get_set().context("Cannot find set in dag")?;
                         let res_set: HashSet<Digest> = s1.union(&s2).cloned().collect();
                         let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
-                        let final_cost = s1.len() * s2.len();
+                        let mut final_cost = s1.len() * s2.len();
                         if self.outputs.contains(idx) {
-                            cost += final_cost
+                            final_cost = 0;
+                            cost += final_cost;
                         } else {
                             cost += inter_cost;
                         }

@@ -325,12 +325,13 @@ impl ScanQueryInterface for &SimChain {
     }
 
     fn root_query(&self, query: &QPBlkRtNode) -> Result<HashSet<Digest>> {
+        debug!("Root query is: {:?}", query);
         let mut res = HashSet::<Digest>::new();
         let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
         for (_key, val) in db_iter {
             let o = bincode::deserialize::<Object<u32>>(&val[..])?;
-            if o.blk_height <= query.blk_height
-                && Height(o.blk_height.0 + query.time_win) >= Height(query.blk_height.0 + 1)
+            if o.blk_height.0 <= query.blk_height.0
+                && o.blk_height.0 + query.time_win >= query.blk_height.0 + 1
             {
                 res.insert(o.to_digest());
             }
