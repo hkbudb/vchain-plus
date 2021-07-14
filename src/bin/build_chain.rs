@@ -73,9 +73,10 @@ fn build_chain(
     res_path: &Path,
     param: &Parameter,
 ) -> Result<()> {
-    if !db_path.exists() {
-        fs::create_dir_all(db_path)?;
+    if db_path.exists() {
+        fs::remove_dir_all(db_path)?;
     }
+    fs::create_dir_all(db_path)?;
     let mut chain = SimChain::create(db_path, param.clone())?;
     chain.set_parameter(param)?;
     let mut prev_hash = Digest::zero();
