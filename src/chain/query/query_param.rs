@@ -1,12 +1,15 @@
-use crate::chain::{
-    block::Height,
-    query::query_obj::{
-        BlkRtNode, DiffNode, IntersecNode, KeywordNode, Query, QueryNode, RangeNode, UnionNode,
+use crate::{
+    acc::{AccPublicKey, Set},
+    chain::{
+        block::Height,
+        query::query_obj::{
+            BlkRtNode, DiffNode, IntersecNode, KeywordNode, Query, QueryNode, RangeNode, UnionNode,
+        },
+        range::Range,
+        traits::{Num, ReadInterface},
     },
-    range::Range,
-    traits::Num,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use petgraph::{graph::NodeIndex, Graph};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -432,22 +435,25 @@ impl<K: Num> QueryParam<K> {
         Ok(res_query)
     }
 
-    /*
-    pub fn into_query_trimmed<T: ScanQueryInterface<K = K>>(
+    pub fn into_query_trimmed<T: ReadInterface<K = K>>(
         self,
         chain: &T,
+        pk: &AccPublicKey,
         start_win_size: Option<u64>,
         end_win_size: u64,
-    ) -> Result<(Query<K>, HashMap<NodeIndex, HashSet<Digest>>)> {
+    ) -> Result<Query<K>> {
         let start_blk_height = Height(self.start_blk);
         let end_blk_height = Height(self.end_blk);
         let keyword_exp_opt = self.keyword_exp;
         let mut query_dag = Graph::<QueryNode<K>, ()>::new();
         let mut heights = Vec::<(u64, Height)>::new();
         if let Some(win_size) = start_win_size {
-            heights.push((win_size, start_blk_height));
+            if start_blk_height.0 > 1 {
+                heights.push((win_size, Height(start_blk_height.0 - 1)));
+            }
         }
         heights.push((end_win_size, end_blk_height));
+        debug!("heights: {:?}", heights);
 
         let has_keyword_query: bool;
         let has_range_query: bool;
@@ -463,6 +469,7 @@ impl<K: Num> QueryParam<K> {
             has_range_query = true;
         }
 
+        let mut sub_root_idxes = Vec::<NodeIndex>::new();
         for (win_size, height) in heights {
             let mut queue = VecDeque::<(Node, NodeIndex)>::new();
             let mut idx_map = HashMap::<String, NodeIndex>::new();
@@ -571,38 +578,44 @@ impl<K: Num> QueryParam<K> {
                     }
                     Node::Not(n) => {
                         if height == end_blk_height {
-
+                            let idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            keyword_root_idx = idx;
+                            let NotNode(c) = *n;
+                            let c_idx: NodeIndex;
+                            match &c {
+                                Node::And(_) => {
+                                    c_idx =
+                                        query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                                }
+                                Node::Or(_) => {
+                                    c_idx = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                                }
+                                Node::Not(_) => {
+                                    c_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                                }
+                                Node::Input(s) => {
+                                    c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                    }));
+                                    idx_map.insert(s.to_string(), c_idx);
+                                }
+                            }
+                            query_dag.add_edge(idx, c_idx, ());
+                            let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
+                                blk_height: height,
+                                time_win: win_size,
+                            }));
+                            query_dag.add_edge(idx, blk_rt_idx, ());
+                            queue.push_back((c, c_idx));
+                        } else {
+                            let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
+                                blk_height: height,
+                                time_win: win_size,
+                            }));
+                            keyword_root_idx = blk_rt_idx;
                         }
-                        let idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
-                        keyword_root_idx = idx;
-                        let NotNode(c) = *n;
-                        let c_idx: NodeIndex;
-                        match &c {
-                            Node::And(_) => {
-                                c_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
-                            }
-                            Node::Or(_) => {
-                                c_idx = query_dag.add_node(QueryNode::Union(UnionNode {}));
-                            }
-                            Node::Not(_) => {
-                                c_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
-                            }
-                            Node::Input(s) => {
-                                c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                    keyword: s.to_string(),
-                                    blk_height: height,
-                                    time_win: win_size,
-                                }));
-                                idx_map.insert(s.to_string(), c_idx);
-                            }
-                        }
-                        query_dag.add_edge(idx, c_idx, ());
-                        let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
-                            blk_height: height,
-                            time_win: win_size,
-                        }));
-                        query_dag.add_edge(idx, blk_rt_idx, ());
-                        queue.push_back((c, c_idx));
                     }
                     Node::Input(s) => {
                         let idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
@@ -761,18 +774,98 @@ impl<K: Num> QueryParam<K> {
                         query_dag.add_edge(idx, blk_rt_idx, ());
                         queue.push_back((c, c_idx));
                     }
-                    (Node::Input(_), idx) => {}
+                    (Node::Input(_), _idx) => {}
                 }
             }
 
-            if has_range_query == true {
-
+            if has_range_query {
+                let mut range_nodes = Vec::<(usize, NodeIndex, Set)>::new();
+                for (i, r) in self.range.iter().enumerate() {
+                    let mut range_node = RangeNode {
+                        range: *r,
+                        blk_height: height,
+                        time_win: win_size,
+                        dim: i,
+                        set: None,
+                    };
+                    let (range_size, set) = range_node.estimate_size(chain, &pk)?;
+                    let range_idx = query_dag.add_node(QueryNode::Range(range_node));
+                    range_nodes.push((range_size, range_idx, set));
+                }
+                let sorted_idxes = get_range_idxs_sorted(range_nodes);
+                let mut range_lock = false;
+                for idx in sorted_idxes {
+                    if range_lock {
+                        let intersec_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                        query_dag.add_edge(intersec_idx, range_root_idx, ());
+                        query_dag.add_edge(intersec_idx, idx, ());
+                        range_root_idx = intersec_idx;
+                        continue;
+                    }
+                    range_root_idx = idx;
+                    range_lock = true;
+                }
             }
-        }
+            let sub_root_idx: NodeIndex;
 
-        todo!()
+            if has_keyword_query && has_range_query {
+                debug!("has both keyword and range query");
+                sub_root_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                query_dag.add_edge(sub_root_idx, range_root_idx, ());
+                query_dag.add_edge(sub_root_idx, keyword_root_idx, ());
+            } else if has_keyword_query {
+                debug!("has keyword query only");
+                sub_root_idx = keyword_root_idx;
+            } else if has_range_query {
+                debug!("has range query only");
+                sub_root_idx = range_root_idx;
+            } else {
+                debug!("invalid query");
+                bail!("query invalid");
+            }
+            sub_root_idxes.push(sub_root_idx);
+        }
+        if sub_root_idxes.len() > 1 {
+            let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+            query_dag.add_edge(diff_idx, *sub_root_idxes.get(0).context("")?, ());
+            query_dag.add_edge(diff_idx, *sub_root_idxes.get(1).context("")?, ());
+        }
+        let res_query = Query {
+            end_blk_height,
+            query_dag,
+        };
+
+        Ok(res_query)
     }
-    */
+}
+
+fn get_range_idxs_sorted(mut vec: Vec<(usize, NodeIndex, Set)>) -> Vec<NodeIndex> {
+    let (vec_unsorted, cost_unsorted) = get_intersec_cost(&vec);
+    vec.sort_by(|a, b| a.0.cmp(&b.0));
+    let (vec_sorted, cost_sorted) = get_intersec_cost(&vec);
+    if cost_unsorted < cost_sorted {
+        vec_unsorted
+    } else {
+        vec_sorted
+    }
+}
+
+fn get_intersec_cost(vec: &[(usize, NodeIndex, Set)]) -> (Vec<NodeIndex>, usize) {
+    let mut res = Vec::<NodeIndex>::new();
+    let mut res_cost: usize = 0;
+    let mut range_lock = false;
+    let mut cur_set = Set::new();
+    for (_size, idx, set) in vec {
+        res.push(*idx);
+        if range_lock {
+            res_cost += cur_set.len() * set.len();
+            cur_set = (&cur_set) & (set);
+            continue;
+        }
+        cur_set = set.clone();
+        range_lock = true;
+    }
+    (res, res_cost)
 }
 
 #[cfg(test)]

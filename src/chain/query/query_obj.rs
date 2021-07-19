@@ -1,4 +1,6 @@
-use crate::{acc::{AccPublicKey, AccValue, Set}, chain::{
+use crate::{
+    acc::{AccPublicKey, AccValue, Set},
+    chain::{
         block::Height,
         bplus_tree,
         query::query_plan::{
@@ -7,7 +9,8 @@ use crate::{acc::{AccPublicKey, AccValue, Set}, chain::{
         range::Range,
         traits::{Num, ReadInterface},
         trie_tree,
-    }};
+    },
+};
 use anyhow::{bail, Context, Result};
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
@@ -33,20 +36,28 @@ pub struct RangeNode<K: Num> {
 }
 
 impl<K: Num> RangeNode<K> {
-    pub fn estimate_size<T: ReadInterface<K = K>>(&mut self, chain: &T, pk: &AccPublicKey) -> Result<usize> {
+    pub fn estimate_size<T: ReadInterface<K = K>>(
+        &mut self,
+        chain: &T,
+        pk: &AccPublicKey,
+    ) -> Result<(usize, Set)> {
         if self.set.is_none() {
             let bplus_root = chain
                 .read_block_content(self.blk_height)?
                 .ads
                 .read_bplus_root(self.time_win, self.dim)?;
-            let (s, a, p) =
-                bplus_tree::read::range_query(chain, bplus_root.bplus_tree_root_id, self.range, pk)?;
+            let (s, a, p) = bplus_tree::read::range_query(
+                chain,
+                bplus_root.bplus_tree_root_id,
+                self.range,
+                pk,
+            )?;
             let size = s.len();
-            self.set = Some((s, a, p));
-            Ok(size)
+            self.set = Some((s.clone(), a, p));
+            Ok((size, s))
         } else {
             let set_ref = self.set.as_ref().context("No set found")?;
-            Ok(set_ref.0.len())
+            Ok((set_ref.0.len(), set_ref.0.clone()))
         }
     }
 }

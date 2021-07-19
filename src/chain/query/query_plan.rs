@@ -286,6 +286,11 @@ impl<K: Num> QueryPlan<K> {
             }
         }
 
+        for (height, trie_ctx) in trie_ctxes {
+            let trie_proof = trie_ctx.into_proof();
+            self.trie_proofs.insert(height, trie_proof);
+        }
+
         Ok(cost)
     }
 }

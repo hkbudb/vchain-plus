@@ -367,9 +367,8 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
         trie_proofs.insert(height, trie_proof);
     }
 
-    if trie_proofs.is_empty() {
-        debug!("no keyword query");
-        for (height, time_win) in &time_win_map {
+    for (height, time_win) in &time_win_map {
+        if trie_proofs.get(height).is_none() {
             let trie_root = chain
                 .read_block_content(*height)?
                 .ads
@@ -501,6 +500,7 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
     for (q_param, s_win_size, e_win_size) in query_params {
         let sub_timer = howlong::ProcessCPUTimer::new();
         let query = q_param.into_query_basic(s_win_size, e_win_size)?;
+        //let query = q_param.into_query_trimmed(&chain, pk, s_win_size, e_win_size)?;
         debug!(
             "query dag: {:?}",
             Dot::with_config(&query.query_dag, &[Config::EdgeNoLabel])
@@ -518,7 +518,7 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
         let sub_timer = howlong::ProcessCPUTimer::new();
         let cost = query_plan.estimate_cost(&chain, pk)?;
         let time = sub_timer.elapsed();
-        info!(
+        debug!(
             "cost estimate for the query plan: {}, time elapsed: {}",
             cost, time
         );
