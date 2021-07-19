@@ -4,7 +4,7 @@ use crate::{
         bplus_tree::{BPlusTreeNode, BPlusTreeNodeId, BPlusTreeNodeLoader},
         id_tree::{IdTreeNode, IdTreeNodeId, IdTreeNodeLoader},
         object::Object,
-        query::query_plan::{QPBlkRtNode, QPKeywordNode, QPRangeNode},
+        range::Range,
         trie_tree::TrieNodeLoader,
         trie_tree::{TrieNode, TrieNodeId},
         Parameter,
@@ -78,7 +78,18 @@ pub trait WriteInterface {
 
 pub trait ScanQueryInterface {
     type K: Num;
-    fn range_query(&self, query: &QPRangeNode<Self::K>) -> Result<HashSet<Digest>>;
-    fn keyword_query(&self, query: &QPKeywordNode) -> Result<HashSet<Digest>>;
-    fn root_query(&self, query: &QPBlkRtNode) -> Result<HashSet<Digest>>;
+    fn range_query(
+        &self,
+        query: Range<Self::K>,
+        height: Height,
+        win_size: u64,
+        dim: usize,
+    ) -> Result<HashSet<Digest>>;
+    fn keyword_query(
+        &self,
+        keyword: &str,
+        height: Height,
+        win_size: u64,
+    ) -> Result<HashSet<Digest>>;
+    fn root_query(&self, height: Height, win_size: u64) -> Result<HashSet<Digest>>;
 }

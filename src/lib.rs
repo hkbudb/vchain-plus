@@ -14,7 +14,7 @@ use chain::{
     bplus_tree::{BPlusTreeNode, BPlusTreeNodeId},
     id_tree::{IdTreeNode, IdTreeNodeId},
     object::Object,
-    query::query_plan::{QPBlkRtNode, QPKeywordNode, QPRangeNode},
+    range::Range,
     traits::{ReadInterface, ScanQueryInterface, WriteInterface},
     trie_tree::{TrieNode, TrieNodeId},
     Parameter,
@@ -287,18 +287,22 @@ impl WriteInterface for &mut SimChain {
 
 impl ScanQueryInterface for &SimChain {
     type K = u32;
-    fn range_query(&self, query: &QPRangeNode<u32>) -> Result<HashSet<Digest>> {
+    fn range_query(
+        &self,
+        query: Range<Self::K>,
+        height: Height,
+        win_size: u64,
+        dim: usize,
+    ) -> Result<HashSet<Digest>> {
         let mut res = HashSet::<Digest>::new();
         let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
         for (_key, val) in db_iter {
             let o = bincode::deserialize::<Object<u32>>(&val[..])?;
-            if o.blk_height <= query.blk_height
-                && Height(o.blk_height.0 + query.time_win) >= Height(query.blk_height.0 + 1)
-            {
-                let o_num_val = o.num_data.get(query.dim).with_context(|| {
-                    format!("Object does not have numerical value at dim {}", query.dim)
+            if o.blk_height <= height && Height(o.blk_height.0 + win_size) >= Height(height.0 + 1) {
+                let o_num_val = o.num_data.get(dim).with_context(|| {
+                    format!("Object does not have numerical value at dim {}", dim)
                 })?;
-                if query.range.is_in_range(*o_num_val) {
+                if query.is_in_range(*o_num_val) {
                     res.insert(o.to_digest());
                 }
             }
@@ -306,16 +310,19 @@ impl ScanQueryInterface for &SimChain {
         Ok(res)
     }
 
-    fn keyword_query(&self, query: &QPKeywordNode) -> Result<HashSet<Digest>> {
+    fn keyword_query(
+        &self,
+        keyword: &str,
+        height: Height,
+        win_size: u64,
+    ) -> Result<HashSet<Digest>> {
         let mut res = HashSet::<Digest>::new();
         let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
         for (_key, val) in db_iter {
             let o = bincode::deserialize::<Object<u32>>(&val[..])?;
-            if o.blk_height <= query.blk_height
-                && Height(o.blk_height.0 + query.time_win) >= Height(query.blk_height.0 + 1)
-            {
-                for keyword in o.keyword_data.iter() {
-                    if keyword.clone() == query.keyword {
+            if o.blk_height <= height && Height(o.blk_height.0 + win_size) >= Height(height.0 + 1) {
+                for k in o.keyword_data.iter() {
+                    if keyword == k {
                         res.insert(o.to_digest());
                     }
                 }
@@ -324,15 +331,12 @@ impl ScanQueryInterface for &SimChain {
         Ok(res)
     }
 
-    fn root_query(&self, query: &QPBlkRtNode) -> Result<HashSet<Digest>> {
-        debug!("Root query is: {:?}", query);
+    fn root_query(&self, height: Height, win_size: u64) -> Result<HashSet<Digest>> {
         let mut res = HashSet::<Digest>::new();
         let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
         for (_key, val) in db_iter {
             let o = bincode::deserialize::<Object<u32>>(&val[..])?;
-            if o.blk_height.0 <= query.blk_height.0
-                && o.blk_height.0 + query.time_win >= query.blk_height.0 + 1
-            {
+            if o.blk_height <= height && o.blk_height.0 + win_size >= height.0 + 1 {
                 res.insert(o.to_digest());
             }
         }
