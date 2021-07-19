@@ -42,7 +42,7 @@ impl<K: Num> Proof<K> {
             .value_acc_completeness(query_range, pk)?
             != acc_val
         {
-            bail!("Acc value not matched");
+            bail!("B plus tree verification: acc value not matched");
         }
         Ok(self.root_hash())
     }
