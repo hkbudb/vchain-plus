@@ -3,7 +3,7 @@ use super::{
     bplus_tree::{BPlusTreeNode, BPlusTreeNodeId},
     id_tree::{IdTreeNode, IdTreeNodeId},
     object::Object,
-    query::query_plan::{QPBlkRtNode, QPKeywordNode, QPRangeNode},
+    range::Range,
     traits::{ReadInterface, ScanQueryInterface, WriteInterface},
     trie_tree::{TrieNode, TrieNodeId},
     Parameter,
@@ -222,16 +222,20 @@ impl WriteInterface for &mut FakeChain {
 
 impl ScanQueryInterface for &FakeChain {
     type K = u32;
-    fn range_query(&self, query: &QPRangeNode<u32>) -> Result<HashSet<Digest>> {
+    fn range_query(
+        &self,
+        query: Range<Self::K>,
+        height: Height,
+        win_size: u64,
+        dim: usize,
+    ) -> Result<HashSet<Digest>> {
         let mut res = HashSet::<Digest>::new();
         for (hash, o) in &self.objects {
-            if o.blk_height <= query.blk_height
-                && Height(o.blk_height.0 + query.time_win) >= Height(query.blk_height.0 + 1)
-            {
-                let o_num_val = o.num_data.get(query.dim).with_context(|| {
-                    format!("Object does not have numerical value at dim {}", query.dim)
+            if o.blk_height <= height && Height(o.blk_height.0 + win_size) >= Height(height.0 + 1) {
+                let o_num_val = o.num_data.get(dim).with_context(|| {
+                    format!("Object does not have numerical value at dim {}", dim)
                 })?;
-                if query.range.is_in_range(*o_num_val) {
+                if query.is_in_range(*o_num_val) {
                     res.insert(*hash);
                 }
             }
@@ -239,14 +243,17 @@ impl ScanQueryInterface for &FakeChain {
         Ok(res)
     }
 
-    fn keyword_query(&self, query: &QPKeywordNode) -> Result<HashSet<Digest>> {
+    fn keyword_query(
+        &self,
+        keyword: &str,
+        height: Height,
+        win_size: u64,
+    ) -> Result<HashSet<Digest>> {
         let mut res = HashSet::<Digest>::new();
         for (hash, o) in &self.objects {
-            if o.blk_height <= query.blk_height
-                && Height(o.blk_height.0 + query.time_win) >= Height(query.blk_height.0 + 1)
-            {
-                for keyword in o.keyword_data.iter() {
-                    if keyword.clone() == query.keyword {
+            if o.blk_height <= height && Height(o.blk_height.0 + win_size) >= Height(height.0 + 1) {
+                for k in o.keyword_data.iter() {
+                    if keyword == k {
                         res.insert(*hash);
                     }
                 }
@@ -255,12 +262,10 @@ impl ScanQueryInterface for &FakeChain {
         Ok(res)
     }
 
-    fn root_query(&self, query: &QPBlkRtNode) -> Result<HashSet<Digest>> {
+    fn root_query(&self, height: Height, win_size: u64) -> Result<HashSet<Digest>> {
         let mut res = HashSet::<Digest>::new();
         for (hash, o) in &self.objects {
-            if o.blk_height <= query.blk_height
-                && Height(o.blk_height.0 + query.time_win) >= Height(query.blk_height.0 + 1)
-            {
+            if o.blk_height <= height && Height(o.blk_height.0 + win_size) >= Height(height.0 + 1) {
                 res.insert(*hash);
             }
         }

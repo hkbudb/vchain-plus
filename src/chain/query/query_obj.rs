@@ -1,14 +1,13 @@
-use crate::{
-    chain::{
+use crate::{acc::{AccPublicKey, AccValue, Set}, chain::{
         block::Height,
+        bplus_tree,
         query::query_plan::{
             QPBlkRtNode, QPDiff, QPIntersec, QPKeywordNode, QPNode, QPRangeNode, QPUnion, QueryPlan,
         },
         range::Range,
-        traits::Num,
-    },
-    digest::Digest,
-};
+        traits::{Num, ReadInterface},
+        trie_tree,
+    }};
 use anyhow::{bail, Context, Result};
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
@@ -30,6 +29,26 @@ pub struct RangeNode<K: Num> {
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
     pub(crate) dim: usize,
+    pub(crate) set: Option<(Set, AccValue, bplus_tree::proof::Proof<K>)>,
+}
+
+impl<K: Num> RangeNode<K> {
+    pub fn estimate_size<T: ReadInterface<K = K>>(&mut self, chain: &T, pk: &AccPublicKey) -> Result<usize> {
+        if self.set.is_none() {
+            let bplus_root = chain
+                .read_block_content(self.blk_height)?
+                .ads
+                .read_bplus_root(self.time_win, self.dim)?;
+            let (s, a, p) =
+                bplus_tree::read::range_query(chain, bplus_root.bplus_tree_root_id, self.range, pk)?;
+            let size = s.len();
+            self.set = Some((s, a, p));
+            Ok(size)
+        } else {
+            let set_ref = self.set.as_ref().context("No set found")?;
+            Ok(set_ref.0.len())
+        }
+    }
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -60,10 +79,7 @@ pub struct Query<K: Num> {
     pub(crate) query_dag: Graph<QueryNode<K>, ()>,
 }
 
-pub fn query_to_qp<K: Num>(
-    query: Query<K>,
-    set_map: HashMap<NodeIndex, HashSet<Digest>>,
-) -> Result<QueryPlan<K>> {
+pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
     let mut qp_dag = Graph::<QPNode<K>, ()>::new();
     let query_dag = query.query_dag;
     let query_end_blk_height = query.end_blk_height;
@@ -79,59 +95,48 @@ pub fn query_to_qp<K: Num>(
         .cloned()
         .context("Input query graph is empty")?;
     let mut idx_map = HashMap::<NodeIndex, NodeIndex>::new();
-    let mut qp_inputs = Vec::<NodeIndex>::new();
     let q_outputs = vec![q_output_elm];
-    let mut qp_outputs = Vec::<NodeIndex>::new();
+    let mut qp_outputs = HashSet::<NodeIndex>::new();
 
     for idx in q_inputs {
         if let Some(node) = query_dag.node_weight(idx) {
             match node {
                 QueryNode::Range(n) => {
-                    let set = set_map
-                        .get(&idx)
-                        .map(|hash_set| (hash_set.clone(), 0_usize, 0_usize));
                     let qp_range_node = QPRangeNode {
                         range: n.range,
                         blk_height: n.blk_height,
                         time_win: n.time_win,
                         dim: n.dim,
-                        set,
+                        set: n.set.clone(),
                     };
                     let qp_idx = qp_dag.add_node(QPNode::Range(qp_range_node));
-                    qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                 }
                 QueryNode::Keyword(n) => {
-                    let set = set_map
-                        .get(&idx)
-                        .map(|hash_set| (hash_set.clone(), 0_usize, 0_usize));
                     let qp_keyword_node = QPKeywordNode {
                         keyword: n.keyword.clone(),
                         blk_height: n.blk_height,
                         time_win: n.time_win,
-                        set,
+                        set: None,
                     };
                     let qp_idx = qp_dag.add_node(QPNode::Keyword(Box::new(qp_keyword_node)));
-                    qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                 }
                 QueryNode::BlkRt(n) => {
-                    let set = set_map
-                        .get(&idx)
-                        .map(|hash_set| (hash_set.clone(), 0_usize, 0_usize));
                     let qp_blk_rt_node = QPBlkRtNode {
                         blk_height: n.blk_height,
                         time_win: n.time_win,
-                        set,
+                        set: None,
                     };
                     let qp_idx = qp_dag.add_node(QPNode::BlkRt(Box::new(qp_blk_rt_node)));
-                    qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                 }
                 QueryNode::Union(_) => {
-                    let qp_union = QPUnion { set: None };
+                    let qp_union = QPUnion {
+                        set: None,
+                        cost: None,
+                    };
                     let qp_idx = qp_dag.add_node(QPNode::Union(qp_union));
-                    qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                     for child_idx in query_dag.neighbors_directed(idx, Outgoing) {
                         if let Some(target_idx) = idx_map.get(&child_idx) {
@@ -142,9 +147,11 @@ pub fn query_to_qp<K: Num>(
                     }
                 }
                 QueryNode::Intersec(_) => {
-                    let qp_intersec = QPIntersec { set: None };
+                    let qp_intersec = QPIntersec {
+                        set: None,
+                        cost: None,
+                    };
                     let qp_idx = qp_dag.add_node(QPNode::Intersec(qp_intersec));
-                    qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                     for child_idx in query_dag.neighbors_directed(idx, Outgoing) {
                         if let Some(target_idx) = idx_map.get(&child_idx) {
@@ -155,9 +162,11 @@ pub fn query_to_qp<K: Num>(
                     }
                 }
                 QueryNode::Diff(_) => {
-                    let qp_diff = QPDiff { set: None };
+                    let qp_diff = QPDiff {
+                        set: None,
+                        cost: None,
+                    };
                     let qp_idx = qp_dag.add_node(QPNode::Diff(qp_diff));
-                    qp_inputs.push(qp_idx);
                     idx_map.insert(idx, qp_idx);
                     for child_idx in query_dag.neighbors_directed(idx, Outgoing) {
                         if let Some(target_idx) = idx_map.get(&child_idx) {
@@ -172,14 +181,14 @@ pub fn query_to_qp<K: Num>(
     }
 
     for q_idx in &q_outputs {
-        qp_outputs.push(*idx_map.get(q_idx).context("index map not matched")?);
+        qp_outputs.insert(*idx_map.get(q_idx).context("index map not matched")?);
     }
 
     let qp = QueryPlan {
         end_blk_height: query_end_blk_height,
-        inputs: qp_inputs,
         outputs: qp_outputs,
         dag: qp_dag,
+        trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
     };
 
     Ok(qp)

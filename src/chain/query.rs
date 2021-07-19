@@ -23,8 +23,11 @@ use crate::{
     digest::{Digest, Digestible},
     utils::Time,
 };
-use anyhow::{Context, Result};
-use petgraph::dot::{Config, Dot};
+use anyhow::{bail, Context, Result};
+use petgraph::{
+    algo::toposort,
+    dot::{Config, Dot},
+};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_param::QueryParam;
 use query_plan::QueryPlan;
@@ -43,15 +46,22 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     pk: &AccPublicKey,
 ) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
     let mut vo_dag = Graph::<VONode<K>, ()>::new();
-    let qp_inputs = query_plan.inputs;
     let qp_outputs = query_plan.outputs;
     let qp_dag = query_plan.dag;
+    let mut qp_inputs = match toposort(&qp_dag, None) {
+        Ok(v) => v,
+        Err(_) => {
+            bail!("Input query plan graph not valid")
+        }
+    };
+    qp_inputs.reverse();
     let qp_end_blk_height = query_plan.end_blk_height;
 
     let mut idx_map = HashMap::<NodeIndex, NodeIndex>::new();
     let mut set_map = HashMap::<NodeIndex, Set>::new();
     let mut trie_ctxes = HashMap::<Height, trie_tree::read::ReadContext<T>>::new();
     let mut trie_proofs = HashMap::<Height, trie_tree::proof::Proof>::new();
+    let qp_trie_proofs = query_plan.trie_proofs;
     let mut obj_map = HashMap::<ObjId, Object<K>>::new();
     let mut time_win_map = HashMap::<Height, u64>::new();
     let mut merkle_proofs = HashMap::<Height, MerkleProof>::new();
@@ -61,16 +71,29 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
             match node {
                 QPNode::Range(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
-                    let bplus_root = chain
-                        .read_block_content(n.blk_height)?
-                        .ads
-                        .read_bplus_root(n.time_win, n.dim)?;
-                    let (set, acc, proof) = bplus_tree::read::range_query(
-                        chain,
-                        bplus_root.bplus_tree_root_id,
-                        n.range,
-                        pk,
-                    )?;
+                    let set;
+                    let acc;
+                    let proof;
+                    if let Some((s, a, p)) = n.set.clone() {
+                        set = s;
+                        acc = a;
+                        proof = p;
+                    } else {
+                        let bplus_root = chain
+                            .read_block_content(n.blk_height)?
+                            .ads
+                            .read_bplus_root(n.time_win, n.dim)?;
+                        let (s, a, p) = bplus_tree::read::range_query(
+                            chain,
+                            bplus_root.bplus_tree_root_id,
+                            n.range,
+                            pk,
+                        )?;
+                        set = s;
+                        acc = a;
+                        proof = p;
+                    }
+
                     let vo_range_node = VORangeNode {
                         range: n.range,
                         blk_height: n.blk_height,
@@ -81,13 +104,16 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     };
                     let vo_idx = vo_dag.add_node(VONode::Range(vo_range_node));
                     idx_map.insert(idx, vo_idx);
-                    set_map.insert(vo_idx, set.clone());
+                    set_map.insert(vo_idx, set);
                 }
                 QPNode::Keyword(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
                     let set;
                     let acc;
-                    if let Some(ctx) = trie_ctxes.get_mut(&n.blk_height) {
+                    if let Some((s, a)) = n.set.clone() {
+                        set = s;
+                        acc = a;
+                    } else if let Some(ctx) = trie_ctxes.get_mut(&n.blk_height) {
                         let trie_ctx = ctx;
                         let (s, a) = trie_ctx.query(n.keyword.clone(), pk)?;
                         set = s;
@@ -104,6 +130,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         acc = a;
                         trie_ctxes.insert(n.blk_height, trie_ctx);
                     }
+
                     let vo_keyword_node = VOKeywordNode {
                         keyword: n.keyword.clone(),
                         blk_height: n.blk_height,
@@ -112,25 +139,35 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     };
                     let vo_idx = vo_dag.add_node(VONode::Keyword(vo_keyword_node));
                     idx_map.insert(idx, vo_idx);
-                    set_map.insert(vo_idx, set.clone());
+                    set_map.insert(vo_idx, set);
                 }
                 QPNode::BlkRt(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
-                    let mut acc = AccValue::from_set(&Set::new(), pk);
-                    let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
-                    for i in 0..n.time_win {
-                        if n.blk_height.0 > i {
-                            let blk_content =
-                                chain.read_block_content(Height(n.blk_height.0 - i))?;
-                            let mut obj_id_nums = blk_content.read_obj_id_nums();
-                            total_obj_id_nums.append(&mut obj_id_nums);
-                            let sub_acc = blk_content
-                                .read_acc()
-                                .context("The block does not have acc value")?;
-                            acc = acc + sub_acc;
+                    let set;
+                    let acc;
+                    if let Some((s, a)) = n.set.clone() {
+                        set = s;
+                        acc = a;
+                    } else {
+                        let mut a = AccValue::from_set(&Set::new(), pk);
+                        let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
+                        for i in 0..n.time_win {
+                            if n.blk_height.0 > i {
+                                let blk_content =
+                                    chain.read_block_content(Height(n.blk_height.0 - i))?;
+                                let mut obj_id_nums = blk_content.read_obj_id_nums();
+                                total_obj_id_nums.append(&mut obj_id_nums);
+                                let sub_acc = blk_content
+                                    .read_acc()
+                                    .context("The block does not have acc value")?;
+                                a = a + sub_acc;
+                            }
                         }
+                        let s = Set::from_iter(total_obj_id_nums.into_iter());
+                        set = s;
+                        acc = a;
                     }
-                    let set = Set::from_iter(total_obj_id_nums.into_iter());
+
                     let vo_blk_root = VOBlkRtNode {
                         blk_height: n.blk_height,
                         time_win: n.time_win,
@@ -326,18 +363,21 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
         let trie_proof = trie_ctx.into_proof();
         trie_proofs.insert(height, trie_proof);
     }
+    for (height, trie_proof) in qp_trie_proofs {
+        trie_proofs.insert(height, trie_proof);
+    }
+
     if trie_proofs.is_empty() {
         debug!("no keyword query");
-        let end_win_size = time_win_map
-            .get(&qp_end_blk_height)
-            .context("Cannot find end blk height")?;
-        let trie_root = chain
-            .read_block_content(qp_end_blk_height)?
-            .ads
-            .read_trie_root(*end_win_size)?;
-        let end_trie_ctx = trie_tree::read::ReadContext::new(chain, trie_root.trie_root_id);
-        let end_trie_proof = end_trie_ctx.into_proof();
-        trie_proofs.insert(qp_end_blk_height, end_trie_proof);
+        for (height, time_win) in &time_win_map {
+            let trie_root = chain
+                .read_block_content(*height)?
+                .ads
+                .read_trie_root(*time_win)?;
+            let trie_ctx = trie_tree::read::ReadContext::new(chain, trie_root.trie_root_id);
+            let trie_proof = trie_ctx.into_proof();
+            trie_proofs.insert(*height, trie_proof);
+        }
     }
 
     let id_root = chain.read_block_content(qp_end_blk_height)?.id_tree_root;
@@ -349,8 +389,9 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     let mut vo_ouput_sets = HashMap::<NodeIndex, Set>::new();
     for idx in qp_outputs {
         let vo_idx = idx_map.get(&idx).context("Cannot find idx in idx_map")?;
-        let set = set_map.get(vo_idx).context("Cannot find set in set_map")?;
-        vo_ouput_sets.insert(*vo_idx, set.clone());
+        let set = set_map
+            .remove(vo_idx)
+            .context("Cannot find set in set_map")?;
         for i in set.iter() {
             let obj_id = ObjId(*i);
             let obj_hash = id_tree_ctx
@@ -359,6 +400,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
             let obj = chain.read_object(obj_hash)?;
             obj_map.insert(obj_id, obj);
         }
+        vo_ouput_sets.insert(*vo_idx, set.clone());
     }
     let id_tree_proof = id_tree_ctx.into_proof();
 
@@ -458,7 +500,7 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
     let mut result = Vec::<(HashMap<ObjId, Object<K>>, VO<K>)>::new();
     for (q_param, s_win_size, e_win_size) in query_params {
         let sub_timer = howlong::ProcessCPUTimer::new();
-        let (query, set) = q_param.into_query_basic(s_win_size, e_win_size)?;
+        let query = q_param.into_query_basic(s_win_size, e_win_size)?;
         debug!(
             "query dag: {:?}",
             Dot::with_config(&query.query_dag, &[Config::EdgeNoLabel])
@@ -466,7 +508,7 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
         let time = sub_timer.elapsed();
         debug!("Stage1: {}", time);
         let sub_timer = howlong::ProcessCPUTimer::new();
-        let mut query_plan = query_to_qp(query, set)?;
+        let mut query_plan = query_to_qp(query)?;
         debug!(
             "query plan dag: {:?}",
             Dot::with_config(&query_plan.dag, &[Config::EdgeNoLabel])
@@ -474,7 +516,7 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
         let time = sub_timer.elapsed();
         debug!("Stage2: {}", time);
         let sub_timer = howlong::ProcessCPUTimer::new();
-        let cost = query_plan.estimate_cost(&chain)?;
+        let cost = query_plan.estimate_cost(&chain, pk)?;
         let time = sub_timer.elapsed();
         info!(
             "cost estimate for the query plan: {}, time elapsed: {}",

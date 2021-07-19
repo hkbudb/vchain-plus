@@ -1,18 +1,15 @@
-use crate::{
-    chain::{
-        block::Height,
-        query::query_obj::{
-            BlkRtNode, DiffNode, IntersecNode, KeywordNode, Query, QueryNode, RangeNode, UnionNode,
-        },
-        range::Range,
-        traits::Num,
+use crate::chain::{
+    block::Height,
+    query::query_obj::{
+        BlkRtNode, DiffNode, IntersecNode, KeywordNode, Query, QueryNode, RangeNode, UnionNode,
     },
-    digest::Digest,
+    range::Range,
+    traits::Num,
 };
 use anyhow::{bail, Result};
 use petgraph::{graph::NodeIndex, Graph};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -63,7 +60,7 @@ impl<K: Num> QueryParam<K> {
         self,
         start_win_size: Option<u64>,
         end_win_size: u64,
-    ) -> Result<(Query<K>, HashMap<NodeIndex, HashSet<Digest>>)> {
+    ) -> Result<Query<K>> {
         let end_blk_height = Height(self.end_blk);
         let keyword_exp_opt = self.keyword_exp;
         let mut query_dag = Graph::<QueryNode<K>, ()>::new();
@@ -382,6 +379,7 @@ impl<K: Num> QueryParam<K> {
                     blk_height: end_blk_height,
                     time_win: end_win_size,
                     dim: i,
+                    set: None,
                 }));
                 if range_lock {
                     // add intersec
@@ -431,9 +429,350 @@ impl<K: Num> QueryParam<K> {
             end_blk_height,
             query_dag,
         };
-        let res_map = HashMap::<NodeIndex, HashSet<Digest>>::new();
-        Ok((res_query, res_map))
+        Ok(res_query)
     }
+
+    /*
+    pub fn into_query_trimmed<T: ScanQueryInterface<K = K>>(
+        self,
+        chain: &T,
+        start_win_size: Option<u64>,
+        end_win_size: u64,
+    ) -> Result<(Query<K>, HashMap<NodeIndex, HashSet<Digest>>)> {
+        let start_blk_height = Height(self.start_blk);
+        let end_blk_height = Height(self.end_blk);
+        let keyword_exp_opt = self.keyword_exp;
+        let mut query_dag = Graph::<QueryNode<K>, ()>::new();
+        let mut heights = Vec::<(u64, Height)>::new();
+        if let Some(win_size) = start_win_size {
+            heights.push((win_size, start_blk_height));
+        }
+        heights.push((end_win_size, end_blk_height));
+
+        let has_keyword_query: bool;
+        let has_range_query: bool;
+
+        match keyword_exp_opt {
+            Some(_) => has_keyword_query = true,
+            None => has_keyword_query = false,
+        }
+
+        if self.range.is_empty() {
+            has_range_query = false;
+        } else {
+            has_range_query = true;
+        }
+
+        for (win_size, height) in heights {
+            let mut queue = VecDeque::<(Node, NodeIndex)>::new();
+            let mut idx_map = HashMap::<String, NodeIndex>::new();
+            let mut keyword_root_idx: NodeIndex = NodeIndex::default();
+            let mut range_root_idx: NodeIndex = NodeIndex::default();
+
+            if let Some(keyword_exp) = keyword_exp_opt.clone() {
+                match keyword_exp {
+                    Node::And(n) => {
+                        let idx = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                        keyword_root_idx = idx;
+                        let AndNode(c1, c2) = *n;
+                        let idx1: NodeIndex;
+                        let idx2: NodeIndex;
+                        match &c1 {
+                            Node::And(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                    keyword: s.to_string(),
+                                    blk_height: height,
+                                    time_win: win_size,
+                                }));
+                                idx_map.insert(s.to_string(), idx1);
+                            }
+                        }
+                        query_dag.add_edge(idx, idx1, ());
+                        match &c2 {
+                            Node::And(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                    keyword: s.to_string(),
+                                    blk_height: height,
+                                    time_win: win_size,
+                                }));
+                                idx_map.insert(s.to_string(), idx2);
+                            }
+                        }
+                        query_dag.add_edge(idx, idx2, ());
+                        queue.push_back((c1, idx1));
+                        queue.push_back((c2, idx2));
+                    }
+                    Node::Or(n) => {
+                        let idx = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                        keyword_root_idx = idx;
+                        let OrNode(c1, c2) = *n;
+                        let idx1: NodeIndex;
+                        let idx2: NodeIndex;
+                        match &c1 {
+                            Node::And(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                    keyword: s.to_string(),
+                                    blk_height: height,
+                                    time_win: win_size,
+                                }));
+                                idx_map.insert(s.to_string(), idx1);
+                            }
+                        }
+                        query_dag.add_edge(idx, idx1, ());
+                        match &c2 {
+                            Node::And(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                    keyword: s.to_string(),
+                                    blk_height: height,
+                                    time_win: win_size,
+                                }));
+                                idx_map.insert(s.to_string(), idx2);
+                            }
+                        }
+                        query_dag.add_edge(idx, idx2, ());
+                        queue.push_back((c1, idx1));
+                        queue.push_back((c2, idx2));
+                    }
+                    Node::Not(n) => {
+                        if height == end_blk_height {
+
+                        }
+                        let idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                        keyword_root_idx = idx;
+                        let NotNode(c) = *n;
+                        let c_idx: NodeIndex;
+                        match &c {
+                            Node::And(_) => {
+                                c_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                c_idx = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                c_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                    keyword: s.to_string(),
+                                    blk_height: height,
+                                    time_win: win_size,
+                                }));
+                                idx_map.insert(s.to_string(), c_idx);
+                            }
+                        }
+                        query_dag.add_edge(idx, c_idx, ());
+                        let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
+                            blk_height: height,
+                            time_win: win_size,
+                        }));
+                        query_dag.add_edge(idx, blk_rt_idx, ());
+                        queue.push_back((c, c_idx));
+                    }
+                    Node::Input(s) => {
+                        let idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                            keyword: s,
+                            blk_height: height,
+                            time_win: win_size,
+                        }));
+                        keyword_root_idx = idx;
+                    }
+                }
+            }
+
+            while let Some(node) = queue.pop_front() {
+                match node {
+                    (Node::And(n), idx) => {
+                        let AndNode(c1, c2) = *n;
+                        let idx1: NodeIndex;
+                        let idx2: NodeIndex;
+                        match &c1 {
+                            Node::And(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                if let Some(c_idx) = idx_map.get(s) {
+                                    idx1 = *c_idx;
+                                } else {
+                                    idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                    }));
+                                    idx_map.insert(s.to_string(), idx1);
+                                }
+                            }
+                        }
+                        query_dag.add_edge(idx, idx1, ());
+                        match &c2 {
+                            Node::And(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                if let Some(c_idx) = idx_map.get(s) {
+                                    idx2 = *c_idx;
+                                } else {
+                                    idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                    }));
+                                    idx_map.insert(s.to_string(), idx2);
+                                }
+                            }
+                        }
+                        query_dag.add_edge(idx, idx2, ());
+                        queue.push_back((c1, idx1));
+                        queue.push_back((c2, idx2));
+                    }
+                    (Node::Or(n), idx) => {
+                        let OrNode(c1, c2) = *n;
+                        let idx1: NodeIndex;
+                        let idx2: NodeIndex;
+                        match &c1 {
+                            Node::And(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                idx1 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                if let Some(c_idx) = idx_map.get(s) {
+                                    idx1 = *c_idx;
+                                } else {
+                                    idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                    }));
+                                    idx_map.insert(s.to_string(), idx1);
+                                }
+                            }
+                        }
+                        query_dag.add_edge(idx, idx1, ());
+                        match &c2 {
+                            Node::And(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                idx2 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                if let Some(c_idx) = idx_map.get(s) {
+                                    idx2 = *c_idx;
+                                } else {
+                                    idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                    }));
+                                    idx_map.insert(s.to_string(), idx2);
+                                }
+                            }
+                        }
+                        query_dag.add_edge(idx, idx2, ());
+                        queue.push_back((c1, idx1));
+                        queue.push_back((c2, idx2));
+                    }
+                    (Node::Not(n), idx) => {
+                        let NotNode(c) = *n;
+                        let c_idx: NodeIndex;
+                        let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
+                            blk_height: height,
+                            time_win: win_size,
+                        }));
+                        match &c {
+                            Node::And(_) => {
+                                c_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
+                            }
+                            Node::Or(_) => {
+                                c_idx = query_dag.add_node(QueryNode::Union(UnionNode {}));
+                            }
+                            Node::Not(_) => {
+                                c_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
+                            }
+                            Node::Input(s) => {
+                                if let Some(ch_idx) = idx_map.get(s) {
+                                    c_idx = *ch_idx;
+                                } else {
+                                    c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                    }));
+                                    idx_map.insert(s.to_string(), c_idx);
+                                }
+                            }
+                        }
+                        query_dag.add_edge(idx, c_idx, ());
+                        query_dag.add_edge(idx, blk_rt_idx, ());
+                        queue.push_back((c, c_idx));
+                    }
+                    (Node::Input(_), idx) => {}
+                }
+            }
+
+            if has_range_query == true {
+
+            }
+        }
+
+        todo!()
+    }
+    */
 }
 
 #[cfg(test)]
@@ -530,7 +869,7 @@ mod tests {
         let time_wins: Vec<u64> = vec![4];
         let query_params = select_win_size(time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
-            let (query, _) = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
             println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
         }
@@ -545,7 +884,7 @@ mod tests {
         let time_wins: Vec<u64> = vec![4];
         let query_params = select_win_size(time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
-            let (query, _) = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
             println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
         }
@@ -560,7 +899,7 @@ mod tests {
         let time_wins: Vec<u64> = vec![4];
         let query_params = select_win_size(time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
-            let (query, _) = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
             println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
         }
@@ -577,7 +916,7 @@ mod tests {
         let time_wins: Vec<u64> = vec![4];
         let query_params = select_win_size(time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
-            let (query, _) = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
+            let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
             println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
         }

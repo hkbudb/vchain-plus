@@ -1,16 +1,21 @@
 use crate::{
+    acc::{AccPublicKey, AccValue, Set},
     chain::{
         block::Height,
+        bplus_tree,
         range::Range,
-        traits::{Num, ScanQueryInterface},
-        COST_COEFFICIENT,
+        traits::{Num, ReadInterface},
+        trie_tree, COST_COEFFICIENT,
     },
-    digest::Digest,
 };
-use anyhow::{Context, Result};
-use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
+use anyhow::{bail, Context, Result};
+use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    iter::FromIterator,
+    num::NonZeroU64,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum QPNode<K: Num> {
@@ -23,14 +28,14 @@ pub enum QPNode<K: Num> {
 }
 
 impl<K: Num> QPNode<K> {
-    pub fn get_set(&self) -> Option<(HashSet<Digest>, usize, usize)> {
+    pub fn get_set(&self) -> Result<Set> {
         match self {
-            QPNode::Range(n) => n.set.clone(),
-            QPNode::Keyword(n) => n.set.clone(),
-            QPNode::BlkRt(n) => n.set.clone(),
-            QPNode::Union(n) => n.set.clone(),
-            QPNode::Intersec(n) => n.set.clone(),
-            QPNode::Diff(n) => n.set.clone(),
+            QPNode::Range(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
+            QPNode::Keyword(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
+            QPNode::BlkRt(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
+            QPNode::Union(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
+            QPNode::Intersec(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
+            QPNode::Diff(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
         }
     }
 }
@@ -41,7 +46,7 @@ pub struct QPRangeNode<K: Num> {
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
     pub(crate) dim: usize,
-    pub(crate) set: Option<(HashSet<Digest>, usize, usize)>,
+    pub(crate) set: Option<(Set, AccValue, bplus_tree::proof::Proof<K>)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -49,53 +54,58 @@ pub struct QPKeywordNode {
     pub(crate) keyword: String,
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
-    pub(crate) set: Option<(HashSet<Digest>, usize, usize)>,
+    pub(crate) set: Option<(Set, AccValue)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct QPBlkRtNode {
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
-    pub(crate) set: Option<(HashSet<Digest>, usize, usize)>,
+    pub(crate) set: Option<(Set, AccValue)>,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct QPUnion {
-    pub(crate) set: Option<(HashSet<Digest>, usize, usize)>,
+    pub(crate) set: Option<(Set, usize, usize)>,
+    pub(crate) cost: Option<(usize, usize)>,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct QPIntersec {
-    pub(crate) set: Option<(HashSet<Digest>, usize, usize)>,
+    pub(crate) set: Option<(Set, usize, usize)>,
+    pub(crate) cost: Option<(usize, usize)>,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct QPDiff {
-    pub(crate) set: Option<(HashSet<Digest>, usize, usize)>,
+    pub(crate) set: Option<(Set, usize, usize)>,
+    pub(crate) cost: Option<(usize, usize)>,
 }
 
 pub struct QueryPlan<K: Num> {
     pub(crate) end_blk_height: Height,
-    pub(crate) inputs: Vec<NodeIndex>,
-    pub(crate) outputs: Vec<NodeIndex>,
+    pub(crate) outputs: HashSet<NodeIndex>,
     pub(crate) dag: Graph<QPNode<K>, ()>,
+    pub(crate) trie_proofs: HashMap<Height, trie_tree::proof::Proof>,
 }
 
 impl<K: Num> QueryPlan<K> {
     pub fn remove_top_union(&mut self) -> Result<()> {
-        let mut queue = VecDeque::from(self.outputs.clone());
+        let mut queue = VecDeque::<NodeIndex>::new();
+        for idx in &self.outputs {
+            queue.push_back(*idx);
+        }
 
         while let Some(idx) = queue.pop_front() {
             if let Some(QPNode::Union(_)) = self.dag.node_weight(idx) {
                 let cur_max_idx = self.dag.node_indices().last().context("No idx in output")?;
                 let child_idxs = self.dag.neighbors_directed(idx, Outgoing);
-                self.inputs.retain(|&x| x != cur_max_idx);
-                self.outputs.retain(|&x| x != idx);
+                self.outputs.remove(&idx);
                 for child_idx in child_idxs {
                     if child_idx == cur_max_idx {
-                        self.outputs.push(idx);
+                        self.outputs.insert(idx);
                     } else {
-                        self.outputs.push(child_idx);
+                        self.outputs.insert(child_idx);
                     }
                     queue.push_back(child_idx);
                 }
@@ -105,37 +115,93 @@ impl<K: Num> QueryPlan<K> {
         Ok(())
     }
 
-    pub fn estimate_cost<T: ScanQueryInterface<K = K>>(&mut self, chain: &T) -> Result<usize> {
+    pub fn estimate_cost<T: ReadInterface<K = K>>(
+        &mut self,
+        chain: &T,
+        pk: &AccPublicKey,
+    ) -> Result<usize> {
+        let mut qp_inputs = match toposort(&self.dag, None) {
+            Ok(v) => v,
+            Err(_) => {
+                bail!("Input query plan graph not valid")
+            }
+        };
+        qp_inputs.reverse();
         let mut cost: usize = 0;
         let mut map = HashMap::<NodeIndex, QPNode<K>>::new();
         let dag = &mut self.dag;
-        for idx in &self.inputs {
+        let mut trie_ctxes = HashMap::<Height, trie_tree::read::ReadContext<T>>::new();
+
+        for idx in qp_inputs {
             let mut child_idxs = Vec::<NodeIndex>::new();
-            for index in dag.neighbors_directed(*idx, Outgoing) {
+            for index in dag.neighbors_directed(idx, Outgoing) {
                 child_idxs.push(index);
             }
-            if let Some(node) = dag.node_weight_mut(*idx) {
+            if let Some(node) = dag.node_weight_mut(idx) {
                 match node {
                     QPNode::Range(n) => {
                         if n.set.is_none() {
-                            let s = chain.range_query(&n)?;
-                            n.set = Some((s, 0, 0));
+                            let bplus_root = chain
+                                .read_block_content(n.blk_height)?
+                                .ads
+                                .read_bplus_root(n.time_win, n.dim)?;
+                            let (s, a, p) = bplus_tree::read::range_query(
+                                chain,
+                                bplus_root.bplus_tree_root_id,
+                                n.range,
+                                pk,
+                            )?;
+                            n.set = Some((s, a, p));
                         }
-                        map.insert(*idx, node.clone());
+                        map.insert(idx, node.clone());
                     }
                     QPNode::Keyword(n) => {
                         if n.set.is_none() {
-                            let s = chain.keyword_query(&n)?;
-                            n.set = Some((s, 0, 0));
+                            let set;
+                            let acc;
+                            if let Some(ctx) = trie_ctxes.get_mut(&n.blk_height) {
+                                let trie_ctx = ctx;
+                                let (s, a) = trie_ctx.query(n.keyword.clone(), pk)?;
+                                set = s;
+                                acc = a;
+                            } else {
+                                let trie_root = chain
+                                    .read_block_content(n.blk_height)?
+                                    .ads
+                                    .read_trie_root(n.time_win)?;
+                                let mut trie_ctx = trie_tree::read::ReadContext::new(
+                                    chain,
+                                    trie_root.trie_root_id,
+                                );
+                                let (s, a) = trie_ctx.query(n.keyword.clone(), pk)?;
+                                set = s;
+                                acc = a;
+                                trie_ctxes.insert(n.blk_height, trie_ctx);
+                            }
+                            n.set = Some((set, acc));
                         }
-                        map.insert(*idx, node.clone());
+                        map.insert(idx, node.clone());
                     }
                     QPNode::BlkRt(n) => {
                         if n.set.is_none() {
-                            let s = chain.root_query(&n)?;
-                            n.set = Some((s, 0, 0));
+                            let mut a = AccValue::from_set(&Set::new(), pk);
+                            let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
+                            for i in 0..n.time_win {
+                                if n.blk_height.0 > i {
+                                    let blk_content =
+                                        chain.read_block_content(Height(n.blk_height.0 - i))?;
+                                    let mut obj_id_nums = blk_content.read_obj_id_nums();
+                                    total_obj_id_nums.append(&mut obj_id_nums);
+                                    let sub_acc = blk_content
+                                        .read_acc()
+                                        .context("The block does not have acc value")?;
+                                    a = a + sub_acc;
+                                }
+                            }
+                            let s = Set::from_iter(total_obj_id_nums.into_iter());
+                            n.set = Some((s, a));
                         }
-                        map.insert(*idx, node.clone());
+                        map.insert(idx, node.clone());
                     }
                     QPNode::Union(n) => {
                         let qp_c_idx1 = child_idxs
@@ -144,25 +210,25 @@ impl<K: Num> QueryPlan<K> {
                         let qp_c1 = map
                             .get(qp_c_idx1)
                             .context("Cannot find the first child node in map")?;
-                        let (s1, _, _) = qp_c1.get_set().context("Cannot find set in dag")?;
+                        let s1 = qp_c1.get_set()?;
                         let qp_c_idx2 = child_idxs
                             .get(0)
                             .context("Cannot find the first child idx of union")?;
                         let qp_c2 = map
                             .get(qp_c_idx2)
                             .context("Cannot find the second child node in map")?;
-                        let (s2, _, _) = qp_c2.get_set().context("Cannot find set in dag")?;
-                        let res_set: HashSet<Digest> = s1.union(&s2).cloned().collect();
+                        let s2 = qp_c2.get_set()?;
+                        let res_set = (&s1) | (&s2);
                         let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
                         let mut final_cost = s1.len() * s2.len();
-                        if self.outputs.contains(idx) {
+                        if self.outputs.contains(&idx) {
                             final_cost = 0;
                             cost += final_cost;
                         } else {
                             cost += inter_cost;
                         }
                         n.set = Some((res_set, inter_cost, final_cost));
-                        map.insert(*idx, node.clone());
+                        map.insert(idx, node.clone());
                     }
                     QPNode::Intersec(n) => {
                         let qp_c_idx1 = child_idxs
@@ -171,24 +237,24 @@ impl<K: Num> QueryPlan<K> {
                         let qp_c1 = map
                             .get(qp_c_idx1)
                             .context("Cannot find the first child node in map")?;
-                        let (s1, _, _) = qp_c1.get_set().context("Cannot find set in dag")?;
+                        let s1 = qp_c1.get_set()?;
                         let qp_c_idx2 = child_idxs
                             .get(0)
                             .context("Cannot find the first child idx of intersection")?;
                         let qp_c2 = map
                             .get(qp_c_idx2)
                             .context("Cannot find the second child node in map")?;
-                        let (s2, _, _) = qp_c2.get_set().context("Cannot find set in dag")?;
-                        let res_set: HashSet<Digest> = s1.intersection(&s2).cloned().collect();
+                        let s2 = qp_c2.get_set()?;
+                        let res_set = (&s1) & (&s2);
                         let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
                         let final_cost = s1.len() * s2.len();
-                        if self.outputs.contains(idx) {
+                        if self.outputs.contains(&idx) {
                             cost += final_cost
                         } else {
                             cost += inter_cost;
                         }
                         n.set = Some((res_set, inter_cost, final_cost));
-                        map.insert(*idx, node.clone());
+                        map.insert(idx, node.clone());
                     }
                     QPNode::Diff(n) => {
                         let qp_c_idx1 = child_idxs
@@ -197,24 +263,24 @@ impl<K: Num> QueryPlan<K> {
                         let qp_c1 = map
                             .get(qp_c_idx1)
                             .context("Cannot find the first child node in map")?;
-                        let (s1, _, _) = qp_c1.get_set().context("Cannot find set in dag")?;
+                        let s1 = qp_c1.get_set()?;
                         let qp_c_idx2 = child_idxs
                             .get(0)
                             .context("Cannot find the first child idx of difference")?;
                         let qp_c2 = map
                             .get(qp_c_idx2)
                             .context("Cannot find the second child node in map")?;
-                        let (s2, _, _) = qp_c2.get_set().context("Cannot find set in dag")?;
-                        let res_set: HashSet<Digest> = s1.difference(&s2).cloned().collect();
+                        let s2 = qp_c2.get_set()?;
+                        let res_set = (&s1) / (&s2);
                         let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
                         let final_cost = s1.len() * s2.len();
-                        if self.outputs.contains(idx) {
+                        if self.outputs.contains(&idx) {
                             cost += final_cost
                         } else {
                             cost += inter_cost;
                         }
                         n.set = Some((res_set, inter_cost, final_cost));
-                        map.insert(*idx, node.clone());
+                        map.insert(idx, node.clone());
                     }
                 }
             }
@@ -226,13 +292,20 @@ impl<K: Num> QueryPlan<K> {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::{HashMap, HashSet},
+        iter::FromIterator,
+    };
+
     use super::{QPKeywordNode, QPNode, QPUnion};
     use crate::chain::{
         block::Height,
         query::query_plan::{QPIntersec, QueryPlan},
+        trie_tree,
     };
     use petgraph::{
         dot::{Config, Dot},
+        graph::NodeIndex,
         Graph,
     };
 
@@ -287,8 +360,14 @@ mod tests {
             time_win: 2,
             set: None,
         };
-        let union = QPUnion { set: None };
-        let intersec = QPIntersec { set: None };
+        let union = QPUnion {
+            set: None,
+            cost: None,
+        };
+        let intersec = QPIntersec {
+            set: None,
+            cost: None,
+        };
 
         let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
@@ -298,9 +377,9 @@ mod tests {
         qp_dag.add_edge(idx2, idx1, ());
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
-            inputs: vec![idx0, idx1, idx2],
-            outputs: vec![idx2],
+            outputs: HashSet::<NodeIndex>::from_iter(vec![idx2].into_iter()),
             dag: qp_dag,
+            trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
         };
         println!("before removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
@@ -308,8 +387,10 @@ mod tests {
         println!("after removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
         println!("=======================");
-        assert_eq!(qp.inputs, vec![idx0, idx1, idx2]);
-        assert_eq!(qp.outputs, vec![idx2]);
+        assert_eq!(
+            qp.outputs,
+            HashSet::<NodeIndex>::from_iter(vec![idx2].into_iter())
+        );
 
         let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
@@ -319,9 +400,9 @@ mod tests {
         qp_dag.add_edge(idx2, idx1, ());
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
-            inputs: vec![idx0, idx1, idx2],
-            outputs: vec![idx2],
+            outputs: HashSet::<NodeIndex>::from_iter(vec![idx2].into_iter()),
             dag: qp_dag,
+            trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
         };
         println!("before removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
@@ -329,8 +410,10 @@ mod tests {
         println!("after removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
         println!("=======================");
-        assert_eq!(qp.inputs, vec![idx0, idx1]);
-        assert_eq!(qp.outputs, vec![idx1, idx0]);
+        assert_eq!(
+            qp.outputs,
+            HashSet::<NodeIndex>::from_iter(vec![idx0, idx1].into_iter())
+        );
 
         let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
@@ -345,9 +428,9 @@ mod tests {
         qp_dag.add_edge(idx4, idx2, ());
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
-            inputs: vec![idx0, idx1, idx2, idx3, idx4],
-            outputs: vec![idx4],
+            outputs: HashSet::<NodeIndex>::from_iter(vec![idx4].into_iter()),
             dag: qp_dag,
+            trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
         };
         println!("before removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
@@ -355,8 +438,10 @@ mod tests {
         println!("after removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
         println!("=======================");
-        assert_eq!(qp.inputs, vec![idx0, idx1, idx2, idx3]);
-        assert_eq!(qp.outputs, vec![idx2, idx3]);
+        assert_eq!(
+            qp.outputs,
+            HashSet::<NodeIndex>::from_iter(vec![idx2, idx3].into_iter())
+        );
 
         let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
@@ -371,9 +456,9 @@ mod tests {
         qp_dag.add_edge(idx4, idx2, ());
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
-            inputs: vec![idx0, idx1, idx2, idx3, idx4],
-            outputs: vec![idx4],
+            outputs: HashSet::<NodeIndex>::from_iter(vec![idx4].into_iter()),
             dag: qp_dag,
+            trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
         };
         println!("before removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
@@ -381,8 +466,10 @@ mod tests {
         println!("after removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
         println!("=======================");
-        assert_eq!(qp.inputs, vec![idx0, idx1, idx2]);
-        assert_eq!(qp.outputs, vec![idx2, idx1, idx0]);
+        assert_eq!(
+            qp.outputs,
+            HashSet::<NodeIndex>::from_iter(vec![idx2, idx1, idx0].into_iter())
+        );
 
         let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
@@ -401,9 +488,9 @@ mod tests {
         qp_dag.add_edge(idx6, idx5, ());
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
-            inputs: vec![idx0, idx1, idx2, idx3, idx4, idx5, idx6],
-            outputs: vec![idx6],
+            outputs: HashSet::<NodeIndex>::from_iter(vec![idx6].into_iter()),
             dag: qp_dag,
+            trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
         };
         println!("before removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
@@ -411,7 +498,9 @@ mod tests {
         println!("after removing top unions:");
         println!("{:?}", Dot::with_config(&qp.dag, &[Config::EdgeNoLabel]));
         println!("=======================");
-        assert_eq!(qp.inputs, vec![idx0, idx1, idx2, idx3]);
-        assert_eq!(qp.outputs, vec![idx3, idx2, idx1, idx0]);
+        assert_eq!(
+            qp.outputs,
+            HashSet::<NodeIndex>::from_iter(vec![idx3, idx2, idx1, idx0].into_iter())
+        );
     }
 }
