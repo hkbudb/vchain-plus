@@ -13,15 +13,24 @@ use crate::{
 };
 use anyhow::Result;
 use core::str::FromStr;
+use rand::distributions::uniform::SampleUniform;
 use std::{collections::HashSet, fmt};
 
 pub trait Num:
-    num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr
+    num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr + SampleUniform
 {
 }
 
 impl<T> Num for T where
-    T: num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr
+    T: num_traits::Num
+        + Ord
+        + Eq
+        + Clone
+        + Copy
+        + fmt::Debug
+        + Digestible
+        + FromStr
+        + SampleUniform
 {
 }
 
@@ -81,15 +90,18 @@ pub trait ScanQueryInterface {
     fn range_query(
         &self,
         query: Range<Self::K>,
-        height: Height,
-        win_size: u64,
+        start_blk_height: Height,
+        end_blk_height: Height,
         dim: usize,
     ) -> Result<HashSet<Digest>>;
     fn keyword_query(
         &self,
         keyword: &str,
-        height: Height,
-        win_size: u64,
+        start_blk_height: Height,
+        end_blk_height: Height,
     ) -> Result<HashSet<Digest>>;
     fn root_query(&self, height: Height, win_size: u64) -> Result<HashSet<Digest>>;
+    #[allow(clippy::type_complexity)]
+    fn get_range_info(&self, dim_num: usize) -> Result<(u64, u64, Vec<Range<Self::K>>)>;
+    fn get_keyword_info(&self) -> Result<HashSet<String>>;
 }
