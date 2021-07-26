@@ -58,7 +58,10 @@ impl Proof {
         pk: &AccPublicKey,
     ) -> Result<()> {
         let computed_acc = self.value_acc(keyword, pk);
-        ensure!(target_acc == computed_acc, "Trie verification: acc value not matched!");
+        ensure!(
+            target_acc == computed_acc,
+            "Trie verification: acc value not matched!"
+        );
         Ok(())
     }
 }
