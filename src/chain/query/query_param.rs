@@ -12,32 +12,106 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use petgraph::{graph::NodeIndex, Graph};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum Node {
+pub enum Node {
     And(Box<AndNode>),
     Or(Box<OrNode>),
     Not(Box<NotNode>),
     Input(String),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) struct AndNode(Node, Node);
+impl Node {
+    pub fn to_cnf(set: &HashSet<Self>) -> Self {
+        let mut lock = false;
+        let mut node = Node::Input("init".to_string());
+        for s in set {
+            if lock {
+                node = Node::And(Box::new(AndNode(node, s.clone())));
+            } else {
+                node = s.clone();
+                lock = true;
+            }
+        }
+        node
+    }
+    pub fn to_cnf_set(&self) -> HashSet<Self> {
+        match self {
+            Node::And(n) => {
+                let AndNode(c1, c2) = n.as_ref();
+                let c1_set = c1.to_cnf_set();
+                let c2_set = c2.to_cnf_set();
+                let res: HashSet<Node> = c1_set.union(&c2_set).cloned().collect();
+                res
+            }
+            Node::Or(n) => {
+                let OrNode(c1, c2) = n.as_ref();
+                let c1_set = c1.to_cnf_set();
+                let c2_set = c2.to_cnf_set();
+                let mut res = HashSet::<Node>::new();
+                for c1_n in &c1_set {
+                    for c2_n in &c2_set {
+                        res.insert(Node::Or(Box::new(OrNode(c1_n.clone(), c2_n.clone()))));
+                    }
+                }
+                res
+            }
+            Node::Not(n) => {
+                let NotNode(c) = n.as_ref();
+                match c {
+                    Node::And(c_n) => {
+                        let AndNode(c_c_1, c_c_2) = c_n.as_ref();
+                        let exp = Node::Or(Box::new(OrNode(
+                            Node::Not(Box::new(NotNode(c_c_1.clone()))),
+                            Node::Not(Box::new(NotNode(c_c_2.clone()))),
+                        )));
+                        exp.to_cnf_set()
+                    }
+                    Node::Or(c_n) => {
+                        let OrNode(c_c_1, c_c_2) = c_n.as_ref();
+                        let exp = Node::And(Box::new(AndNode(
+                            Node::Not(Box::new(NotNode(c_c_1.clone()))),
+                            Node::Not(Box::new(NotNode(c_c_2.clone()))),
+                        )));
+                        exp.to_cnf_set()
+                    }
+                    Node::Not(c_n) => {
+                        let NotNode(inner) = c_n.as_ref();
+                        inner.to_cnf_set()
+                    }
+                    Node::Input(_) => {
+                        let mut res = HashSet::<Node>::new();
+                        res.insert(Node::Not(n.clone()));
+                        res
+                    }
+                }
+            }
+            Node::Input(n) => {
+                let mut res = HashSet::<Node>::new();
+                res.insert(Node::Input(n.to_string()));
+                res
+            }
+        }
+    }
+}
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) struct OrNode(Node, Node);
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct AndNode(pub Node, pub Node);
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) struct NotNode(Node);
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct OrNode(pub Node, pub Node);
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct NotNode(pub Node);
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct QueryParam<K: Num> {
-    pub(crate) start_blk: u64,
-    pub(crate) end_blk: u64,
-    pub(crate) range: Vec<Range<K>>,
-    pub(crate) keyword_exp: Option<Node>,
+    pub start_blk: u64,
+    pub end_blk: u64,
+    pub range: Vec<Range<K>>,
+    pub keyword_exp: Option<Node>,
 }
 
 impl<K: Num> QueryParam<K> {
@@ -872,7 +946,7 @@ fn get_intersec_cost(vec: &[(usize, NodeIndex, Set)]) -> (Vec<NodeIndex>, usize)
 mod tests {
     use crate::chain::{
         query::{
-            query_param::{Node, NotNode, OrNode, QueryParam},
+            query_param::{AndNode, Node, NotNode, OrNode, QueryParam},
             select_win_size,
         },
         range::Range,
@@ -1013,6 +1087,75 @@ mod tests {
             let query_dag = query.query_dag;
             println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
         }
+
+        assert_eq!(1, 1);
+    }
+
+    #[test]
+    fn test_to_cnf() {
+        let exp = Node::Input("a".to_string());
+        let exp_cnf = exp.to_cnf_set();
+        println!("CNF: {:?}", exp_cnf);
+        println!("====================");
+        let exp = Node::And(Box::new(AndNode(
+            Node::Input("a".to_string()),
+            Node::Input("b".to_string()),
+        )));
+        let exp_cnf = exp.to_cnf_set();
+        println!("CNF: {:?}", exp_cnf);
+        println!("====================");
+        let exp = Node::Or(Box::new(OrNode(
+            Node::Input("a".to_string()),
+            Node::Input("b".to_string()),
+        )));
+        let exp_cnf = exp.to_cnf_set();
+        println!("CNF: {:?}", exp_cnf);
+        println!("====================");
+        let exp = Node::And(Box::new(AndNode(
+            Node::Or(Box::new(OrNode(
+                Node::Input("a".to_string()),
+                Node::Input("b".to_string()),
+            ))),
+            Node::Input("c".to_string()),
+        )));
+        let exp_cnf = exp.to_cnf_set();
+        println!("CNF: {:?}", exp_cnf);
+        println!("====================");
+        let exp = Node::Or(Box::new(OrNode(
+            Node::And(Box::new(AndNode(
+                Node::Input("a".to_string()),
+                Node::Input("b".to_string()),
+            ))),
+            Node::Input("c".to_string()),
+        )));
+        let exp_cnf = exp.to_cnf_set();
+        println!("CNF: {:?}", exp_cnf);
+        println!("====================");
+        let exp = Node::Or(Box::new(OrNode(
+            Node::And(Box::new(AndNode(
+                Node::Input("a".to_string()),
+                Node::Input("b".to_string()),
+            ))),
+            Node::And(Box::new(AndNode(
+                Node::Input("c".to_string()),
+                Node::Input("d".to_string()),
+            ))),
+        )));
+        let exp_cnf = exp.to_cnf_set();
+        println!("CNF: {:?}", exp_cnf);
+        println!("====================");
+        let exp = Node::And(Box::new(AndNode(
+            Node::Or(Box::new(OrNode(
+                Node::Input("a".to_string()),
+                Node::Input("b".to_string()),
+            ))),
+            Node::Or(Box::new(OrNode(
+                Node::Input("c".to_string()),
+                Node::Input("d".to_string()),
+            ))),
+        )));
+        let exp_cnf = exp.to_cnf_set();
+        println!("CNF: {:?}", exp_cnf);
 
         assert_eq!(1, 1);
     }
