@@ -24,10 +24,10 @@ pub enum Node {
 }
 
 impl Node {
-    pub fn to_cnf(set: &HashSet<Self>) -> Self {
+    pub fn set_to_cnf(cnf_set: &HashSet<Self>) -> Self {
         let mut lock = false;
         let mut node = Node::Input("init".to_string());
-        for s in set {
+        for s in cnf_set {
             if lock {
                 node = Node::And(Box::new(AndNode(node, s.clone())));
             } else {
