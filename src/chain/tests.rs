@@ -324,14 +324,18 @@ impl ScanQueryInterface for &FakeChain {
         Ok((total_num, cur_height_num, num_ranges))
     }
 
-    fn get_keyword_info(&self) -> Result<HashSet<String>> {
+    fn get_keyword_info(&self) -> Result<(u64, HashSet<String>)> {
         let mut res = HashSet::<String>::new();
+        let mut cur_height_num = 0;
         for (_, o) in &self.objects {
             for k in o.keyword_data.iter() {
                 res.insert(k.to_string());
             }
+            if cur_height_num < o.blk_height.0 {
+                cur_height_num = o.blk_height.0;
+            }
         }
-        Ok(res)
+        Ok((cur_height_num, res))
     }
 }
 

@@ -103,5 +103,5 @@ pub trait ScanQueryInterface {
     fn root_query(&self, height: Height, win_size: u64) -> Result<HashSet<Digest>>;
     #[allow(clippy::type_complexity)]
     fn get_range_info(&self, dim_num: usize) -> Result<(u64, u64, Vec<Range<Self::K>>)>;
-    fn get_keyword_info(&self) -> Result<HashSet<String>>;
+    fn get_keyword_info(&self) -> Result<(u64, HashSet<String>)>;
 }
