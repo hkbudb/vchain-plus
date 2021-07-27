@@ -382,7 +382,9 @@ impl ScanQueryInterface for &SimChain {
                 }
             }
             total_num += 1;
-            cur_height_num = o.blk_height.0;
+            if cur_height_num < o.blk_height.0 {
+                cur_height_num = o.blk_height.0;
+            }
         }
 
         for (min, max) in num_range_scope {
@@ -392,15 +394,19 @@ impl ScanQueryInterface for &SimChain {
         Ok((total_num, cur_height_num, num_ranges))
     }
 
-    fn get_keyword_info(&self) -> Result<HashSet<String>> {
+    fn get_keyword_info(&self) -> Result<(u64, HashSet<String>)> {
         let mut res = HashSet::<String>::new();
         let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
+        let mut cur_height_num = 0;
         for (_key, val) in db_iter {
             let o = bincode::deserialize::<Object<u32>>(&val[..])?;
             for k in o.keyword_data.iter() {
                 res.insert(k.to_string());
             }
+            if cur_height_num < o.blk_height.0 {
+                cur_height_num = o.blk_height.0;
+            }
         }
-        Ok(res)
+        Ok((cur_height_num, res))
     }
 }
