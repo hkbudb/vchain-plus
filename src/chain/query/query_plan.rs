@@ -28,14 +28,14 @@ pub enum QPNode<K: Num> {
 }
 
 impl<K: Num> QPNode<K> {
-    pub fn get_set(&self) -> Result<Set> {
+    pub fn get_set(&self) -> Result<&Set> {
         match self {
-            QPNode::Range(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
-            QPNode::Keyword(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
-            QPNode::BlkRt(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
-            QPNode::Union(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
-            QPNode::Intersec(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
-            QPNode::Diff(n) => Ok(n.set.clone().context("No set in the QPNode")?.0),
+            QPNode::Range(n) => {Ok(&n.set.as_ref().context("No set in the QPNode")?.0)},
+            QPNode::Keyword(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
+            QPNode::BlkRt(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
+            QPNode::Union(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
+            QPNode::Intersec(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
+            QPNode::Diff(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
         }
     }
 }
@@ -218,7 +218,7 @@ impl<K: Num> QueryPlan<K> {
                             .get(qp_c_idx2)
                             .context("Cannot find the second child node in map")?;
                         let s2 = qp_c2.get_set()?;
-                        let res_set = (&s1) | (&s2);
+                        let res_set = (s1) | (s2);
                         let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
                         let mut final_cost = s1.len() * s2.len();
                         if self.outputs.contains(&idx) {
@@ -245,7 +245,7 @@ impl<K: Num> QueryPlan<K> {
                             .get(qp_c_idx2)
                             .context("Cannot find the second child node in map")?;
                         let s2 = qp_c2.get_set()?;
-                        let res_set = (&s1) & (&s2);
+                        let res_set = (s1) & (s2);
                         let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
                         let final_cost = s1.len() * s2.len();
                         if self.outputs.contains(&idx) {
@@ -271,7 +271,7 @@ impl<K: Num> QueryPlan<K> {
                             .get(qp_c_idx2)
                             .context("Cannot find the second child node in map")?;
                         let s2 = qp_c2.get_set()?;
-                        let res_set = (&s1) / (&s2);
+                        let res_set = (s1) / (s2);
                         let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
                         let final_cost = s1.len() * s2.len();
                         if self.outputs.contains(&idx) {
