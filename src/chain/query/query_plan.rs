@@ -30,7 +30,7 @@ pub enum QPNode<K: Num> {
 impl<K: Num> QPNode<K> {
     pub fn get_set(&self) -> Result<&Set> {
         match self {
-            QPNode::Range(n) => {Ok(&n.set.as_ref().context("No set in the QPNode")?.0)},
+            QPNode::Range(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
             QPNode::Keyword(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
             QPNode::BlkRt(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
             QPNode::Union(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),

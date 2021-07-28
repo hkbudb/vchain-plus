@@ -7,6 +7,7 @@ use crate::{
         },
         range::Range,
         traits::{Num, ReadInterface},
+        trie_tree,
     },
 };
 use anyhow::{bail, Context, Result};
@@ -170,11 +171,12 @@ impl<K: Num> QueryParam<K> {
                             idx1 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                         }
                         Node::Input(s) => {
-                            idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                            idx1 = query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
                                 keyword: s.to_string(),
                                 blk_height: end_blk_height,
                                 time_win: end_win_size,
-                            }));
+                                set: None,
+                            })));
                             idx_map.insert(s.to_string(), idx1);
                         }
                     }
@@ -190,11 +192,12 @@ impl<K: Num> QueryParam<K> {
                             idx2 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                         }
                         Node::Input(s) => {
-                            idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                            idx2 = query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
                                 keyword: s.to_string(),
                                 blk_height: end_blk_height,
                                 time_win: end_win_size,
-                            }));
+                                set: None,
+                            })));
                             idx_map.insert(s.to_string(), idx2);
                         }
                     }
@@ -219,11 +222,12 @@ impl<K: Num> QueryParam<K> {
                             idx1 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                         }
                         Node::Input(s) => {
-                            idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                            idx1 = query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
                                 keyword: s.to_string(),
                                 blk_height: end_blk_height,
                                 time_win: end_win_size,
-                            }));
+                                set: None,
+                            })));
                             idx_map.insert(s.to_string(), idx1);
                         }
                     }
@@ -239,11 +243,12 @@ impl<K: Num> QueryParam<K> {
                             idx2 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                         }
                         Node::Input(s) => {
-                            idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                            idx2 = query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
                                 keyword: s.to_string(),
                                 blk_height: end_blk_height,
                                 time_win: end_win_size,
-                            }));
+                                set: None,
+                            })));
                             idx_map.insert(s.to_string(), idx2);
                         }
                     }
@@ -267,28 +272,31 @@ impl<K: Num> QueryParam<K> {
                             c_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                         }
                         Node::Input(s) => {
-                            c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                            c_idx = query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
                                 keyword: s.to_string(),
                                 blk_height: end_blk_height,
                                 time_win: end_win_size,
-                            }));
+                                set: None,
+                            })));
                             idx_map.insert(s.to_string(), c_idx);
                         }
                     }
                     query_dag.add_edge(idx, c_idx, ());
-                    let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
+                    let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
                         blk_height: end_blk_height,
                         time_win: end_win_size,
-                    }));
+                        set: None,
+                    })));
                     query_dag.add_edge(idx, blk_rt_idx, ());
                     queue.push_back((c, c_idx));
                 }
                 Node::Input(s) => {
-                    let idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                    let idx = query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
                         keyword: s,
                         blk_height: end_blk_height,
                         time_win: end_win_size,
-                    }));
+                        set: None,
+                    })));
                     keyword_root_idx = idx;
                 }
             }
@@ -313,11 +321,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(c_idx) = idx_map.get(s) {
                                     idx1 = *c_idx;
                                 } else {
-                                    idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: end_blk_height,
-                                        time_win: end_win_size,
-                                    }));
+                                    idx1 = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: end_blk_height,
+                                            time_win: end_win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), idx1);
                                 }
                             }
@@ -337,11 +348,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(c_idx) = idx_map.get(s) {
                                     idx2 = *c_idx;
                                 } else {
-                                    idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: end_blk_height,
-                                        time_win: end_win_size,
-                                    }));
+                                    idx2 = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: end_blk_height,
+                                            time_win: end_win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), idx2);
                                 }
                             }
@@ -368,11 +382,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(c_idx) = idx_map.get(s) {
                                     idx1 = *c_idx;
                                 } else {
-                                    idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: end_blk_height,
-                                        time_win: end_win_size,
-                                    }));
+                                    idx1 = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: end_blk_height,
+                                            time_win: end_win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), idx1);
                                 }
                             }
@@ -392,11 +409,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(c_idx) = idx_map.get(s) {
                                     idx2 = *c_idx;
                                 } else {
-                                    idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: end_blk_height,
-                                        time_win: end_win_size,
-                                    }));
+                                    idx2 = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: end_blk_height,
+                                            time_win: end_win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), idx2);
                                 }
                             }
@@ -408,10 +428,12 @@ impl<K: Num> QueryParam<K> {
                     (Node::Not(n), idx) => {
                         let NotNode(c) = *n;
                         let c_idx: NodeIndex;
-                        let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
-                            blk_height: end_blk_height,
-                            time_win: end_win_size,
-                        }));
+                        let blk_rt_idx =
+                            query_dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
+                                blk_height: end_blk_height,
+                                time_win: end_win_size,
+                                set: None,
+                            })));
                         match &c {
                             Node::And(_) => {
                                 c_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
@@ -426,11 +448,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(ch_idx) = idx_map.get(s) {
                                     c_idx = *ch_idx;
                                 } else {
-                                    c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: end_blk_height,
-                                        time_win: end_win_size,
-                                    }));
+                                    c_idx = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: end_blk_height,
+                                            time_win: end_win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), c_idx);
                                 }
                             }
@@ -493,10 +518,11 @@ impl<K: Num> QueryParam<K> {
 
         if let Some(size) = start_win_size {
             if self.start_blk > 1 {
-                let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
+                let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
                     blk_height: Height(self.start_blk - 1),
                     time_win: size,
-                }));
+                    set: None,
+                })));
                 let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                 query_dag.add_edge(diff_idx, blk_rt_idx, ());
                 query_dag.add_edge(diff_idx, end_blk_idx, ());
@@ -505,6 +531,7 @@ impl<K: Num> QueryParam<K> {
         let res_query = Query {
             end_blk_height,
             query_dag,
+            trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
         };
         Ok(res_query)
     }
@@ -569,11 +596,13 @@ impl<K: Num> QueryParam<K> {
                                 idx1 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                             }
                             Node::Input(s) => {
-                                idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                    keyword: s.to_string(),
-                                    blk_height: height,
-                                    time_win: win_size,
-                                }));
+                                idx1 =
+                                    query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                        set: None,
+                                    })));
                                 idx_map.insert(s.to_string(), idx1);
                             }
                         }
@@ -589,11 +618,13 @@ impl<K: Num> QueryParam<K> {
                                 idx2 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                             }
                             Node::Input(s) => {
-                                idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                    keyword: s.to_string(),
-                                    blk_height: height,
-                                    time_win: win_size,
-                                }));
+                                idx2 =
+                                    query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                        set: None,
+                                    })));
                                 idx_map.insert(s.to_string(), idx2);
                             }
                         }
@@ -618,11 +649,13 @@ impl<K: Num> QueryParam<K> {
                                 idx1 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                             }
                             Node::Input(s) => {
-                                idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                    keyword: s.to_string(),
-                                    blk_height: height,
-                                    time_win: win_size,
-                                }));
+                                idx1 =
+                                    query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                        set: None,
+                                    })));
                                 idx_map.insert(s.to_string(), idx1);
                             }
                         }
@@ -638,11 +671,13 @@ impl<K: Num> QueryParam<K> {
                                 idx2 = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                             }
                             Node::Input(s) => {
-                                idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                    keyword: s.to_string(),
-                                    blk_height: height,
-                                    time_win: win_size,
-                                }));
+                                idx2 =
+                                    query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
+                                        keyword: s.to_string(),
+                                        blk_height: height,
+                                        time_win: win_size,
+                                        set: None,
+                                    })));
                                 idx_map.insert(s.to_string(), idx2);
                             }
                         }
@@ -668,35 +703,43 @@ impl<K: Num> QueryParam<K> {
                                     c_idx = query_dag.add_node(QueryNode::Diff(DiffNode {}));
                                 }
                                 Node::Input(s) => {
-                                    c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: height,
-                                        time_win: win_size,
-                                    }));
+                                    c_idx = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: height,
+                                            time_win: win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), c_idx);
                                 }
                             }
                             query_dag.add_edge(idx, c_idx, ());
-                            let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
-                                blk_height: height,
-                                time_win: win_size,
-                            }));
+                            let blk_rt_idx =
+                                query_dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
+                                    blk_height: height,
+                                    time_win: win_size,
+                                    set: None,
+                                })));
                             query_dag.add_edge(idx, blk_rt_idx, ());
                             queue.push_back((c, c_idx));
                         } else {
-                            let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
-                                blk_height: height,
-                                time_win: win_size,
-                            }));
+                            let blk_rt_idx =
+                                query_dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
+                                    blk_height: height,
+                                    time_win: win_size,
+                                    set: None,
+                                })));
                             keyword_root_idx = blk_rt_idx;
                         }
                     }
                     Node::Input(s) => {
-                        let idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
+                        let idx = query_dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
                             keyword: s,
                             blk_height: height,
                             time_win: win_size,
-                        }));
+                            set: None,
+                        })));
                         keyword_root_idx = idx;
                     }
                 }
@@ -722,11 +765,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(c_idx) = idx_map.get(s) {
                                     idx1 = *c_idx;
                                 } else {
-                                    idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: height,
-                                        time_win: win_size,
-                                    }));
+                                    idx1 = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: height,
+                                            time_win: win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), idx1);
                                 }
                             }
@@ -746,11 +792,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(c_idx) = idx_map.get(s) {
                                     idx2 = *c_idx;
                                 } else {
-                                    idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: height,
-                                        time_win: win_size,
-                                    }));
+                                    idx2 = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: height,
+                                            time_win: win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), idx2);
                                 }
                             }
@@ -777,11 +826,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(c_idx) = idx_map.get(s) {
                                     idx1 = *c_idx;
                                 } else {
-                                    idx1 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: height,
-                                        time_win: win_size,
-                                    }));
+                                    idx1 = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: height,
+                                            time_win: win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), idx1);
                                 }
                             }
@@ -801,11 +853,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(c_idx) = idx_map.get(s) {
                                     idx2 = *c_idx;
                                 } else {
-                                    idx2 = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: height,
-                                        time_win: win_size,
-                                    }));
+                                    idx2 = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: height,
+                                            time_win: win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), idx2);
                                 }
                             }
@@ -817,10 +872,12 @@ impl<K: Num> QueryParam<K> {
                     (Node::Not(n), idx) => {
                         let NotNode(c) = *n;
                         let c_idx: NodeIndex;
-                        let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(BlkRtNode {
-                            blk_height: height,
-                            time_win: win_size,
-                        }));
+                        let blk_rt_idx =
+                            query_dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
+                                blk_height: height,
+                                time_win: win_size,
+                                set: None,
+                            })));
                         match &c {
                             Node::And(_) => {
                                 c_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode {}));
@@ -835,11 +892,14 @@ impl<K: Num> QueryParam<K> {
                                 if let Some(ch_idx) = idx_map.get(s) {
                                     c_idx = *ch_idx;
                                 } else {
-                                    c_idx = query_dag.add_node(QueryNode::Keyword(KeywordNode {
-                                        keyword: s.to_string(),
-                                        blk_height: height,
-                                        time_win: win_size,
-                                    }));
+                                    c_idx = query_dag.add_node(QueryNode::Keyword(Box::new(
+                                        KeywordNode {
+                                            keyword: s.to_string(),
+                                            blk_height: height,
+                                            time_win: win_size,
+                                            set: None,
+                                        },
+                                    )));
                                     idx_map.insert(s.to_string(), c_idx);
                                 }
                             }
@@ -907,6 +967,7 @@ impl<K: Num> QueryParam<K> {
         let res_query = Query {
             end_blk_height,
             query_dag,
+            trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
         };
 
         Ok(res_query)

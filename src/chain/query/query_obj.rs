@@ -8,19 +8,23 @@ use crate::{
         },
         range::Range,
         traits::{Num, ReadInterface},
-        trie_tree,
+        trie_tree::{self},
     },
 };
 use anyhow::{bail, Context, Result};
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::FromIterator,
+    num::NonZeroU64,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum QueryNode<K: Num> {
     Range(RangeNode<K>),
-    Keyword(KeywordNode),
-    BlkRt(BlkRtNode),
+    Keyword(Box<KeywordNode>),
+    BlkRt(Box<BlkRtNode>),
     Union(UnionNode),
     Intersec(IntersecNode),
     Diff(DiffNode),
@@ -67,12 +71,64 @@ pub struct KeywordNode {
     pub(crate) keyword: String,
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
+    pub(crate) set: Option<(Set, AccValue)>,
+}
+
+impl KeywordNode {
+    pub fn estimate_size<K: Num, T: ReadInterface<K = K>>(
+        &mut self,
+        trie_ctx: &mut trie_tree::read::ReadContext<T>,
+        pk: &AccPublicKey,
+    ) -> Result<(usize, Set)> {
+        if self.set.is_none() {
+            let keyword = self.keyword.clone();
+            let (s, a) = trie_ctx.query(keyword, pk)?;
+            let size = s.len();
+            self.set = Some((s.clone(), a));
+            Ok((size, s))
+        } else {
+            let set_ref = self.set.as_ref().context("No set found")?;
+            Ok((set_ref.0.len(), set_ref.0.clone()))
+        }
+    }
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct BlkRtNode {
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
+    pub(crate) set: Option<(Set, AccValue)>,
+}
+
+impl BlkRtNode {
+    pub fn estimate_size<K: Num, T: ReadInterface<K = K>>(
+        &mut self,
+        chain: &T,
+        pk: &AccPublicKey,
+    ) -> Result<(usize, Set)> {
+        if self.set.is_none() {
+            let mut a = AccValue::from_set(&Set::new(), pk);
+            let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
+            for i in 0..self.time_win {
+                if self.blk_height.0 > i {
+                    let blk_content = chain.read_block_content(Height(self.blk_height.0 - i))?;
+                    let mut obj_id_nums = blk_content.read_obj_id_nums();
+                    total_obj_id_nums.append(&mut obj_id_nums);
+                    let sub_acc = blk_content
+                        .read_acc()
+                        .context("The block does not have acc value")?;
+                    a = a + sub_acc;
+                }
+            }
+            let s = Set::from_iter(total_obj_id_nums.into_iter());
+            let size = s.len();
+            self.set = Some((s.clone(), a));
+            Ok((size, s))
+        } else {
+            let set_ref = self.set.as_ref().context("No set found")?;
+            Ok((set_ref.0.len(), set_ref.0.clone()))
+        }
+    }
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -88,6 +144,7 @@ pub struct DiffNode {}
 pub struct Query<K: Num> {
     pub(crate) end_blk_height: Height,
     pub(crate) query_dag: Graph<QueryNode<K>, ()>,
+    pub(crate) trie_proofs: HashMap<Height, trie_tree::proof::Proof>,
 }
 
 pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
@@ -128,7 +185,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                         keyword: n.keyword.clone(),
                         blk_height: n.blk_height,
                         time_win: n.time_win,
-                        set: None,
+                        set: n.set.clone(),
                     };
                     let qp_idx = qp_dag.add_node(QPNode::Keyword(Box::new(qp_keyword_node)));
                     idx_map.insert(idx, qp_idx);
@@ -137,7 +194,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                     let qp_blk_rt_node = QPBlkRtNode {
                         blk_height: n.blk_height,
                         time_win: n.time_win,
-                        set: None,
+                        set: n.set.clone(),
                     };
                     let qp_idx = qp_dag.add_node(QPNode::BlkRt(Box::new(qp_blk_rt_node)));
                     idx_map.insert(idx, qp_idx);
@@ -199,7 +256,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
         end_blk_height: query_end_blk_height,
         outputs: qp_outputs,
         dag: qp_dag,
-        trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
+        trie_proofs: query.trie_proofs,
     };
 
     Ok(qp)
