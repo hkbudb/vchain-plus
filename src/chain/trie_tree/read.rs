@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 pub fn query_trie(
     node_loader: &impl TrieNodeLoader,
     root_id: Option<TrieNodeId>,
-    keyword: String,
+    keyword: &str,
     pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, Proof)> {
     let trie_root_id: TrieNodeId;
@@ -32,17 +32,17 @@ fn inner_query_trie(
     node_loader: &impl TrieNodeLoader,
     root_id: TrieNodeId,
     root_node: TrieNode,
-    keyword: String,
+    keyword: &str,
     pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, SubProof)> {
     use super::proof::{leaf::TrieLeaf, non_leaf::TrieNonLeaf};
 
-    let mut query_proof = SubProof::from_hash(root_id, keyword.clone(), root_node.to_digest());
+    let mut query_proof = SubProof::from_hash(root_id, keyword, root_node.to_digest());
     let query_val: Set;
     let res_acc: AccValue;
 
     let mut cur_node = root_node;
-    let mut cur_key = keyword;
+    let mut cur_key = keyword.to_string();
     let mut cur_proof = &mut query_proof as *mut _;
 
     loop {
@@ -54,7 +54,7 @@ fn inner_query_trie(
                     unsafe {
                         *cur_proof = SubProof::from_leaf(TrieLeaf::new(
                             n.id,
-                            n.rest.clone(),
+                            &n.rest,
                             n.data_set_acc,
                         ));
                     }
@@ -62,7 +62,7 @@ fn inner_query_trie(
                     query_val = Set::new();
                     res_acc = AccValue::from_set(&query_val, pk);
                     unsafe {
-                        *cur_proof = SubProof::from_hash(n.id, n.rest.clone(), n.to_digest());
+                        *cur_proof = SubProof::from_hash(n.id, &n.rest, n.to_digest());
                     }
                 }
                 break;
@@ -75,7 +75,7 @@ fn inner_query_trie(
                     Some((id, hash)) => {
                         let sub_node = node_loader.load_node(*id)?;
                         let mut sub_proof =
-                            Box::new(SubProof::from_hash(*id, rest_cur_key.clone(), *hash));
+                            Box::new(SubProof::from_hash(*id, &rest_cur_key, *hash));
                         let sub_proof_ptr = &mut *sub_proof as *mut _;
                         let mut children = BTreeMap::new();
                         for (c, (i, h)) in &n.children {
@@ -90,7 +90,7 @@ fn inner_query_trie(
                             );
                         }
                         let mut non_leaf = TrieNonLeaf::from_hashes(
-                            (*n.nibble).to_string(),
+                            &n.nibble,
                             n.data_set_acc,
                             children,
                         );
@@ -110,7 +110,7 @@ fn inner_query_trie(
                         query_val = Set::new();
                         res_acc = AccValue::from_set(&query_val, pk);
                         unsafe {
-                            *cur_proof = SubProof::from_hash(n.id, n.nibble.clone(), n.to_digest());
+                            *cur_proof = SubProof::from_hash(n.id, &n.nibble, n.to_digest());
                         }
                         break;
                     }
@@ -144,13 +144,13 @@ impl<'a, L: TrieNodeLoader> ReadContext<'a, L> {
                 Err(_) => Self {
                     node_loader,
                     root_id,
-                    proof: Proof::from_root_hash(id, "".to_string(), Digest::zero()),
+                    proof: Proof::from_root_hash(id, "", Digest::zero()),
                 },
             },
             None => Self {
                 node_loader,
                 root_id,
-                proof: Proof::from_root_hash(TrieNodeId(0), "".to_string(), Digest::zero()),
+                proof: Proof::from_root_hash(TrieNodeId(0), "", Digest::zero()),
             },
         }
     }
@@ -163,7 +163,7 @@ impl<'a, L: TrieNodeLoader> ReadContext<'a, L> {
         self.proof
     }
 
-    pub fn query(&mut self, keyword: String, pk: &AccPublicKey) -> Result<(Set, AccValue)> {
+    pub fn query(&mut self, keyword: &str, pk: &AccPublicKey) -> Result<(Set, AccValue)> {
         let query_val: Set;
         let res_acc: AccValue;
         match self.proof.root.as_mut() {
@@ -174,7 +174,7 @@ impl<'a, L: TrieNodeLoader> ReadContext<'a, L> {
                         self.node_loader,
                         sub_root_id,
                         sub_root_node,
-                        cur_key,
+                        &cur_key,
                         pk,
                     )?;
                     unsafe {

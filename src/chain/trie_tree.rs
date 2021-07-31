@@ -67,10 +67,10 @@ impl TrieNode {
         }
     }
 
-    pub fn get_string(&self) -> String {
+    pub fn get_string(&self) -> &str {
         match self {
-            TrieNode::Leaf(n) => n.rest.clone(),
-            TrieNode::NonLeaf(n) => n.nibble.clone(),
+            TrieNode::Leaf(n) => &n.rest,
+            TrieNode::NonLeaf(n) => &n.nibble,
         }
     }
 }

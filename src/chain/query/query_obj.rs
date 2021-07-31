@@ -91,7 +91,7 @@ impl KeywordNode {
         pk: &AccPublicKey,
     ) -> Result<()> {
         if self.set.is_none() {
-            let keyword = self.keyword.clone();
+            let keyword = &self.keyword;
             let (s, a) = trie_ctx.query(keyword, pk)?;
             self.set = Some((s, a));
             Ok(())

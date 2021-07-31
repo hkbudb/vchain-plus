@@ -26,7 +26,7 @@ impl Proof {
         Self { root: Some(root) }
     }
 
-    pub fn from_root_hash(root_id: TrieNodeId, nibble: String, root_hash: Digest) -> Self {
+    pub fn from_root_hash(root_id: TrieNodeId, nibble: &str, root_hash: Digest) -> Self {
         if root_hash == Digest::zero() {
             Self::default()
         } else {
@@ -41,7 +41,7 @@ impl Proof {
         }
     }
 
-    fn value_acc(&self, keyword: String, pk: &AccPublicKey) -> AccValue {
+    fn value_acc(&self, keyword: &str, pk: &AccPublicKey) -> AccValue {
         match self.root.as_ref() {
             Some(root) => root.value_acc(keyword, pk),
             None => {
@@ -54,7 +54,7 @@ impl Proof {
     pub fn verify_acc(
         &self,
         target_acc: AccValue,
-        keyword: String,
+        keyword: &str,
         pk: &AccPublicKey,
     ) -> Result<()> {
         let computed_acc = self.value_acc(keyword, pk);

@@ -60,7 +60,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                     let proof = trie_proofs
                         .get(&n.blk_height)
                         .context("Inside dag: cannot find trie proof in VO")?;
-                    proof.verify_acc(n.acc, n.keyword.clone(), pk)?;
+                    proof.verify_acc(n.acc, &n.keyword, pk)?;
                 }
                 vo::VONode::BlkRt(n) => {
                     time_win_map.insert(n.blk_height, n.time_win);
