@@ -147,7 +147,7 @@ impl<K: Num> QueryParam<K> {
     ) -> Result<Query<K>> {
         let end_blk_height = Height(self.end_blk);
         let keyword_exp_opt = self.keyword_exp;
-        let mut query_dag = Graph::<QueryNode<K>, ()>::new();
+        let mut query_dag = Graph::<QueryNode<K>, bool>::new();
 
         let mut keyword_root_idx: NodeIndex = NodeIndex::default();
         let mut range_root_idx: NodeIndex = NodeIndex::default();
@@ -178,8 +178,8 @@ impl<K: Num> QueryParam<K> {
                     // add intersec
                     let intersec_idx =
                         query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                    query_dag.add_edge(intersec_idx, range_root_idx, ());
-                    query_dag.add_edge(intersec_idx, range_idx, ());
+                    query_dag.add_edge(intersec_idx, range_root_idx, true);
+                    query_dag.add_edge(intersec_idx, range_idx, false);
                     range_root_idx = intersec_idx;
                     continue;
                 }
@@ -195,8 +195,8 @@ impl<K: Num> QueryParam<K> {
         if has_keyword_query && has_range_query {
             debug!("has both keyword and range query");
             end_blk_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-            query_dag.add_edge(end_blk_idx, range_root_idx, ());
-            query_dag.add_edge(end_blk_idx, keyword_root_idx, ());
+            query_dag.add_edge(end_blk_idx, range_root_idx, true);
+            query_dag.add_edge(end_blk_idx, keyword_root_idx, false);
         } else if has_keyword_query {
             debug!("has keyword query only");
             end_blk_idx = keyword_root_idx;
@@ -216,8 +216,8 @@ impl<K: Num> QueryParam<K> {
                     set: None,
                 })));
                 let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                query_dag.add_edge(diff_idx, blk_rt_idx, ());
-                query_dag.add_edge(diff_idx, end_blk_idx, ());
+                query_dag.add_edge(diff_idx, blk_rt_idx, true);
+                query_dag.add_edge(diff_idx, end_blk_idx, false);
             }
         }
         let res_query = Query {
@@ -238,7 +238,7 @@ impl<K: Num> QueryParam<K> {
         let start_blk_height = Height(self.start_blk);
         let end_blk_height = Height(self.end_blk);
         let keyword_exp_opt = self.keyword_exp;
-        let mut query_dag = Graph::<QueryNode<K>, ()>::new();
+        let mut query_dag = Graph::<QueryNode<K>, bool>::new();
         let mut heights = Vec::<(u64, Height)>::new();
         if let Some(win_size) = start_win_size {
             if start_blk_height.0 > 1 {
@@ -294,8 +294,8 @@ impl<K: Num> QueryParam<K> {
                     if range_lock {
                         let intersec_idx =
                             query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                        query_dag.add_edge(intersec_idx, range_root_idx, ());
-                        query_dag.add_edge(intersec_idx, idx, ());
+                        query_dag.add_edge(intersec_idx, range_root_idx, true);
+                        query_dag.add_edge(intersec_idx, idx, false);
                         range_root_idx = intersec_idx;
                         continue;
                     }
@@ -308,8 +308,8 @@ impl<K: Num> QueryParam<K> {
             if has_keyword_query && has_range_query {
                 debug!("has both keyword and range query");
                 sub_root_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                query_dag.add_edge(sub_root_idx, range_root_idx, ());
-                query_dag.add_edge(sub_root_idx, keyword_root_idx, ());
+                query_dag.add_edge(sub_root_idx, range_root_idx, true);
+                query_dag.add_edge(sub_root_idx, keyword_root_idx, false);
             } else if has_keyword_query {
                 debug!("has keyword query only");
                 sub_root_idx = keyword_root_idx;
@@ -324,8 +324,8 @@ impl<K: Num> QueryParam<K> {
         }
         if sub_root_idxes.len() > 1 {
             let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-            query_dag.add_edge(diff_idx, *sub_root_idxes.get(0).context("")?, ());
-            query_dag.add_edge(diff_idx, *sub_root_idxes.get(1).context("")?, ());
+            query_dag.add_edge(diff_idx, *sub_root_idxes.get(0).context("")?, true);
+            query_dag.add_edge(diff_idx, *sub_root_idxes.get(1).context("")?, false);
         }
         let res_query = Query {
             end_blk_height,
@@ -346,7 +346,7 @@ impl<K: Num> QueryParam<K> {
         let start_blk_height = Height(self.start_blk);
         let end_blk_height = Height(self.end_blk);
         let keyword_exp_opt = self.keyword_exp;
-        let mut query_dag = Graph::<QueryNode<K>, ()>::new();
+        let mut query_dag = Graph::<QueryNode<K>, bool>::new();
         let mut heights = vec![(end_win_size, end_blk_height)];
         if let Some(win_size) = start_win_size {
             if start_blk_height.0 > 1 {
@@ -373,7 +373,7 @@ impl<K: Num> QueryParam<K> {
                 .read_trie_root(win_size)?;
             let mut trie_ctx = trie_tree::read::ReadContext::new(chain, trie_root.trie_root_id);
 
-            let mut sub_graphs = Vec::<(usize, NodeIndex, Graph<QueryNode<K>, ()>)>::new();
+            let mut sub_graphs = Vec::<(usize, NodeIndex, Graph<QueryNode<K>, bool>)>::new();
             if let Some(keyword_exp) = keyword_exp_opt.as_ref() {
                 let k_exp_set = keyword_exp.to_cnf_set();
                 for k_exp in &k_exp_set {
@@ -394,7 +394,7 @@ impl<K: Num> QueryParam<K> {
                         set: None,
                     };
                     range_node.estimate_size(chain, pk)?;
-                    let mut sub_graph = Graph::<QueryNode<K>, ()>::new();
+                    let mut sub_graph = Graph::<QueryNode<K>, bool>::new();
                     let rt_idx = sub_graph.add_node(QueryNode::Range(range_node));
                     sub_graphs.push((0, rt_idx, sub_graph));
                 }
@@ -452,8 +452,8 @@ impl<K: Num> QueryParam<K> {
         }
         if sub_root_idxes.len() > 1 {
             let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-            query_dag.add_edge(diff_idx, *sub_root_idxes.get(1).context("")?, ());
-            query_dag.add_edge(diff_idx, *sub_root_idxes.get(0).context("")?, ());
+            query_dag.add_edge(diff_idx, *sub_root_idxes.get(1).context("")?, true);
+            query_dag.add_edge(diff_idx, *sub_root_idxes.get(0).context("")?, false);
         }
 
         let res_query = Query {
@@ -468,7 +468,7 @@ impl<K: Num> QueryParam<K> {
 
 fn dag_add_keyword_exp<K: Num>(
     keyword_exp: &Node,
-    dag: &mut Graph<QueryNode<K>, ()>,
+    dag: &mut Graph<QueryNode<K>, bool>,
     blk_height: Height,
     win_size: u64,
 ) -> Result<NodeIndex> {
@@ -502,7 +502,7 @@ fn dag_add_keyword_exp<K: Num>(
                     idx_map.insert(s.to_string(), idx1);
                 }
             }
-            dag.add_edge(idx, idx1, ());
+            dag.add_edge(idx, idx1, true);
             match c2 {
                 Node::And(_) => {
                     idx2 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
@@ -523,7 +523,7 @@ fn dag_add_keyword_exp<K: Num>(
                     idx_map.insert(s.to_string(), idx2);
                 }
             }
-            dag.add_edge(idx, idx2, ());
+            dag.add_edge(idx, idx2, false);
             queue.push_back((c1, idx1));
             queue.push_back((c2, idx2));
         }
@@ -553,7 +553,7 @@ fn dag_add_keyword_exp<K: Num>(
                     idx_map.insert(s.to_string(), idx1);
                 }
             }
-            dag.add_edge(idx, idx1, ());
+            dag.add_edge(idx, idx1, true);
             match c2 {
                 Node::And(_) => {
                     idx2 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
@@ -574,7 +574,7 @@ fn dag_add_keyword_exp<K: Num>(
                     idx_map.insert(s.to_string(), idx2);
                 }
             }
-            dag.add_edge(idx, idx2, ());
+            dag.add_edge(idx, idx2, false);
             queue.push_back((c1, idx1));
             queue.push_back((c2, idx2));
         }
@@ -603,13 +603,13 @@ fn dag_add_keyword_exp<K: Num>(
                     idx_map.insert(s.to_string(), c_idx);
                 }
             }
-            dag.add_edge(idx, c_idx, ());
+            dag.add_edge(idx, c_idx, true);
             let blk_rt_idx = dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
                 blk_height,
                 time_win: win_size,
                 set: None,
             })));
-            dag.add_edge(idx, blk_rt_idx, ());
+            dag.add_edge(idx, blk_rt_idx, false);
             queue.push_back((c, c_idx));
         }
         Node::Input(s) => {
@@ -653,7 +653,7 @@ fn dag_add_keyword_exp<K: Num>(
                         }
                     }
                 }
-                dag.add_edge(idx, idx1, ());
+                dag.add_edge(idx, idx1, true);
                 match c2 {
                     Node::And(_) => {
                         idx2 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
@@ -678,7 +678,7 @@ fn dag_add_keyword_exp<K: Num>(
                         }
                     }
                 }
-                dag.add_edge(idx, idx2, ());
+                dag.add_edge(idx, idx2, false);
                 queue.push_back((c1, idx1));
                 queue.push_back((c2, idx2));
             }
@@ -710,7 +710,7 @@ fn dag_add_keyword_exp<K: Num>(
                         }
                     }
                 }
-                dag.add_edge(idx, idx1, ());
+                dag.add_edge(idx, idx1, true);
                 match c2 {
                     Node::And(_) => {
                         idx2 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
@@ -735,7 +735,7 @@ fn dag_add_keyword_exp<K: Num>(
                         }
                     }
                 }
-                dag.add_edge(idx, idx2, ());
+                dag.add_edge(idx, idx2, false);
                 queue.push_back((c1, idx1));
                 queue.push_back((c2, idx2));
             }
@@ -771,8 +771,8 @@ fn dag_add_keyword_exp<K: Num>(
                         }
                     }
                 }
-                dag.add_edge(idx, c_idx, ());
-                dag.add_edge(idx, blk_rt_idx, ());
+                dag.add_edge(idx, c_idx, true);
+                dag.add_edge(idx, blk_rt_idx, false);
                 queue.push_back((c, c_idx));
             }
             Node::Input(_) => {}
@@ -788,8 +788,8 @@ fn process_sub_node<K: Num, T: ReadInterface<K = K>>(
     trie_ctx: &mut trie_tree::read::ReadContext<T>,
     chain: &T,
     pk: &AccPublicKey,
-) -> Result<(usize, NodeIndex, Graph<QueryNode<K>, ()>)> {
-    let mut sub_dag = Graph::<QueryNode<K>, ()>::new();
+) -> Result<(usize, NodeIndex, Graph<QueryNode<K>, bool>)> {
+    let mut sub_dag = Graph::<QueryNode<K>, bool>::new();
     let sub_root_idx = dag_add_keyword_exp(sub_exp, &mut sub_dag, blk_height, win_size)?;
     let mut inputs = match toposort(&sub_dag, None) {
         Ok(v) => v,
@@ -805,9 +805,9 @@ fn process_sub_node<K: Num, T: ReadInterface<K = K>>(
 }
 
 fn combine_query_graphs_by_intersec<K: Num>(
-    graph1: &mut Graph<QueryNode<K>, ()>,
+    graph1: &mut Graph<QueryNode<K>, bool>,
     graph1_root_idx: NodeIndex,
-    graph2: &mut Graph<QueryNode<K>, ()>,
+    graph2: &mut Graph<QueryNode<K>, bool>,
     graph2_root_idx: NodeIndex,
 ) -> Result<NodeIndex> {
     let new_graph2_sub_root_idx = combine_query_graphs(graph1, graph2, graph2_root_idx)?;
@@ -821,36 +821,40 @@ fn combine_query_graphs_by_intersec<K: Num>(
         .get_set()?;
     let s_new = s1 & s2;
     let new_root_idx = graph1.add_node(QueryNode::Intersec(IntersecNode { set: Some(s_new) }));
-    graph1.add_edge(new_root_idx, graph1_root_idx, ());
-    graph1.add_edge(new_root_idx, new_graph2_sub_root_idx, ());
+    graph1.add_edge(new_root_idx, graph1_root_idx, true);
+    graph1.add_edge(new_root_idx, new_graph2_sub_root_idx, false);
     Ok(new_root_idx)
 }
 
 fn combine_query_graphs<K: Num>(
-    graph1: &mut Graph<QueryNode<K>, ()>,
-    graph2: &mut Graph<QueryNode<K>, ()>,
+    graph1: &mut Graph<QueryNode<K>, bool>,
+    graph2: &mut Graph<QueryNode<K>, bool>,
     graph2_root_idx: NodeIndex,
 ) -> Result<NodeIndex> {
     let mut old_new_idx = HashMap::<NodeIndex, NodeIndex>::new();
-    let mut old_s_e_idx = Vec::<(NodeIndex, NodeIndex)>::new();
+    let mut old_s_e_idx = Vec::<(NodeIndex, NodeIndex, bool)>::new();
 
     let graph2_idxes = graph2.node_indices();
     for idx in graph2_idxes.rev() {
         for c_idx in graph2.neighbors_directed(idx, Outgoing) {
-            old_s_e_idx.push((idx, c_idx));
+            let edge_idx = graph2.find_edge(idx, c_idx).context("Cannot find edge")?;
+            let weight = graph2.edge_weight(edge_idx).context("Cannot find edge")?;
+            old_s_e_idx.push((idx, c_idx, *weight));
         }
         for p_idx in graph2.neighbors_directed(idx, Incoming) {
-            old_s_e_idx.push((p_idx, idx));
+            let edge_idx = graph2.find_edge(p_idx, idx).context("Cannot find edge")?;
+            let weight = graph2.edge_weight(edge_idx).context("Cannot find edge")?;
+            old_s_e_idx.push((p_idx, idx, *weight));
         }
         let node = graph2.remove_node(idx).context("Node does not exist")?;
         let new_idx = graph1.add_node(node);
         old_new_idx.insert(idx, new_idx);
     }
 
-    for (old_s, old_e) in old_s_e_idx.iter().rev() {
+    for (old_s, old_e, weight) in old_s_e_idx.iter().rev() {
         let new_s = old_new_idx.get(&old_s).context("Cannot find idx in map")?;
         let new_e = old_new_idx.get(&old_e).context("Cannot find idx in map")?;
-        graph1.add_edge(*new_s, *new_e, ());
+        graph1.add_edge(*new_s, *new_e, *weight);
     }
 
     let sub_root = old_new_idx

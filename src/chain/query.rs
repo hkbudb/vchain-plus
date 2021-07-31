@@ -42,7 +42,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     query_plan: QueryPlan<K>,
     pk: &AccPublicKey,
 ) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
-    let mut vo_dag = Graph::<VONode<K>, ()>::new();
+    let mut vo_dag = Graph::<VONode<K>, bool>::new();
     let qp_outputs = query_plan.outputs;
     let qp_dag = query_plan.dag;
     let mut qp_inputs = match toposort(&qp_dag, None) {
@@ -219,8 +219,8 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         };
                         let vo_idx = vo_dag.add_node(VONode::InterUnion(vo_inter_union));
                         set_map.insert(vo_idx, res_set);
-                        vo_dag.add_edge(vo_idx, *vo_c_idx1, ());
-                        vo_dag.add_edge(vo_idx, *vo_c_idx2, ());
+                        vo_dag.add_edge(vo_idx, *vo_c_idx1, true);
+                        vo_dag.add_edge(vo_idx, *vo_c_idx2, false);
                         idx_map.insert(idx, vo_idx);
                     } else {
                         let (res_set, final_proof) =
@@ -228,8 +228,8 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         let vo_final_union = VOFinalUnion { proof: final_proof };
                         let vo_idx = vo_dag.add_node(VONode::FinalUnion(vo_final_union));
                         set_map.insert(vo_idx, res_set);
-                        vo_dag.add_edge(vo_idx, *vo_c_idx1, ());
-                        vo_dag.add_edge(vo_idx, *vo_c_idx2, ());
+                        vo_dag.add_edge(vo_idx, *vo_c_idx1, true);
+                        vo_dag.add_edge(vo_idx, *vo_c_idx2, false);
                         idx_map.insert(idx, vo_idx);
                     }
                 }
@@ -278,8 +278,8 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         };
                         let vo_idx = vo_dag.add_node(VONode::InterIntersec(vo_inter_intersec));
                         set_map.insert(vo_idx, res_set);
-                        vo_dag.add_edge(vo_idx, *vo_c_idx1, ());
-                        vo_dag.add_edge(vo_idx, *vo_c_idx2, ());
+                        vo_dag.add_edge(vo_idx, *vo_c_idx1, true);
+                        vo_dag.add_edge(vo_idx, *vo_c_idx2, false);
                         idx_map.insert(idx, vo_idx);
                     } else {
                         let (res_set, final_proof) =
@@ -287,8 +287,8 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         let vo_final_intersec = VOFinalIntersec { proof: final_proof };
                         let vo_idx = vo_dag.add_node(VONode::FinalIntersec(vo_final_intersec));
                         set_map.insert(vo_idx, res_set);
-                        vo_dag.add_edge(vo_idx, *vo_c_idx1, ());
-                        vo_dag.add_edge(vo_idx, *vo_c_idx2, ());
+                        vo_dag.add_edge(vo_idx, *vo_c_idx1, true);
+                        vo_dag.add_edge(vo_idx, *vo_c_idx2, false);
                         idx_map.insert(idx, vo_idx);
                     }
                 }
@@ -297,9 +297,28 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     for idx in qp_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let qp_c_idx1 = child_idxs
+
+                    let mut qp_c_idx1 = child_idxs
                         .get(1)
                         .context("Cannot find the first qp child idx of difference")?;
+                    let qp_c_idx2;
+                    let edge_idx = qp_dag
+                        .find_edge(idx, *qp_c_idx1)
+                        .context("Cannot find edge")?;
+                    let weight = qp_dag.edge_weight(edge_idx).context("Cannot find edge")?;
+                    if !*weight {
+                        qp_c_idx2 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first qp child idx of difference")?;
+                    } else {
+                        qp_c_idx1 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first qp child idx of difference")?;
+                        qp_c_idx2 = child_idxs
+                            .get(1)
+                            .context("Cannot find the first qp child idx of difference")?;
+                    }
+
                     let vo_c_idx1 = idx_map
                         .get(&qp_c_idx1)
                         .context("Cannot find the first vo node idx of Difference in idx_map")?;
@@ -310,9 +329,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         .get(vo_c_idx1)
                         .context("Cannot find the set in set_map")?;
 
-                    let qp_c_idx2 = child_idxs
-                        .get(0)
-                        .context("Cannot second the first qp child idx of difference")?;
                     let vo_c_idx2 = idx_map
                         .get(&qp_c_idx2)
                         .context("Cannot find the vo node idx of Difference in idx_map")?;
@@ -338,8 +354,8 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         };
                         let vo_idx = vo_dag.add_node(VONode::InterDiff(vo_inter_diff));
                         set_map.insert(vo_idx, res_set);
-                        vo_dag.add_edge(vo_idx, *vo_c_idx1, ());
-                        vo_dag.add_edge(vo_idx, *vo_c_idx2, ());
+                        vo_dag.add_edge(vo_idx, *vo_c_idx1, false);
+                        vo_dag.add_edge(vo_idx, *vo_c_idx2, true);
                         idx_map.insert(idx, vo_idx);
                     } else {
                         let (res_set, final_proof) =
@@ -347,8 +363,8 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         let vo_final_diff = VOFinalDiff { proof: final_proof };
                         let vo_idx = vo_dag.add_node(VONode::FinalDiff(vo_final_diff));
                         set_map.insert(vo_idx, res_set);
-                        vo_dag.add_edge(vo_idx, *vo_c_idx1, ());
-                        vo_dag.add_edge(vo_idx, *vo_c_idx2, ());
+                        vo_dag.add_edge(vo_idx, *vo_c_idx1, false);
+                        vo_dag.add_edge(vo_idx, *vo_c_idx2, true);
                         idx_map.insert(idx, vo_idx);
                     }
                 }
@@ -496,8 +512,8 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
     let mut result = Vec::<(HashMap<ObjId, Object<K>>, VO<K>)>::new();
     for (q_param, s_win_size, e_win_size) in query_params {
         let sub_timer = howlong::ProcessCPUTimer::new();
-        let query = q_param.into_query_basic(s_win_size, e_win_size)?;
-        // let query = q_param.into_query_trimmed2(&chain, pk, s_win_size, e_win_size)?;
+        //let query = q_param.into_query_basic(s_win_size, e_win_size)?;
+        let query = q_param.into_query_trimmed2(&chain, pk, s_win_size, e_win_size)?;
         let time = sub_timer.elapsed();
         debug!("Stage1: {}", time);
         let sub_timer = howlong::ProcessCPUTimer::new();

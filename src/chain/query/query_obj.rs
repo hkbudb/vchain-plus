@@ -155,12 +155,12 @@ pub struct DiffNode {
 #[derive(Debug)]
 pub struct Query<K: Num> {
     pub(crate) end_blk_height: Height,
-    pub(crate) query_dag: Graph<QueryNode<K>, ()>,
+    pub(crate) query_dag: Graph<QueryNode<K>, bool>,
     pub(crate) trie_proofs: HashMap<Height, trie_tree::proof::Proof>,
 }
 
 pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
-    let mut qp_dag = Graph::<QPNode<K>, ()>::new();
+    let mut qp_dag = Graph::<QPNode<K>, bool>::new();
     let query_dag = query.query_dag;
     let query_end_blk_height = query.end_blk_height;
     let mut q_inputs = match toposort(&query_dag, None) {
@@ -217,7 +217,13 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                     idx_map.insert(idx, qp_idx);
                     for child_idx in query_dag.neighbors_directed(idx, Outgoing) {
                         if let Some(target_idx) = idx_map.get(&child_idx) {
-                            qp_dag.add_edge(qp_idx, *target_idx, ());
+                            let edge_idx = query_dag
+                                .find_edge(idx, child_idx)
+                                .context("Cannot find edge")?;
+                            let weight = query_dag
+                                .edge_weight(edge_idx)
+                                .context("Cannot find edge")?;
+                            qp_dag.add_edge(qp_idx, *target_idx, *weight);
                         } else {
                             bail!("Cannot find the child idx of union in idx_map");
                         }
@@ -229,7 +235,13 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                     idx_map.insert(idx, qp_idx);
                     for child_idx in query_dag.neighbors_directed(idx, Outgoing) {
                         if let Some(target_idx) = idx_map.get(&child_idx) {
-                            qp_dag.add_edge(qp_idx, *target_idx, ());
+                            let edge_idx = query_dag
+                                .find_edge(idx, child_idx)
+                                .context("Cannot find edge")?;
+                            let weight = query_dag
+                                .edge_weight(edge_idx)
+                                .context("Cannot find edge")?;
+                            qp_dag.add_edge(qp_idx, *target_idx, *weight);
                         } else {
                             bail!("Cannot find the child idx of intersection in idx_map");
                         }
@@ -241,7 +253,13 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                     idx_map.insert(idx, qp_idx);
                     for child_idx in query_dag.neighbors_directed(idx, Outgoing) {
                         if let Some(target_idx) = idx_map.get(&child_idx) {
-                            qp_dag.add_edge(qp_idx, *target_idx, ());
+                            let edge_idx = query_dag
+                                .find_edge(idx, child_idx)
+                                .context("Cannot find edge")?;
+                            let weight = query_dag
+                                .edge_weight(edge_idx)
+                                .context("Cannot find edge")?;
+                            qp_dag.add_edge(qp_idx, *target_idx, *weight);
                         } else {
                             bail!("Cannot find the child idx of difference in idx_map");
                         }
@@ -267,7 +285,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
 
 pub(crate) fn estimate_query_cost<K: Num, T: ReadInterface<K = K>>(
     inputs: &[NodeIndex],
-    dag: &mut Graph<QueryNode<K>, ()>,
+    dag: &mut Graph<QueryNode<K>, bool>,
     trie_ctx: &mut trie_tree::read::ReadContext<T>,
     chain: &T,
     pk: &AccPublicKey,

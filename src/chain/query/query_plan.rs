@@ -82,7 +82,7 @@ pub struct QPDiff {
 pub struct QueryPlan<K: Num> {
     pub(crate) end_blk_height: Height,
     pub(crate) outputs: HashSet<NodeIndex>,
-    pub(crate) dag: Graph<QPNode<K>, ()>,
+    pub(crate) dag: Graph<QPNode<K>, bool>,
     pub(crate) trie_proofs: HashMap<Height, trie_tree::proof::Proof>,
 }
 
@@ -365,12 +365,12 @@ mod tests {
         let union = QPUnion { set: None };
         let intersec = QPIntersec { set: None };
 
-        let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
+        let mut qp_dag = Graph::<QPNode<u32>, bool>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
         let idx1 = qp_dag.add_node(QPNode::Keyword(Box::new(k2.clone())));
         let idx2 = qp_dag.add_node(QPNode::Intersec(intersec.clone()));
-        qp_dag.add_edge(idx2, idx0, ());
-        qp_dag.add_edge(idx2, idx1, ());
+        qp_dag.add_edge(idx2, idx0, true);
+        qp_dag.add_edge(idx2, idx1, false);
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
             outputs: HashSet::<NodeIndex>::from_iter(vec![idx2].into_iter()),
@@ -388,12 +388,12 @@ mod tests {
             HashSet::<NodeIndex>::from_iter(vec![idx2].into_iter())
         );
 
-        let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
+        let mut qp_dag = Graph::<QPNode<u32>, bool>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
         let idx1 = qp_dag.add_node(QPNode::Keyword(Box::new(k2.clone())));
         let idx2 = qp_dag.add_node(QPNode::Union(union.clone()));
-        qp_dag.add_edge(idx2, idx0, ());
-        qp_dag.add_edge(idx2, idx1, ());
+        qp_dag.add_edge(idx2, idx0, true);
+        qp_dag.add_edge(idx2, idx1, false);
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
             outputs: HashSet::<NodeIndex>::from_iter(vec![idx2].into_iter()),
@@ -411,17 +411,17 @@ mod tests {
             HashSet::<NodeIndex>::from_iter(vec![idx0, idx1].into_iter())
         );
 
-        let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
+        let mut qp_dag = Graph::<QPNode<u32>, bool>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
         let idx1 = qp_dag.add_node(QPNode::Keyword(Box::new(k2.clone())));
         let idx2 = qp_dag.add_node(QPNode::Keyword(Box::new(k3.clone())));
         let idx3 = qp_dag.add_node(QPNode::Intersec(intersec.clone()));
         let idx4 = qp_dag.add_node(QPNode::Union(union.clone()));
 
-        qp_dag.add_edge(idx3, idx0, ());
-        qp_dag.add_edge(idx3, idx1, ());
-        qp_dag.add_edge(idx4, idx3, ());
-        qp_dag.add_edge(idx4, idx2, ());
+        qp_dag.add_edge(idx3, idx0, true);
+        qp_dag.add_edge(idx3, idx1, false);
+        qp_dag.add_edge(idx4, idx3, true);
+        qp_dag.add_edge(idx4, idx2, false);
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
             outputs: HashSet::<NodeIndex>::from_iter(vec![idx4].into_iter()),
@@ -439,17 +439,17 @@ mod tests {
             HashSet::<NodeIndex>::from_iter(vec![idx2, idx3].into_iter())
         );
 
-        let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
+        let mut qp_dag = Graph::<QPNode<u32>, bool>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
         let idx1 = qp_dag.add_node(QPNode::Keyword(Box::new(k2.clone())));
         let idx2 = qp_dag.add_node(QPNode::Keyword(Box::new(k3.clone())));
         let idx3 = qp_dag.add_node(QPNode::Union(union.clone()));
         let idx4 = qp_dag.add_node(QPNode::Union(union.clone()));
 
-        qp_dag.add_edge(idx3, idx0, ());
-        qp_dag.add_edge(idx3, idx1, ());
-        qp_dag.add_edge(idx4, idx3, ());
-        qp_dag.add_edge(idx4, idx2, ());
+        qp_dag.add_edge(idx3, idx0, true);
+        qp_dag.add_edge(idx3, idx1, false);
+        qp_dag.add_edge(idx4, idx3, true);
+        qp_dag.add_edge(idx4, idx2, false);
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
             outputs: HashSet::<NodeIndex>::from_iter(vec![idx4].into_iter()),
@@ -467,7 +467,7 @@ mod tests {
             HashSet::<NodeIndex>::from_iter(vec![idx2, idx1, idx0].into_iter())
         );
 
-        let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
+        let mut qp_dag = Graph::<QPNode<u32>, bool>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
         let idx1 = qp_dag.add_node(QPNode::Keyword(Box::new(k2.clone())));
         let idx2 = qp_dag.add_node(QPNode::Keyword(Box::new(k3.clone())));
@@ -476,12 +476,12 @@ mod tests {
         let idx5 = qp_dag.add_node(QPNode::Union(union.clone()));
         let idx6 = qp_dag.add_node(QPNode::Union(union.clone()));
 
-        qp_dag.add_edge(idx4, idx0, ());
-        qp_dag.add_edge(idx4, idx1, ());
-        qp_dag.add_edge(idx5, idx2, ());
-        qp_dag.add_edge(idx5, idx3, ());
-        qp_dag.add_edge(idx6, idx4, ());
-        qp_dag.add_edge(idx6, idx5, ());
+        qp_dag.add_edge(idx4, idx0, true);
+        qp_dag.add_edge(idx4, idx1, false);
+        qp_dag.add_edge(idx5, idx2, true);
+        qp_dag.add_edge(idx5, idx3, false);
+        qp_dag.add_edge(idx6, idx4, true);
+        qp_dag.add_edge(idx6, idx5, false);
         let mut qp = QueryPlan {
             end_blk_height: Height(0),
             outputs: HashSet::<NodeIndex>::from_iter(vec![idx6].into_iter()),

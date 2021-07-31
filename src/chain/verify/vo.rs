@@ -127,7 +127,7 @@ impl MerkleProof {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VoDag<K: Num> {
     pub(crate) output_sets: HashMap<NodeIndex, Set>,
-    pub(crate) dag: Graph<VONode<K>, ()>,
+    pub(crate) dag: Graph<VONode<K>, bool>,
 }
 
 #[derive(Serialize, Deserialize)]

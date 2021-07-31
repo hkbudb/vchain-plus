@@ -156,15 +156,29 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                     for idx in vo_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let child_idx1 = child_idxs
+                    let mut child_idx1 = child_idxs
                         .get(1)
                         .context("Cannot find the first child idx of intermediate difference")?;
+                    let child_idx2;
+                    let edge_idx = vo_dag
+                        .find_edge(idx, *child_idx1)
+                        .context("Cannot find edge")?;
+                    let weight = vo_dag.edge_weight(edge_idx).context("Cannot find edge")?;
+                    if !*weight {
+                        child_idx2 = child_idxs.get(0).context(
+                            "Cannot find the second child idx of intermediate difference",
+                        )?;
+                    } else {
+                        child_idx1 = child_idxs.get(0).context(
+                            "Cannot find the first child idx of intermediate difference",
+                        )?;
+                        child_idx2 = child_idxs.get(1).context(
+                            "Cannot find the second child idx of intermediate difference",
+                        )?;
+                    }
                     let child1 = vo_dag
                         .node_weight(*child_idx1)
                         .context("Cannot find the second child node in vo_dag")?;
-                    let child_idx2 = child_idxs
-                        .get(0)
-                        .context("Cannot find the second child idx of intermediate difference")?;
                     let child2 = vo_dag
                         .node_weight(*child_idx2)
                         .context("Cannot find the second child node in vo_dag")?;
@@ -176,15 +190,29 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                     for idx in vo_dag.neighbors_directed(idx, Outgoing) {
                         child_idxs.push(idx);
                     }
-                    let child_idx1 = child_idxs
+                    let mut child_idx1 = child_idxs
                         .get(1)
-                        .context("Cannot find the first child idx of final difference")?;
+                        .context("Cannot find the first child idx of intermediate difference")?;
+                    let child_idx2;
+                    let edge_idx = vo_dag
+                        .find_edge(idx, *child_idx1)
+                        .context("Cannot find edge")?;
+                    let weight = vo_dag.edge_weight(edge_idx).context("Cannot find edge")?;
+                    if !*weight {
+                        child_idx2 = child_idxs.get(0).context(
+                            "Cannot find the second child idx of intermediate difference",
+                        )?;
+                    } else {
+                        child_idx1 = child_idxs.get(0).context(
+                            "Cannot find the first child idx of intermediate difference",
+                        )?;
+                        child_idx2 = child_idxs.get(1).context(
+                            "Cannot find the second child idx of intermediate difference",
+                        )?;
+                    }
                     let child1 = vo_dag
                         .node_weight(*child_idx1)
                         .context("Cannot find the second child node in vo_dag")?;
-                    let child_idx2 = child_idxs
-                        .get(0)
-                        .context("Cannot find the second child idx of final difference")?;
                     let child2 = vo_dag
                         .node_weight(*child_idx2)
                         .context("Cannot find the second child node in vo_dag")?;
