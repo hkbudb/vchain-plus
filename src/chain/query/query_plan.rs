@@ -67,19 +67,16 @@ pub struct QPBlkRtNode {
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct QPUnion {
     pub(crate) set: Option<(Set, usize, usize)>,
-    pub(crate) cost: Option<(usize, usize)>,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct QPIntersec {
     pub(crate) set: Option<(Set, usize, usize)>,
-    pub(crate) cost: Option<(usize, usize)>,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct QPDiff {
     pub(crate) set: Option<(Set, usize, usize)>,
-    pub(crate) cost: Option<(usize, usize)>,
 }
 
 pub struct QueryPlan<K: Num> {
@@ -365,14 +362,8 @@ mod tests {
             time_win: 2,
             set: None,
         };
-        let union = QPUnion {
-            set: None,
-            cost: None,
-        };
-        let intersec = QPIntersec {
-            set: None,
-            cost: None,
-        };
+        let union = QPUnion { set: None };
+        let intersec = QPIntersec { set: None };
 
         let mut qp_dag = Graph::<QPNode<u32>, ()>::new();
         let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));

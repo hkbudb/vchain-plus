@@ -9,6 +9,7 @@ use crate::{
         range::Range,
         traits::{Num, ReadInterface},
         trie_tree::{self},
+        COST_COEFFICIENT,
     },
 };
 use anyhow::{bail, Context, Result};
@@ -20,7 +21,7 @@ use std::{
     num::NonZeroU64,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum QueryNode<K: Num> {
     Range(RangeNode<K>),
     Keyword(Box<KeywordNode>),
@@ -30,7 +31,20 @@ pub enum QueryNode<K: Num> {
     Diff(DiffNode),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl<K: Num> QueryNode<K> {
+    pub fn get_set(&self) -> Result<&Set> {
+        match self {
+            QueryNode::Range(n) => Ok(&n.set.as_ref().context("No set in the QueryNode")?.0),
+            QueryNode::Keyword(n) => Ok(&n.set.as_ref().context("No set in the QueryNode")?.0),
+            QueryNode::BlkRt(n) => Ok(&n.set.as_ref().context("No set in the QueryNode")?.0),
+            QueryNode::Union(n) => Ok(n.set.as_ref().context("No set in the QueryNode")?),
+            QueryNode::Intersec(n) => Ok(n.set.as_ref().context("No set in the QueryNode")?),
+            QueryNode::Diff(n) => Ok(n.set.as_ref().context("No set in the QueryNode")?),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RangeNode<K: Num> {
     pub(crate) range: Range<K>,
     pub(crate) blk_height: Height,
@@ -44,7 +58,7 @@ impl<K: Num> RangeNode<K> {
         &mut self,
         chain: &T,
         pk: &AccPublicKey,
-    ) -> Result<(usize, Set)> {
+    ) -> Result<()> {
         if self.set.is_none() {
             let bplus_root = chain
                 .read_block_content(self.blk_height)?
@@ -56,17 +70,13 @@ impl<K: Num> RangeNode<K> {
                 self.range,
                 pk,
             )?;
-            let size = s.len();
-            self.set = Some((s.clone(), a, p));
-            Ok((size, s))
-        } else {
-            let set_ref = self.set.as_ref().context("No set found")?;
-            Ok((set_ref.0.len(), set_ref.0.clone()))
+            self.set = Some((s, a, p));
         }
+        Ok(())
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct KeywordNode {
     pub(crate) keyword: String,
     pub(crate) blk_height: Height,
@@ -79,21 +89,19 @@ impl KeywordNode {
         &mut self,
         trie_ctx: &mut trie_tree::read::ReadContext<T>,
         pk: &AccPublicKey,
-    ) -> Result<(usize, Set)> {
+    ) -> Result<()> {
         if self.set.is_none() {
             let keyword = self.keyword.clone();
             let (s, a) = trie_ctx.query(keyword, pk)?;
-            let size = s.len();
-            self.set = Some((s.clone(), a));
-            Ok((size, s))
+            self.set = Some((s, a));
+            Ok(())
         } else {
-            let set_ref = self.set.as_ref().context("No set found")?;
-            Ok((set_ref.0.len(), set_ref.0.clone()))
+            Ok(())
         }
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct BlkRtNode {
     pub(crate) blk_height: Height,
     pub(crate) time_win: u64,
@@ -105,7 +113,7 @@ impl BlkRtNode {
         &mut self,
         chain: &T,
         pk: &AccPublicKey,
-    ) -> Result<(usize, Set)> {
+    ) -> Result<()> {
         if self.set.is_none() {
             let mut a = AccValue::from_set(&Set::new(), pk);
             let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
@@ -121,24 +129,28 @@ impl BlkRtNode {
                 }
             }
             let s = Set::from_iter(total_obj_id_nums.into_iter());
-            let size = s.len();
-            self.set = Some((s.clone(), a));
-            Ok((size, s))
+            self.set = Some((s, a));
+            Ok(())
         } else {
-            let set_ref = self.set.as_ref().context("No set found")?;
-            Ok((set_ref.0.len(), set_ref.0.clone()))
+            Ok(())
         }
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct UnionNode {}
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct UnionNode {
+    pub(crate) set: Option<Set>,
+}
 
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct IntersecNode {}
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct IntersecNode {
+    pub(crate) set: Option<Set>,
+}
 
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct DiffNode {}
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct DiffNode {
+    pub(crate) set: Option<Set>,
+}
 
 #[derive(Debug)]
 pub struct Query<K: Num> {
@@ -200,10 +212,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                     idx_map.insert(idx, qp_idx);
                 }
                 QueryNode::Union(_) => {
-                    let qp_union = QPUnion {
-                        set: None,
-                        cost: None,
-                    };
+                    let qp_union = QPUnion { set: None };
                     let qp_idx = qp_dag.add_node(QPNode::Union(qp_union));
                     idx_map.insert(idx, qp_idx);
                     for child_idx in query_dag.neighbors_directed(idx, Outgoing) {
@@ -215,10 +224,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                     }
                 }
                 QueryNode::Intersec(_) => {
-                    let qp_intersec = QPIntersec {
-                        set: None,
-                        cost: None,
-                    };
+                    let qp_intersec = QPIntersec { set: None };
                     let qp_idx = qp_dag.add_node(QPNode::Intersec(qp_intersec));
                     idx_map.insert(idx, qp_idx);
                     for child_idx in query_dag.neighbors_directed(idx, Outgoing) {
@@ -230,10 +236,7 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
                     }
                 }
                 QueryNode::Diff(_) => {
-                    let qp_diff = QPDiff {
-                        set: None,
-                        cost: None,
-                    };
+                    let qp_diff = QPDiff { set: None };
                     let qp_idx = qp_dag.add_node(QPNode::Diff(qp_diff));
                     idx_map.insert(idx, qp_idx);
                     for child_idx in query_dag.neighbors_directed(idx, Outgoing) {
@@ -260,4 +263,115 @@ pub fn query_to_qp<K: Num>(query: Query<K>) -> Result<QueryPlan<K>> {
     };
 
     Ok(qp)
+}
+
+pub(crate) fn estimate_query_cost<K: Num, T: ReadInterface<K = K>>(
+    inputs: &[NodeIndex],
+    dag: &mut Graph<QueryNode<K>, ()>,
+    trie_ctx: &mut trie_tree::read::ReadContext<T>,
+    chain: &T,
+    pk: &AccPublicKey,
+) -> Result<usize> {
+    let mut cost: usize = 0;
+    let mut map = HashMap::<NodeIndex, QueryNode<K>>::new();
+
+    for idx in inputs {
+        let mut child_idxs = Vec::<NodeIndex>::new();
+        for index in dag.neighbors_directed(*idx, Outgoing) {
+            child_idxs.push(index);
+        }
+        if let Some(node) = dag.node_weight_mut(*idx) {
+            match node {
+                QueryNode::Range(n) => {
+                    if n.set.is_none() {
+                        n.estimate_size(chain, pk)?;
+                    }
+                    map.insert(*idx, node.clone());
+                }
+                QueryNode::Keyword(n) => {
+                    if n.set.is_none() {
+                        n.estimate_size(trie_ctx, pk)?;
+                    }
+                    map.insert(*idx, node.clone());
+                }
+                QueryNode::BlkRt(n) => {
+                    if n.set.is_none() {
+                        n.estimate_size(chain, pk)?;
+                    }
+                    map.insert(*idx, node.clone());
+                }
+                QueryNode::Union(n) => {
+                    if n.set.is_none() {
+                        let q_c_idx1 = child_idxs
+                            .get(1)
+                            .context("Cannot find the first child idx of union")?;
+                        let q_c1 = map
+                            .get(q_c_idx1)
+                            .context("Cannot find the first child node in map")?;
+                        let s1 = q_c1.get_set()?;
+                        let q_c_idx2 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first child idx of union")?;
+                        let q_c2 = map
+                            .get(q_c_idx2)
+                            .context("Cannot find the second child node in map")?;
+                        let s2 = q_c2.get_set()?;
+                        let res_set = (s1) | (s2);
+                        let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
+                        cost += inter_cost;
+                        n.set = Some(res_set);
+                    }
+                    map.insert(*idx, node.clone());
+                }
+                QueryNode::Intersec(n) => {
+                    if n.set.is_none() {
+                        let q_c_idx1 = child_idxs
+                            .get(1)
+                            .context("Cannot find the first child idx of intersection")?;
+                        let q_c1 = map
+                            .get(q_c_idx1)
+                            .context("Cannot find the first child node in map")?;
+                        let s1 = q_c1.get_set()?;
+                        let q_c_idx2 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first child idx of intersection")?;
+                        let q_c2 = map
+                            .get(q_c_idx2)
+                            .context("Cannot find the second child node in map")?;
+                        let s2 = q_c2.get_set()?;
+                        let res_set = (s1) & (s2);
+                        let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
+                        cost += inter_cost;
+                        n.set = Some(res_set);
+                    }
+                    map.insert(*idx, node.clone());
+                }
+                QueryNode::Diff(n) => {
+                    if n.set.is_none() {
+                        let q_c_idx1 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first child idx of difference")?;
+                        let q_c1 = map
+                            .get(q_c_idx1)
+                            .context("Cannot find the first child node in map")?;
+                        let s1 = q_c1.get_set()?;
+                        let q_c_idx2 = child_idxs
+                            .get(1)
+                            .context("Cannot find the first child idx of difference")?;
+                        let q_c2 = map
+                            .get(q_c_idx2)
+                            .context("Cannot find the second child node in map")?;
+                        let s2 = q_c2.get_set()?;
+                        let res_set = (s1) / (s2);
+                        let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
+                        cost += inter_cost;
+                        n.set = Some(res_set);
+                    }
+                    map.insert(*idx, node.clone());
+                }
+            }
+        }
+    }
+
+    Ok(cost)
 }

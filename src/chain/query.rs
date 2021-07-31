@@ -24,10 +24,7 @@ use crate::{
     utils::Time,
 };
 use anyhow::{bail, Context, Result};
-use petgraph::{
-    algo::toposort,
-    dot::{Config, Dot},
-};
+use petgraph::algo::toposort;
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_param::QueryParam;
 use query_plan::QueryPlan;
@@ -500,19 +497,11 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
     for (q_param, s_win_size, e_win_size) in query_params {
         let sub_timer = howlong::ProcessCPUTimer::new();
         let query = q_param.into_query_basic(s_win_size, e_win_size)?;
-        //let query = q_param.into_query_trimmed(&chain, pk, s_win_size, e_win_size)?;
-        debug!(
-            "query dag: {:?}",
-            Dot::with_config(&query.query_dag, &[Config::EdgeNoLabel])
-        );
+        // let query = q_param.into_query_trimmed2(&chain, pk, s_win_size, e_win_size)?;
         let time = sub_timer.elapsed();
         debug!("Stage1: {}", time);
         let sub_timer = howlong::ProcessCPUTimer::new();
         let mut query_plan = query_to_qp(query)?;
-        debug!(
-            "query plan dag: {:?}",
-            Dot::with_config(&query_plan.dag, &[Config::EdgeNoLabel])
-        );
         let time = sub_timer.elapsed();
         debug!("Stage2: {}", time);
         let sub_timer = howlong::ProcessCPUTimer::new();
