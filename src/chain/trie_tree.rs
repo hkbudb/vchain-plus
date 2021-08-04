@@ -6,6 +6,7 @@ use crate::{
 use anyhow::Result;
 use hash::{trie_leaf_hash, trie_non_leaf_hash};
 use serde::{Deserialize, Serialize};
+use smallstr::SmallString;
 use std::collections::BTreeMap;
 
 create_id_type!(TrieNodeId);
@@ -26,6 +27,8 @@ impl Digestible for TrieRoot {
         self.trie_root_hash
     }
 }
+
+pub const KEY_LEN: usize = 8;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TrieNode {
@@ -78,7 +81,7 @@ impl TrieNode {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TrieLeafNode {
     pub id: TrieNodeId,
-    pub rest: String,
+    pub rest: SmallString<[u8; KEY_LEN]>,
     pub data_set: Set,
     pub data_set_acc: AccValue,
 }
@@ -90,7 +93,7 @@ impl Digestible for TrieLeafNode {
 }
 
 impl TrieLeafNode {
-    pub fn new(rest: String, data_set: Set, data_set_acc: AccValue) -> Self {
+    pub fn new(rest: SmallString<[u8; KEY_LEN]>, data_set: Set, data_set_acc: AccValue) -> Self {
         Self {
             id: TrieNodeId::next_id(),
             rest,
@@ -103,7 +106,7 @@ impl TrieLeafNode {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TrieNonLeafNode {
     pub id: TrieNodeId,
-    pub nibble: String,
+    pub nibble: SmallString<[u8; KEY_LEN]>,
     pub data_set: Set,
     pub data_set_acc: AccValue,
     pub children: BTreeMap<char, (TrieNodeId, Digest)>,
@@ -121,7 +124,7 @@ impl Digestible for TrieNonLeafNode {
 
 impl TrieNonLeafNode {
     pub fn new(
-        nibble: String,
+        nibble: SmallString<[u8; KEY_LEN]>,
         data_set: Set,
         data_set_acc: AccValue,
         children: BTreeMap<char, (TrieNodeId, Digest)>,

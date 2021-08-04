@@ -3,11 +3,12 @@ use crate::chain::{
     id_tree::ObjId,
     trie_tree::{
         split_at_common_prefix2, AccValue, Digest, Digestible, Set, TrieLeafNode, TrieNode,
-        TrieNodeId, TrieNodeLoader, TrieNonLeafNode, TrieRoot,
+        TrieNodeId, TrieNodeLoader, TrieNonLeafNode, TrieRoot, KEY_LEN,
     },
 };
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
+use smallstr::SmallString;
 use std::collections::BTreeMap;
 use std::{
     borrow::Cow,
@@ -45,7 +46,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
 
     pub fn write_leaf(
         &mut self,
-        rest: String,
+        rest: SmallString<[u8; KEY_LEN]>,
         data_set: Set,
         acc: AccValue,
     ) -> (TrieNodeId, Digest) {
@@ -70,7 +71,12 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
         })
     }
 
-    pub fn insert(&mut self, key: String, obj_id: ObjId, pk: &AccPublicKey) -> Result<()> {
+    pub fn insert(
+        &mut self,
+        key: SmallString<[u8; KEY_LEN]>,
+        obj_id: ObjId,
+        pk: &AccPublicKey,
+    ) -> Result<()> {
         let set = Set::from_single_element(obj_id.0);
         let new_acc = AccValue::from_set(&set, pk);
         let mut cur_id_opt = self.apply.root.trie_root_id;
@@ -111,14 +117,17 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
                                 let node_data_set = n.data_set.clone();
                                 let node_acc = n.data_set_acc;
-                                let (node_leaf_id, node_leaf_hash) =
-                                    self.write_leaf(rest_node_key, node_data_set, node_acc);
+                                let (node_leaf_id, node_leaf_hash) = self.write_leaf(
+                                    SmallString::<[u8; KEY_LEN]>::from_str(&rest_node_key),
+                                    node_data_set,
+                                    node_acc,
+                                );
 
                                 let mut btree_map: BTreeMap<char, (TrieNodeId, Digest)> =
                                     BTreeMap::new();
                                 btree_map.insert(node_idx, (node_leaf_id, node_leaf_hash));
                                 let non_leaf = TrieNonLeafNode::new(
-                                    common_key,
+                                    SmallString::<[u8; KEY_LEN]>::from_str(&common_key),
                                     non_leaf_set,
                                     non_leaf_acc,
                                     btree_map,
@@ -128,8 +137,11 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     idx: cur_idx,
                                 });
 
-                                let (leaf_id, leaf_hash) =
-                                    self.write_leaf(rest_cur_key, set, new_acc);
+                                let (leaf_id, leaf_hash) = self.write_leaf(
+                                    SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key),
+                                    set,
+                                    new_acc,
+                                );
                                 temp_nodes.push(TempNode::Leaf {
                                     id: leaf_id,
                                     hash: leaf_hash,
@@ -144,13 +156,13 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                             let sets_inter = (&set) & (&n.data_set);
                             let non_leaf_acc =
                                 new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
-                            if common_key == n.nibble {
+                            if SmallString::<[u8; KEY_LEN]>::from_str(&common_key) == n.nibble {
                                 match n.children.get(&cur_idx) {
                                     Some((id, _digest)) => {
                                         // has path, go down
                                         temp_nodes.push(TempNode::NonLeaf {
                                             node: TrieNonLeafNode::new(
-                                                common_key,
+                                                SmallString::<[u8; KEY_LEN]>::from_str(&common_key),
                                                 non_leaf_set,
                                                 non_leaf_acc,
                                                 n.children.clone(),
@@ -158,18 +170,22 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                             idx: cur_idx,
                                         });
                                         cur_id_opt = Some(*id);
-                                        cur_key = rest_cur_key;
+                                        cur_key =
+                                            SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key);
                                     }
                                     None => {
                                         // no path, create leaf
                                         let non_leaf = TrieNonLeafNode::new(
-                                            common_key,
+                                            SmallString::<[u8; KEY_LEN]>::from_str(&common_key),
                                             non_leaf_set,
                                             non_leaf_acc,
                                             n.children.clone(),
                                         );
-                                        let (new_leaf_id, new_leaf_hash) =
-                                            self.write_leaf(rest_cur_key, set, new_acc);
+                                        let (new_leaf_id, new_leaf_hash) = self.write_leaf(
+                                            SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key),
+                                            set,
+                                            new_acc,
+                                        );
                                         temp_nodes.push(TempNode::NonLeaf {
                                             node: non_leaf,
                                             idx: cur_idx,
@@ -186,7 +202,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     BTreeMap::new();
 
                                 let child_non_leaf = TrieNonLeafNode::new(
-                                    rest_node_key,
+                                    SmallString::<[u8; KEY_LEN]>::from_str(&rest_node_key),
                                     n.data_set.clone(),
                                     n.data_set_acc,
                                     n.children.clone(),
@@ -196,10 +212,13 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                 btree_map
                                     .insert(node_idx, (child_non_leaf_id, child_non_leaf_hash));
 
-                                let (new_leaf_id, new_leaf_hash) =
-                                    self.write_leaf(rest_cur_key, set, new_acc);
+                                let (new_leaf_id, new_leaf_hash) = self.write_leaf(
+                                    SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key),
+                                    set,
+                                    new_acc,
+                                );
                                 let non_leaf = TrieNonLeafNode::new(
-                                    common_key,
+                                    SmallString::<[u8; KEY_LEN]>::from_str(&common_key),
                                     non_leaf_set,
                                     non_leaf_acc,
                                     btree_map,
@@ -254,7 +273,12 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
         Ok(())
     }
 
-    pub fn delete(&mut self, key: String, obj_id: ObjId, pk: &AccPublicKey) -> Result<()> {
+    pub fn delete(
+        &mut self,
+        key: SmallString<[u8; KEY_LEN]>,
+        obj_id: ObjId,
+        pk: &AccPublicKey,
+    ) -> Result<()> {
         let set = Set::from_single_element(obj_id.0);
         let delta_acc = AccValue::from_set(&set, pk);
         let mut cur_id_opt = self.apply.root.trie_root_id;
@@ -317,7 +341,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                         idx: cur_idx,
                                     });
                                     cur_id_opt = Some(*id);
-                                    cur_key = rest_cur_key;
+                                    cur_key = SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key);
                                 }
                                 None => {
                                     return Err(anyhow!("Cannot find trie non-leaf node"));
@@ -352,7 +376,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
 
                     if node.children.len() == 1 {
                         empty_flag = false;
-                        let mut new_str: String = node.nibble;
+                        let mut new_str: SmallString<[u8; KEY_LEN]> = node.nibble;
                         for (c, (id, _hash)) in node.children {
                             self.outdated.insert(id);
                             let child_n = self.get_node(id)?;

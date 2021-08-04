@@ -52,11 +52,8 @@ fn inner_query_trie(
                     query_val = n.data_set.clone();
                     res_acc = n.data_set_acc;
                     unsafe {
-                        *cur_proof = SubProof::from_leaf(TrieLeaf::new(
-                            n.id,
-                            &n.rest,
-                            n.data_set_acc,
-                        ));
+                        *cur_proof =
+                            SubProof::from_leaf(TrieLeaf::new(n.id, &n.rest, n.data_set_acc));
                     }
                 } else {
                     query_val = Set::new();
@@ -89,11 +86,8 @@ fn inner_query_trie(
                                 )),
                             );
                         }
-                        let mut non_leaf = TrieNonLeaf::from_hashes(
-                            &n.nibble,
-                            n.data_set_acc,
-                            children,
-                        );
+                        let mut non_leaf =
+                            TrieNonLeaf::from_hashes(&n.nibble, n.data_set_acc, children);
                         *non_leaf
                             .children
                             .get_mut(&cur_idx)

@@ -10,13 +10,14 @@ use crate::{
         id_tree::{self, ObjId},
         object::Object,
         traits::{Num, ReadInterface, WriteInterface},
-        trie_tree::{self, TrieNode, TrieNodeId, TrieRoot},
+        trie_tree::{self, TrieNode, TrieNodeId, TrieRoot, KEY_LEN},
         Parameter,
     },
     digest::{Digest, Digestible},
 };
 use anyhow::{bail, Context, Result};
 use howlong::ProcessDuration;
+use smallstr::SmallString;
 use std::{collections::HashMap, iter::FromIterator, num::NonZeroU64};
 
 pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
@@ -78,7 +79,11 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
                 .get(idx)
                 .context("Cannot find object id number!")?;
             for key in &raw_obj.keyword_data {
-                trie_ctx.delete(key.clone(), ObjId(*obj_id_num), pk)?;
+                trie_ctx.delete(
+                    SmallString::<[u8; KEY_LEN]>::from_str(&key),
+                    ObjId(*obj_id_num),
+                    pk,
+                )?;
             }
         }
         trie_ctxes.push((k, trie_ctx));
@@ -138,7 +143,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
         // build trie
         for (_k, trie_ctx) in &mut trie_ctxes {
             for key in &obj.keyword_data {
-                trie_ctx.insert(key.to_string(), obj_id, &pk)?;
+                trie_ctx.insert(SmallString::<[u8; KEY_LEN]>::from_str(key), obj_id, &pk)?;
             }
         }
         debug!("inserting for trie finished");

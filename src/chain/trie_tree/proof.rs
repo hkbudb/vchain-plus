@@ -51,12 +51,7 @@ impl Proof {
         }
     }
 
-    pub fn verify_acc(
-        &self,
-        target_acc: AccValue,
-        keyword: &str,
-        pk: &AccPublicKey,
-    ) -> Result<()> {
+    pub fn verify_acc(&self, target_acc: AccValue, keyword: &str, pk: &AccPublicKey) -> Result<()> {
         let computed_acc = self.value_acc(keyword, pk);
         ensure!(
             target_acc == computed_acc,
