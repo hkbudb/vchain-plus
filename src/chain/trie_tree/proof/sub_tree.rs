@@ -18,10 +18,10 @@ impl Digestible for TrieSubTree {
 }
 
 impl TrieSubTree {
-    pub(crate) fn new(node_id: TrieNodeId, nibble: String, node_hash: Digest) -> Self {
+    pub(crate) fn new(node_id: TrieNodeId, nibble: &str, node_hash: Digest) -> Self {
         Self {
             node_id,
-            nibble,
+            nibble: nibble.to_string(),
             node_hash,
         }
     }

@@ -19,7 +19,7 @@ impl Default for SubProof {
     fn default() -> Self {
         Self::Hash(Box::new(TrieSubTree::new(
             TrieNodeId(0),
-            "".to_string(),
+            "",
             Digest::zero(),
         )))
     }
@@ -36,7 +36,7 @@ impl Digestible for SubProof {
 }
 
 impl SubProof {
-    pub(crate) fn from_hash(node_id: TrieNodeId, nibble: String, node_hash: Digest) -> Self {
+    pub(crate) fn from_hash(node_id: TrieNodeId, nibble: &str, node_hash: Digest) -> Self {
         Self::Hash(Box::new(TrieSubTree::new(node_id, nibble, node_hash)))
     }
 
@@ -48,7 +48,7 @@ impl SubProof {
         Self::Leaf(Box::new(l))
     }
 
-    pub(crate) fn value_acc(&self, cur_key: String, pk: &AccPublicKey) -> AccValue {
+    pub(crate) fn value_acc(&self, cur_key: &str, pk: &AccPublicKey) -> AccValue {
         match self {
             SubProof::Hash(_) => {
                 let empty_set = Set::new();
@@ -59,19 +59,19 @@ impl SubProof {
         }
     }
 
-    pub(crate) fn search_prefix(
-        &mut self,
-        cur_key: String,
+    pub(crate) fn search_prefix<'a>(
+        &'a mut self,
+        cur_key: &'a str,
     ) -> Option<(*mut SubProof, TrieNodeId, String)> {
         match self {
             SubProof::Hash(sub_tree) => {
                 let node_id = sub_tree.node_id;
-                Some((self as *mut _, node_id, cur_key))
+                Some((self as *mut _, node_id, cur_key.to_string()))
             }
             SubProof::Leaf(n) => {
                 if n.rest == cur_key {
                     let node_id = n.node_id;
-                    Some((self as *mut _, node_id, cur_key))
+                    Some((self as *mut _, node_id, cur_key.to_string()))
                 } else {
                     None
                 }

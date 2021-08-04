@@ -29,22 +29,22 @@ impl Digestible for TrieNonLeaf {
 
 impl TrieNonLeaf {
     pub(crate) fn from_hashes(
-        nibble: String,
+        nibble: &str,
         acc_val: AccValue,
         children: BTreeMap<char, Box<SubProof>>,
     ) -> Self {
         Self {
-            nibble,
+            nibble: nibble.to_string(),
             acc_val,
             children,
         }
     }
 
-    pub(crate) fn value_acc(&self, cur_key: String, pk: &AccPublicKey) -> AccValue {
+    pub(crate) fn value_acc(&self, cur_key: &str, pk: &AccPublicKey) -> AccValue {
         let (_common_key, cur_idx, rest_cur_key, _node_idx, _rest_node_key) =
             split_at_common_prefix2(&cur_key, &self.nibble);
         match self.children.get(&cur_idx) {
-            Some(c) => c.value_acc(rest_cur_key, pk),
+            Some(c) => c.value_acc(&rest_cur_key, pk),
             None => {
                 let empty_set = Set::new();
                 AccValue::from_set(&empty_set, pk)
@@ -54,12 +54,12 @@ impl TrieNonLeaf {
 
     pub(crate) fn search_prefix(
         &mut self,
-        cur_key: String,
+        cur_key: &str,
     ) -> Option<(*mut SubProof, TrieNodeId, String)> {
         let (_common_key, cur_idx, rest_cur_key, _node_idx, _rest_node_key) =
             split_at_common_prefix2(&cur_key, &self.nibble);
         match self.children.get_mut(&cur_idx) {
-            Some(child) => child.search_prefix(rest_cur_key),
+            Some(child) => child.search_prefix(&rest_cur_key),
             None => None,
         }
     }

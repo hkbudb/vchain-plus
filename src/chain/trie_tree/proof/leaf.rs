@@ -19,15 +19,15 @@ impl Digestible for TrieLeaf {
 }
 
 impl TrieLeaf {
-    pub(crate) fn new(node_id: TrieNodeId, rest: String, acc_val: AccValue) -> Self {
+    pub(crate) fn new(node_id: TrieNodeId, rest: &str, acc_val: AccValue) -> Self {
         Self {
             node_id,
-            rest,
+            rest: rest.to_string(),
             acc_val,
         }
     }
 
-    pub(crate) fn value_acc(&self, cur_key: String, pk: &AccPublicKey) -> AccValue {
+    pub(crate) fn value_acc(&self, cur_key: &str, pk: &AccPublicKey) -> AccValue {
         if cur_key == self.rest {
             self.acc_val
         } else {
