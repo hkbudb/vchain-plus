@@ -3,12 +3,12 @@ use crate::chain::{
     id_tree::ObjId,
     trie_tree::{
         split_at_common_prefix2, AccValue, Digest, Digestible, Set, TrieLeafNode, TrieNode,
-        TrieNodeId, TrieNodeLoader, TrieNonLeafNode, TrieRoot, KEY_LEN,
+        TrieNodeId, TrieNodeLoader, TrieNonLeafNode, TrieRoot,
     },
 };
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
-use smallstr::SmallString;
+use smol_str::SmolStr;
 use std::collections::BTreeMap;
 use std::{
     borrow::Cow,
@@ -46,7 +46,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
 
     pub fn write_leaf(
         &mut self,
-        rest: SmallString<[u8; KEY_LEN]>,
+        rest: SmolStr,
         data_set: Set,
         acc: AccValue,
     ) -> (TrieNodeId, Digest) {
@@ -73,7 +73,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
 
     pub fn insert(
         &mut self,
-        key: SmallString<[u8; KEY_LEN]>,
+        key: SmolStr,
         obj_id: ObjId,
         pk: &AccPublicKey,
     ) -> Result<()> {
@@ -118,7 +118,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                 let node_data_set = n.data_set.clone();
                                 let node_acc = n.data_set_acc;
                                 let (node_leaf_id, node_leaf_hash) = self.write_leaf(
-                                    SmallString::<[u8; KEY_LEN]>::from_str(&rest_node_key),
+                                    SmolStr::from(&rest_node_key),
                                     node_data_set,
                                     node_acc,
                                 );
@@ -127,7 +127,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     BTreeMap::new();
                                 btree_map.insert(node_idx, (node_leaf_id, node_leaf_hash));
                                 let non_leaf = TrieNonLeafNode::new(
-                                    SmallString::<[u8; KEY_LEN]>::from_str(&common_key),
+                                    SmolStr::from(&common_key),
                                     non_leaf_set,
                                     non_leaf_acc,
                                     btree_map,
@@ -138,7 +138,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                 });
 
                                 let (leaf_id, leaf_hash) = self.write_leaf(
-                                    SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key),
+                                    SmolStr::from(&rest_cur_key),
                                     set,
                                     new_acc,
                                 );
@@ -156,13 +156,13 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                             let sets_inter = (&set) & (&n.data_set);
                             let non_leaf_acc =
                                 new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
-                            if SmallString::<[u8; KEY_LEN]>::from_str(&common_key) == n.nibble {
+                            if SmolStr::from(&common_key) == n.nibble {
                                 match n.children.get(&cur_idx) {
                                     Some((id, _digest)) => {
                                         // has path, go down
                                         temp_nodes.push(TempNode::NonLeaf {
                                             node: TrieNonLeafNode::new(
-                                                SmallString::<[u8; KEY_LEN]>::from_str(&common_key),
+                                                SmolStr::from(&common_key),
                                                 non_leaf_set,
                                                 non_leaf_acc,
                                                 n.children.clone(),
@@ -171,18 +171,18 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                         });
                                         cur_id_opt = Some(*id);
                                         cur_key =
-                                            SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key);
+                                        SmolStr::from(&rest_cur_key);
                                     }
                                     None => {
                                         // no path, create leaf
                                         let non_leaf = TrieNonLeafNode::new(
-                                            SmallString::<[u8; KEY_LEN]>::from_str(&common_key),
+                                            SmolStr::from(&common_key),
                                             non_leaf_set,
                                             non_leaf_acc,
                                             n.children.clone(),
                                         );
                                         let (new_leaf_id, new_leaf_hash) = self.write_leaf(
-                                            SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key),
+                                            SmolStr::from(&rest_cur_key),
                                             set,
                                             new_acc,
                                         );
@@ -202,7 +202,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     BTreeMap::new();
 
                                 let child_non_leaf = TrieNonLeafNode::new(
-                                    SmallString::<[u8; KEY_LEN]>::from_str(&rest_node_key),
+                                    SmolStr::from(&rest_node_key),
                                     n.data_set.clone(),
                                     n.data_set_acc,
                                     n.children.clone(),
@@ -213,12 +213,12 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     .insert(node_idx, (child_non_leaf_id, child_non_leaf_hash));
 
                                 let (new_leaf_id, new_leaf_hash) = self.write_leaf(
-                                    SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key),
+                                    SmolStr::from(&rest_cur_key),
                                     set,
                                     new_acc,
                                 );
                                 let non_leaf = TrieNonLeafNode::new(
-                                    SmallString::<[u8; KEY_LEN]>::from_str(&common_key),
+                                    SmolStr::from(&common_key),
                                     non_leaf_set,
                                     non_leaf_acc,
                                     btree_map,
@@ -275,7 +275,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
 
     pub fn delete(
         &mut self,
-        key: SmallString<[u8; KEY_LEN]>,
+        key: SmolStr,
         obj_id: ObjId,
         pk: &AccPublicKey,
     ) -> Result<()> {
@@ -341,7 +341,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                         idx: cur_idx,
                                     });
                                     cur_id_opt = Some(*id);
-                                    cur_key = SmallString::<[u8; KEY_LEN]>::from_str(&rest_cur_key);
+                                    cur_key = SmolStr::from(&rest_cur_key);
                                 }
                                 None => {
                                     return Err(anyhow!("Cannot find trie non-leaf node"));
@@ -376,17 +376,26 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
 
                     if node.children.len() == 1 {
                         empty_flag = false;
-                        let mut new_str: SmallString<[u8; KEY_LEN]> = node.nibble;
+                        let mut new_str: SmolStr = node.nibble;
                         for (c, (id, _hash)) in node.children {
                             self.outdated.insert(id);
                             let child_n = self.get_node(id)?;
                             match child_n.as_ref() {
                                 TrieNode::Leaf(n) => {
                                     if c == '\0' {
-                                        new_str.push_str(&n.rest);
+                                        // new_str = new_str.push_str(&n.rest);
+                                        let mut a: String = new_str.to_string();
+                                        let b: String = n.rest.to_string();
+                                        a.push_str(&b);
+                                        new_str = SmolStr::from(&a);
                                     } else {
-                                        new_str.push(c);
-                                        new_str.push_str(&n.rest);
+                                        //new_str.push(c);
+                                        //new_str.push_str(&n.rest);
+                                        let mut a: String = new_str.to_string();
+                                        let b: String = n.rest.to_string();
+                                        a.push(c);
+                                        a.push_str(&b);
+                                        new_str = SmolStr::from(&a);
                                     }
                                     let new_set = n.data_set.clone();
                                     let new_acc = n.data_set_acc;
@@ -397,10 +406,19 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                 }
                                 TrieNode::NonLeaf(n) => {
                                     if c == '\0' {
-                                        new_str.push_str(&n.nibble);
+                                        //new_str.push_str(&n.nibble);
+                                        let mut a: String = new_str.to_string();
+                                        let b: String = n.nibble.to_string();
+                                        a.push_str(&b);
+                                        new_str = SmolStr::from(&a);
                                     } else {
-                                        new_str.push(c);
-                                        new_str.push_str(&n.nibble);
+                                        //new_str.push(c);
+                                        //new_str.push_str(&n.nibble);
+                                        let mut a: String = new_str.to_string();
+                                        let b: String = n.nibble.to_string();
+                                        a.push(c);
+                                        a.push_str(&b);
+                                        new_str = SmolStr::from(&a);
                                     }
                                     let new_non_leaf = TrieNonLeafNode::new(
                                         new_str.clone(),
