@@ -383,16 +383,13 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                             match child_n.as_ref() {
                                 TrieNode::Leaf(n) => {
                                     if c == '\0' {
-                                        // new_str = new_str.push_str(&n.rest);
-                                        let mut a: String = new_str.to_string();
-                                        let b: String = n.rest.to_string();
-                                        a.push_str(&b);
+                                        let mut a = new_str.to_string();
+                                        let b = n.rest.as_str();
+                                        a.push_str(b);
                                         new_str = SmolStr::from(&a);
                                     } else {
-                                        //new_str.push(c);
-                                        //new_str.push_str(&n.rest);
                                         let mut a: String = new_str.to_string();
-                                        let b: String = n.rest.to_string();
+                                        let b = n.rest.as_str();
                                         a.push(c);
                                         a.push_str(&b);
                                         new_str = SmolStr::from(&a);
@@ -406,18 +403,15 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                 }
                                 TrieNode::NonLeaf(n) => {
                                     if c == '\0' {
-                                        //new_str.push_str(&n.nibble);
                                         let mut a: String = new_str.to_string();
-                                        let b: String = n.nibble.to_string();
-                                        a.push_str(&b);
+                                        let b = n.nibble.as_str();
+                                        a.push_str(b);
                                         new_str = SmolStr::from(&a);
                                     } else {
-                                        //new_str.push(c);
-                                        //new_str.push_str(&n.nibble);
                                         let mut a: String = new_str.to_string();
-                                        let b: String = n.nibble.to_string();
+                                        let b = n.nibble.as_str();
                                         a.push(c);
-                                        a.push_str(&b);
+                                        a.push_str(b);
                                         new_str = SmolStr::from(&a);
                                     }
                                     let new_non_leaf = TrieNonLeafNode::new(
