@@ -8,6 +8,7 @@ use crate::{
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +56,7 @@ impl TrieNonLeaf {
     pub(crate) fn search_prefix(
         &mut self,
         cur_key: &str,
-    ) -> Option<(*mut SubProof, TrieNodeId, String)> {
+    ) -> Option<(*mut SubProof, TrieNodeId, SmolStr)> {
         let (_common_key, cur_idx, rest_cur_key, _node_idx, _rest_node_key) =
             split_at_common_prefix2(&cur_key, &self.nibble);
         match self.children.get_mut(&cur_idx) {

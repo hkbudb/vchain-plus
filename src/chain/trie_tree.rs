@@ -145,15 +145,11 @@ pub fn common_prefix_len(a: &str, b: &str) -> usize {
     a.chars().zip(b.chars()).take_while(|(a, b)| a == b).count()
 }
 
-pub fn split_at_common_prefix(a: &str, b: &str) -> (String, String, String) {
+pub fn split_at_common_prefix<'a>(a: &'a str, b: &'a str) -> (&'a str, &'a str, &'a str) {
     let prefix_len = common_prefix_len(a, b);
     let (common, remaining1) = a.split_at(prefix_len);
     let (_, remaining2) = b.split_at(prefix_len);
-    (
-        common.to_string(),
-        remaining1.to_string(),
-        remaining2.to_string(),
-    )
+    (common, remaining1, remaining2)
 }
 
 pub fn split_at_common_prefix2(a: &str, b: &str) -> (String, char, String, char, String) {
@@ -181,7 +177,7 @@ pub fn split_at_common_prefix2(a: &str, b: &str) -> (String, char, String, char,
         remaining2 = r2.to_string();
     }
 
-    (common, first1, remaining1, first2, remaining2)
+    (common.to_string(), first1, remaining1, first2, remaining2)
 }
 
 #[cfg(test)]

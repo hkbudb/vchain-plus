@@ -7,6 +7,7 @@ use crate::{
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum SubProof {
@@ -62,16 +63,16 @@ impl SubProof {
     pub(crate) fn search_prefix<'a>(
         &'a mut self,
         cur_key: &'a str,
-    ) -> Option<(*mut SubProof, TrieNodeId, String)> {
+    ) -> Option<(*mut SubProof, TrieNodeId, SmolStr)> {
         match self {
             SubProof::Hash(sub_tree) => {
                 let node_id = sub_tree.node_id;
-                Some((self as *mut _, node_id, cur_key.to_string()))
+                Some((self as *mut _, node_id, SmolStr::from(cur_key)))
             }
             SubProof::Leaf(n) => {
                 if n.rest == cur_key {
                     let node_id = n.node_id;
-                    Some((self as *mut _, node_id, cur_key.to_string()))
+                    Some((self as *mut _, node_id, SmolStr::from(cur_key)))
                 } else {
                     None
                 }

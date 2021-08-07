@@ -79,11 +79,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
                 .get(idx)
                 .context("Cannot find object id number!")?;
             for key in &raw_obj.keyword_data {
-                trie_ctx.delete(
-                    SmolStr::from(key),
-                    ObjId(*obj_id_num),
-                    pk,
-                )?;
+                trie_ctx.delete(SmolStr::from(key), ObjId(*obj_id_num), pk)?;
             }
         }
         trie_ctxes.push((k, trie_ctx));

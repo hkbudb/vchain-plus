@@ -15,6 +15,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 use std::{
     collections::{HashMap, HashSet},
     iter::FromIterator,
@@ -92,7 +93,7 @@ impl KeywordNode {
     ) -> Result<()> {
         if self.set.is_none() {
             let keyword = &self.keyword;
-            let (s, a) = trie_ctx.query(keyword, pk)?;
+            let (s, a) = trie_ctx.query(&SmolStr::from(keyword), pk)?;
             self.set = Some((s, a));
             Ok(())
         } else {

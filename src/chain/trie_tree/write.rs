@@ -71,12 +71,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
         })
     }
 
-    pub fn insert(
-        &mut self,
-        key: SmolStr,
-        obj_id: ObjId,
-        pk: &AccPublicKey,
-    ) -> Result<()> {
+    pub fn insert(&mut self, key: SmolStr, obj_id: ObjId, pk: &AccPublicKey) -> Result<()> {
         let set = Set::from_single_element(obj_id.0);
         let new_acc = AccValue::from_set(&set, pk);
         let mut cur_id_opt = self.apply.root.trie_root_id;
@@ -137,11 +132,8 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     idx: cur_idx,
                                 });
 
-                                let (leaf_id, leaf_hash) = self.write_leaf(
-                                    SmolStr::from(&rest_cur_key),
-                                    set,
-                                    new_acc,
-                                );
+                                let (leaf_id, leaf_hash) =
+                                    self.write_leaf(SmolStr::from(&rest_cur_key), set, new_acc);
                                 temp_nodes.push(TempNode::Leaf {
                                     id: leaf_id,
                                     hash: leaf_hash,
@@ -170,8 +162,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                             idx: cur_idx,
                                         });
                                         cur_id_opt = Some(*id);
-                                        cur_key =
-                                        SmolStr::from(&rest_cur_key);
+                                        cur_key = SmolStr::from(&rest_cur_key);
                                     }
                                     None => {
                                         // no path, create leaf
@@ -212,11 +203,8 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                 btree_map
                                     .insert(node_idx, (child_non_leaf_id, child_non_leaf_hash));
 
-                                let (new_leaf_id, new_leaf_hash) = self.write_leaf(
-                                    SmolStr::from(&rest_cur_key),
-                                    set,
-                                    new_acc,
-                                );
+                                let (new_leaf_id, new_leaf_hash) =
+                                    self.write_leaf(SmolStr::from(&rest_cur_key), set, new_acc);
                                 let non_leaf = TrieNonLeafNode::new(
                                     SmolStr::from(&common_key),
                                     non_leaf_set,
@@ -273,12 +261,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
         Ok(())
     }
 
-    pub fn delete(
-        &mut self,
-        key: SmolStr,
-        obj_id: ObjId,
-        pk: &AccPublicKey,
-    ) -> Result<()> {
+    pub fn delete(&mut self, key: SmolStr, obj_id: ObjId, pk: &AccPublicKey) -> Result<()> {
         let set = Set::from_single_element(obj_id.0);
         let delta_acc = AccValue::from_set(&set, pk);
         let mut cur_id_opt = self.apply.root.trie_root_id;

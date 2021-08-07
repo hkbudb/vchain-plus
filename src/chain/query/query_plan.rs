@@ -11,6 +11,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     iter::FromIterator,
@@ -158,7 +159,7 @@ impl<K: Num> QueryPlan<K> {
                             let acc;
                             if let Some(ctx) = trie_ctxes.get_mut(&n.blk_height) {
                                 let trie_ctx = ctx;
-                                let (s, a) = trie_ctx.query(&n.keyword, pk)?;
+                                let (s, a) = trie_ctx.query(&SmolStr::from(&n.keyword), pk)?;
                                 set = s;
                                 acc = a;
                             } else {
@@ -170,7 +171,7 @@ impl<K: Num> QueryPlan<K> {
                                     chain,
                                     trie_root.trie_root_id,
                                 );
-                                let (s, a) = trie_ctx.query(&n.keyword, pk)?;
+                                let (s, a) = trie_ctx.query(&SmolStr::from(&n.keyword), pk)?;
                                 set = s;
                                 acc = a;
                                 trie_ctxes.insert(n.blk_height, trie_ctx);

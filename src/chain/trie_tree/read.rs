@@ -7,12 +7,13 @@ use crate::{
     digest::{Digest, Digestible},
 };
 use anyhow::{anyhow, bail, Result};
+use smol_str::SmolStr;
 use std::collections::BTreeMap;
 
 pub fn query_trie(
     node_loader: &impl TrieNodeLoader,
     root_id: Option<TrieNodeId>,
-    keyword: &str,
+    keyword: &SmolStr,
     pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, Proof)> {
     let trie_root_id: TrieNodeId;
@@ -32,7 +33,7 @@ fn inner_query_trie(
     node_loader: &impl TrieNodeLoader,
     root_id: TrieNodeId,
     root_node: TrieNode,
-    keyword: &str,
+    keyword: &SmolStr,
     pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, SubProof)> {
     use super::proof::{leaf::TrieLeaf, non_leaf::TrieNonLeaf};
@@ -157,7 +158,7 @@ impl<'a, L: TrieNodeLoader> ReadContext<'a, L> {
         self.proof
     }
 
-    pub fn query(&mut self, keyword: &str, pk: &AccPublicKey) -> Result<(Set, AccValue)> {
+    pub fn query(&mut self, keyword: &SmolStr, pk: &AccPublicKey) -> Result<(Set, AccValue)> {
         let query_val: Set;
         let res_acc: AccValue;
         match self.proof.root.as_mut() {
