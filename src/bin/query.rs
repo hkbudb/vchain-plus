@@ -43,16 +43,16 @@ fn main() -> Result<()> {
     for (i, q) in query_params.into_iter().enumerate() {
         info!("Processing query {}...", i);
         let (results, time) = query(&chain, q, &pk)?;
-        info!("Total query time elapsed: {:?}", time);
+        info!("Query time elapsed: {:?}", time);
 
-        info!("Processing verification for query {}...", i);
+        info!("Verifying query {}...", i);
         let verify_info = verify(&chain, results, &pk)?;
         info!(
-            "Total verification time elapsed: {:?}",
+            "Verification time elapsed: {:?}",
             verify_info.verify_time
         );
         let res = json!({
-            "query_time": time,
+            "query_info": time,
             "verify_info": verify_info,
         });
         query_info.push(res);

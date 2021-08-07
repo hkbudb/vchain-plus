@@ -2,12 +2,10 @@ pub mod query_obj;
 pub mod query_param;
 pub mod query_plan;
 
-use crate::{
-    acc::{
+use crate::{acc::{
         compute_set_operation_final, compute_set_operation_intermediate, ops::Op, AccPublicKey,
         AccValue, Set,
-    },
-    chain::{
+    }, chain::{
         block::{hash::obj_id_nums_hash, Height},
         bplus_tree,
         id_tree::{self, ObjId},
@@ -19,11 +17,9 @@ use crate::{
             MerkleProof, VOBlkRtNode, VOFinalDiff, VOFinalIntersec, VOFinalUnion, VOInterDiff,
             VOInterIntersec, VOInterUnion, VOKeywordNode, VONode, VORangeNode, VoDag, VO,
         },
-    },
-    digest::{Digest, Digestible},
-    utils::Time,
-};
+    }, digest::{Digest, Digestible}, utils::{QueryTime, Time}};
 use anyhow::{bail, Context, Result};
+use howlong::ProcessDuration;
 use petgraph::algo::toposort;
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_param::QueryParam;
@@ -505,22 +501,28 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
     chain: T,
     query_param: QueryParam<K>,
     pk: &AccPublicKey,
-) -> Result<(Vec<(HashMap<ObjId, Object<K>>, VO<K>)>, Time)> {
-    let timer = howlong::ProcessCPUTimer::new();
+) -> Result<(Vec<(HashMap<ObjId, Object<K>>, VO<K>)>, QueryTime)> {
     let chain_param = &chain.get_parameter()?;
     let chain_win_sizes = chain_param.time_win_sizes.clone();
-    let query_params = select_win_size(chain_win_sizes, query_param)?;
     let mut result = Vec::<(HashMap<ObjId, Object<K>>, VO<K>)>::new();
+    let mut stage1_time = Vec::<ProcessDuration>::new();
+    let mut stage2_time = Vec::<ProcessDuration>::new();
+    let mut stage3_time = Vec::<ProcessDuration>::new();
+    let timer = howlong::ProcessCPUTimer::new();
+    let query_params = select_win_size(chain_win_sizes, query_param)?;
+
     for (q_param, s_win_size, e_win_size) in query_params {
         let sub_timer = howlong::ProcessCPUTimer::new();
         //let query = q_param.into_query_basic(s_win_size, e_win_size)?;
         let query = q_param.into_query_trimmed2(&chain, pk, s_win_size, e_win_size)?;
         let time = sub_timer.elapsed();
-        debug!("Stage1: {}", time);
+        info!("Stage1: {}", time);
+        stage1_time.push(time);
         let sub_timer = howlong::ProcessCPUTimer::new();
         let mut query_plan = query_to_qp(query)?;
         let time = sub_timer.elapsed();
-        debug!("Stage2: {}", time);
+        info!("Stage2: {}", time);
+        stage2_time.push(time);
         let sub_timer = howlong::ProcessCPUTimer::new();
         let cost = query_plan.estimate_cost(&chain, pk)?;
         let time = sub_timer.elapsed();
@@ -531,11 +533,31 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
         let sub_timer = howlong::ProcessCPUTimer::new();
         let res = query_final(&chain, query_plan, pk)?;
         let time = sub_timer.elapsed();
-        debug!("Stage3: {}", time);
+        info!("Stage3: {}", time);
+        stage3_time.push(time);
         result.push(res);
     }
     let total_query_time = Time::from(timer.elapsed());
-    Ok((result, total_query_time))
+    let mut stage1_total_time: ProcessDuration = ProcessDuration::default();
+    for t in stage1_time {
+        stage1_total_time += t;
+    }
+    let mut stage2_total_time: ProcessDuration = ProcessDuration::default();
+    for t in stage2_time {
+        stage2_total_time += t;
+    }
+    let mut stage3_total_time: ProcessDuration = ProcessDuration::default();
+    for t in stage3_time {
+        stage3_total_time += t;
+    }
+    let query_time = QueryTime {
+        stage1: Time::from(stage1_total_time),
+        stage2: Time::from(stage2_total_time),
+        stage3: Time::from(stage3_total_time),
+        total: total_query_time,
+    };
+
+    Ok((result, query_time))
 }
 
 #[cfg(test)]

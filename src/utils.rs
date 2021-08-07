@@ -172,6 +172,14 @@ pub fn init_tracing_subscriber(directives: &str) -> Result<()> {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct QueryTime {
+    pub(crate) stage1: Time,
+    pub(crate) stage2: Time,
+    pub(crate) stage3: Time,
+    pub(crate) total: Time,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Time {
     real: u64,
     user: u64,
