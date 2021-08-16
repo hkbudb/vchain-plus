@@ -47,10 +47,7 @@ fn main() -> Result<()> {
 
         info!("Verifying query {}...", i);
         let verify_info = verify(&chain, results, &pk)?;
-        info!(
-            "Verification time elapsed: {:?}",
-            verify_info.verify_time
-        );
+        info!("Verification time elapsed: {:?}", verify_info.verify_time);
         let res = json!({
             "query_info": time,
             "verify_info": verify_info,
