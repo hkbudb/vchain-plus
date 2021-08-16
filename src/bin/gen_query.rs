@@ -24,7 +24,7 @@ use vchain_plus::{
 
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.1;
-const GAP: u32 = 100;
+const GAP: u32 = 1000;
 
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     time_win: u64,
@@ -130,14 +130,17 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         )?;
         sub_results.push((new_sub_res.len(), new_sub_range, modified_dim, new_sub_res));
 
-        for (_, _, _, sub_res) in &sub_results {
+        debug!("ranges:");
+        for (_, sub_range, _, sub_res) in &sub_results {
             if flag {
                 cur_res_set = sub_res.clone();
                 flag = false;
             } else {
                 cur_res_set = cur_res_set.intersection(&sub_res).cloned().collect();
             }
+            debug!("{:?}", sub_range);
         }
+        debug!("cur_res_set_len: {}", cur_res_set.len());
     }
 
     let mut ranges = BTreeMap::<usize, Range<u32>>::new();
