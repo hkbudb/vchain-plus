@@ -19,11 +19,11 @@ use vchain_plus::{
     SimChain,
 };
 
-const MAX_WIN_SIZE: u64 = 20;
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.0001;
 
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
+    time_win: u64,
     selectivity: f64,
     err_rate: f64,
     dim_num: usize,
@@ -35,7 +35,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     let mut end_blk_height;
     loop {
         start_blk_height = Height(rng.gen_range(1..blk_num));
-        end_blk_height = Height(start_blk_height.0 + rng.gen_range(1..MAX_WIN_SIZE));
+        end_blk_height = Height(start_blk_height.0 + time_win);
         if end_blk_height.0 <= blk_num {
             break;
         }
@@ -206,6 +206,7 @@ fn gen_node_with_not(not_prob: f64, keyword: String) -> Node {
 }
 
 fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
+    time_win: u64,
     with_not: bool,
     not_prob: f64,
     keyword_num: usize,
@@ -257,7 +258,7 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
     let mut end_blk_height_num;
     loop {
         start_blk_height_num = rng.gen_range(1..blk_num);
-        end_blk_height_num = start_blk_height_num + rng.gen_range(1..MAX_WIN_SIZE);
+        end_blk_height_num = start_blk_height_num + time_win;
         if end_blk_height_num <= blk_num {
             break;
         }
@@ -307,11 +308,15 @@ struct Opt {
     with_not: bool,
 
     /// probability of not opt
-    #[structopt(short, long, default_value = "0.0_f64")]
+    #[structopt(short, long, default_value = "0.0")]
     prob_not: f64,
 
+    /// query time window size
+    #[structopt(short, long)]
+    time_win: u64,
+
     /// dim number
-    #[structopt(short, long, default_value = "0")]
+    #[structopt(short, long, default_value = "1")]
     dim_num: usize,
 
     /// selectivity for range query
@@ -322,7 +327,7 @@ struct Opt {
     #[structopt(short, long, default_value = "0")]
     num_keywords: usize,
 
-    /// input path, should be a file
+    /// input db path, should be a directory
     #[structopt(short, long, parse(from_os_str))]
     input: PathBuf,
 
@@ -334,14 +339,16 @@ struct Opt {
 fn main() -> Result<()> {
     let opts = Opt::from_args();
     let output_path = opts.output;
+    fs::create_dir_all(&output_path)?;
     let chain = SimChain::open(&opts.input)?;
+    let time_win = opts.time_win;
     let mut query_for_plus = HashSet::<String>::new();
     let mut query_for_vchain = HashSet::<String>::new();
     if opts.range {
         for selectivity in &opts.selectivities {
             for _ in 0..QUERY_NUM {
                 let (q_for_plus, q_for_vchain) =
-                    gen_range_query(*selectivity, ERR_RATE, opts.dim_num, &chain)?;
+                    gen_range_query(time_win, *selectivity, ERR_RATE, opts.dim_num, &chain)?;
                 query_for_plus.insert(q_for_plus);
                 query_for_vchain.insert(q_for_vchain);
             }
@@ -349,7 +356,7 @@ fn main() -> Result<()> {
     } else if opts.keyword {
         for _ in 0..QUERY_NUM {
             let (q_for_plus, q_for_vchain) =
-                gen_keyword_query(opts.with_not, opts.prob_not, opts.num_keywords, &chain)?;
+                gen_keyword_query(time_win, opts.with_not, opts.prob_not, opts.num_keywords, &chain)?;
             query_for_plus.insert(q_for_plus);
             query_for_vchain.insert(q_for_vchain);
         }
