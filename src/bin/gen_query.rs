@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use rand::{seq::SliceRandom, Rng};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -8,6 +9,7 @@ use std::{
     path::PathBuf,
 };
 use structopt::StructOpt;
+use tracing::debug;
 use vchain_plus::{
     chain::{
         block::Height,
@@ -16,12 +18,12 @@ use vchain_plus::{
         traits::ScanQueryInterface,
     },
     digest::Digest,
+    utils::init_tracing_subscriber,
     SimChain,
 };
-use serde::{Deserialize, Serialize};
 
 const QUERY_NUM: usize = 10;
-const ERR_RATE: f64 = 0.0001;
+const ERR_RATE: f64 = 0.1;
 
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     time_win: u64,
@@ -32,23 +34,36 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
     let (obj_num, blk_num, num_scopes) = chain.get_range_info(dim_num)?;
+    debug!(
+        "obj num: {}, blk_num: {}, scopes in each dim: {:?}",
+        obj_num, blk_num, num_scopes
+    );
+    let obj_num_per_blk = obj_num / blk_num;
     let mut start_blk_height;
     let mut end_blk_height;
     loop {
         start_blk_height = Height(rng.gen_range(1..blk_num));
-        end_blk_height = Height(start_blk_height.0 + time_win);
+        end_blk_height = Height(start_blk_height.0 + time_win - 1);
         if end_blk_height.0 <= blk_num {
             break;
         }
     }
-    let height_selectivity = (end_blk_height.0 - start_blk_height.0) as f64 / blk_num as f64;
+    debug!(
+        "start_blk: {}, end_blk: {}",
+        start_blk_height, end_blk_height
+    );
+    let height_selectivity = (end_blk_height.0 - start_blk_height.0 + 1) as f64 / blk_num as f64;
+    debug!("height_selec: {}", height_selectivity);
     let dim_selectivity = selectivity / height_selectivity;
+    debug!("dim_selec: {}", dim_selectivity);
     let sub_selectivity = dim_selectivity.powf(1_f64 / dim_num as f64);
-    let mut sub_results = BTreeMap::<usize, (Range<u32>, usize, HashSet<Digest>)>::new();
+    debug!("sub_selec: {}", sub_selectivity);
+    let mut sub_results = Vec::<(usize, Range<u32>, usize, HashSet<Digest>)>::new();
     let mut cur_res_set = HashSet::<Digest>::new();
     let mut flag = true;
     for (dim, range) in num_scopes.iter().enumerate() {
-        let selected_len = (obj_num as f64 * sub_selectivity) as u32;
+        let selected_len = (time_win as f64 * obj_num_per_blk as f64 * sub_selectivity) as u32;
+        debug!("selected_len for dim {} is: {}", dim, selected_len);
         let mut start_p;
         let mut end_p;
         loop {
@@ -66,25 +81,26 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         } else {
             cur_res_set = cur_res_set.intersection(&sub_res).cloned().collect();
         }
-        sub_results.insert(sub_res.len(), (sub_range, dim, sub_res));
+        sub_results.push((sub_res.len(), sub_range, dim, sub_res));
     }
+    debug!("sub_res: {:?}", sub_results);
+    debug!("cur_res_set len: {}", cur_res_set.len());
 
-    while cur_res_set.len() < (obj_num as f64 * (selectivity - err_rate)) as usize
-        || cur_res_set.len() > (obj_num as f64 * (selectivity + err_rate)) as usize
+    while cur_res_set.len() < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
+        || cur_res_set.len() > (obj_num as f64 * (selectivity * (1_f64 + err_rate))) as usize
     {
+        sub_results.sort_by(|a, b| a.0.cmp(&b.0));
+        debug!("enter while loop ==============");
         flag = true;
         let new_sub_range;
         let modified_dim;
-        if cur_res_set.len() < (obj_num as f64 * (selectivity - err_rate)) as usize {
-            let (sub_res_size, (sub_range, dim, _)) = sub_results
-                .iter()
-                .next()
-                .context("The BTreeMap does not have min key value pair")?;
+        if cur_res_set.len() < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize {
+            let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
             let h = sub_range.get_high();
             if h + 1
                 < num_scopes
-                    .get(*dim)
+                    .get(dim)
                     .context("Range does not exist")?
                     .get_high()
             {
@@ -92,14 +108,11 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
             } else {
                 new_sub_range = Range::new(l - 1, h);
             }
-            modified_dim = *dim;
-            let removed_key = *sub_res_size;
-            sub_results.remove(&removed_key);
+            modified_dim = dim;
         } else {
-            let (sub_res_size, (sub_range, dim, _)) = sub_results
-                .iter()
-                .next_back()
-                .context("The BTreeMap does not have min key value pair")?;
+            let sub_res_len = sub_results.len();
+            let (_, sub_range, dim, _) = sub_results.remove(sub_res_len - 1);
+
             let l = sub_range.get_low();
             let h = sub_range.get_high();
             if h > l {
@@ -107,9 +120,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
             } else {
                 bail!("Cannot reduce the range anymore");
             }
-            modified_dim = *dim;
-            let removed_key = *sub_res_size;
-            sub_results.remove(&removed_key);
+            modified_dim = dim;
         }
         let new_sub_res = chain.range_query(
             new_sub_range,
@@ -117,12 +128,9 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
             end_blk_height,
             modified_dim,
         )?;
-        sub_results.insert(
-            new_sub_res.len(),
-            (new_sub_range, modified_dim, new_sub_res),
-        );
+        sub_results.push((new_sub_res.len(), new_sub_range, modified_dim, new_sub_res));
 
-        for (_, _, sub_res) in sub_results.values() {
+        for (_, _, _, sub_res) in &sub_results {
             if flag {
                 cur_res_set = sub_res.clone();
                 flag = false;
@@ -133,7 +141,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     }
 
     let mut ranges = BTreeMap::<usize, Range<u32>>::new();
-    for (_, (r, dim, _)) in sub_results {
+    for (_, r, dim, _) in sub_results {
         ranges.insert(dim, r);
     }
 
@@ -259,7 +267,7 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
     let mut end_blk_height_num;
     loop {
         start_blk_height_num = rng.gen_range(1..blk_num);
-        end_blk_height_num = start_blk_height_num + time_win;
+        end_blk_height_num = start_blk_height_num + time_win - 1;
         if end_blk_height_num <= blk_num {
             break;
         }
@@ -341,11 +349,12 @@ struct Opt {
 pub struct VChainQuery {
     pub start_block: u32,
     pub end_block: u32,
-    pub range: Option<Vec::<Vec<u32>>>,
+    pub range: Option<Vec<Vec<u32>>>,
     pub bool: Option<Vec<HashSet<String>>>,
 }
 
 fn main() -> Result<()> {
+    init_tracing_subscriber("info")?;
     let opts = Opt::from_args();
     let output_path = opts.output;
     fs::create_dir_all(&output_path)?;
@@ -366,8 +375,13 @@ fn main() -> Result<()> {
         }
     } else if opts.keyword {
         for _ in 0..QUERY_NUM {
-            let (q_for_plus, q_for_vchain) =
-                gen_keyword_query(time_win, opts.with_not, opts.prob_not, opts.num_keywords, &chain)?;
+            let (q_for_plus, q_for_vchain) = gen_keyword_query(
+                time_win,
+                opts.with_not,
+                opts.prob_not,
+                opts.num_keywords,
+                &chain,
+            )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
             query_for_plus.push(query_param_plus);
             let query_vchain: VChainQuery = serde_json::from_str(&q_for_vchain)?;
