@@ -31,13 +31,11 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     err_rate: f64,
     dim_num: usize,
     chain: T,
+    obj_num: u64,
+    blk_num: u64,
+    num_scopes: &Vec<Range<u32>>,
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
-    let (obj_num, blk_num, num_scopes) = chain.get_range_info(dim_num)?;
-    debug!(
-        "obj num: {}, blk_num: {}, scopes in each dim: {:?}",
-        obj_num, blk_num, num_scopes
-    );
     let obj_num_per_blk = obj_num / blk_num;
     let mut start_blk_height;
     let mut end_blk_height;
@@ -214,15 +212,15 @@ fn gen_node_with_not(not_prob: f64, keyword: String) -> Node {
     }
 }
 
-fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
+fn gen_keyword_query(
     time_win: u64,
     with_not: bool,
     not_prob: f64,
     keyword_num: usize,
-    chain: T,
+    blk_num: u64,
+    keyword_domain: &HashSet<String>,
 ) -> Result<(String, String)> {
-    let (blk_num, keyword_domain) = chain.get_keyword_info()?;
-    let keyword_vec = Vec::from_iter(keyword_domain);
+    let keyword_vec = Vec::from_iter(keyword_domain.clone());
     let keywords_selected: Vec<&String> = keyword_vec
         .choose_multiple(&mut rand::thread_rng(), keyword_num)
         .collect();
@@ -354,7 +352,7 @@ pub struct VChainQuery {
 }
 
 fn main() -> Result<()> {
-    init_tracing_subscriber("info")?;
+    init_tracing_subscriber("debug")?;
     let opts = Opt::from_args();
     let output_path = opts.output;
     fs::create_dir_all(&output_path)?;
@@ -363,10 +361,23 @@ fn main() -> Result<()> {
     let mut query_for_plus = Vec::<QueryParam<u32>>::new();
     let mut query_for_vchain = Vec::<VChainQuery>::new();
     if opts.range {
+        let (obj_num, blk_num, num_scopes) = (&chain).get_range_info(opts.dim_num)?;
+        debug!(
+            "obj num: {}, blk_num: {}, scopes in each dim: {:?}",
+            obj_num, blk_num, num_scopes
+        );
         for selectivity in &opts.selectivities {
             for _ in 0..QUERY_NUM {
-                let (q_for_plus, q_for_vchain) =
-                    gen_range_query(time_win, *selectivity, ERR_RATE, opts.dim_num, &chain)?;
+                let (q_for_plus, q_for_vchain) = gen_range_query(
+                    time_win,
+                    *selectivity,
+                    ERR_RATE,
+                    opts.dim_num,
+                    &chain,
+                    obj_num,
+                    blk_num,
+                    &num_scopes,
+                )?;
                 let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
                 query_for_plus.push(query_param_plus);
                 let query_vchain: VChainQuery = serde_json::from_str(&q_for_vchain)?;
@@ -374,13 +385,15 @@ fn main() -> Result<()> {
             }
         }
     } else if opts.keyword {
+        let (blk_num, keyword_domain) = (&chain).get_keyword_info()?;
         for _ in 0..QUERY_NUM {
             let (q_for_plus, q_for_vchain) = gen_keyword_query(
                 time_win,
                 opts.with_not,
                 opts.prob_not,
                 opts.num_keywords,
-                &chain,
+                blk_num,
+                &keyword_domain,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
             query_for_plus.push(query_param_plus);
