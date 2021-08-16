@@ -18,6 +18,7 @@ use vchain_plus::{
     digest::Digest,
     SimChain,
 };
+use serde::{Deserialize, Serialize};
 
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.0001;
@@ -336,29 +337,41 @@ struct Opt {
     output: PathBuf,
 }
 
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct VChainQuery {
+    pub start_block: u32,
+    pub end_block: u32,
+    pub range: Option<Vec::<Vec<u32>>>,
+    pub bool: Option<Vec<HashSet<String>>>,
+}
+
 fn main() -> Result<()> {
     let opts = Opt::from_args();
     let output_path = opts.output;
     fs::create_dir_all(&output_path)?;
     let chain = SimChain::open(&opts.input)?;
     let time_win = opts.time_win;
-    let mut query_for_plus = HashSet::<String>::new();
-    let mut query_for_vchain = HashSet::<String>::new();
+    let mut query_for_plus = Vec::<QueryParam<u32>>::new();
+    let mut query_for_vchain = Vec::<VChainQuery>::new();
     if opts.range {
         for selectivity in &opts.selectivities {
             for _ in 0..QUERY_NUM {
                 let (q_for_plus, q_for_vchain) =
                     gen_range_query(time_win, *selectivity, ERR_RATE, opts.dim_num, &chain)?;
-                query_for_plus.insert(q_for_plus);
-                query_for_vchain.insert(q_for_vchain);
+                let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
+                query_for_plus.push(query_param_plus);
+                let query_vchain: VChainQuery = serde_json::from_str(&q_for_vchain)?;
+                query_for_vchain.push(query_vchain);
             }
         }
     } else if opts.keyword {
         for _ in 0..QUERY_NUM {
             let (q_for_plus, q_for_vchain) =
                 gen_keyword_query(time_win, opts.with_not, opts.prob_not, opts.num_keywords, &chain)?;
-            query_for_plus.insert(q_for_plus);
-            query_for_vchain.insert(q_for_vchain);
+            let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
+            query_for_plus.push(query_param_plus);
+            let query_vchain: VChainQuery = serde_json::from_str(&q_for_vchain)?;
+            query_for_vchain.push(query_vchain);
         }
     } else if opts.both {
         // to be implemented
