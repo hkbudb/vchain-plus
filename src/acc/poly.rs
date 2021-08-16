@@ -136,7 +136,7 @@ pub(crate) fn poly_remove_term<F: Field>(input: &Poly<F>, v: Variable, q: u64) -
 mod tests {
     use super::*;
     use crate::set;
-    use ark_bls12_381::Fr;
+    use ark_bls12_377::Fr;
     use ark_ff::One;
 
     #[test]
