@@ -409,14 +409,14 @@ pub fn compute_set_operation_final<E: PairingEngine>(
 mod tests {
     use super::*;
     use crate::{acc::keys::AccSecretKey, set};
-    use ark_bls12_377::{Bls12_377, Fr};
+    use ark_bls12_381::{Bls12_381, Fr};
 
     #[test]
     fn test_intersection_proof() {
         let mut rng = rand::thread_rng();
         let q = 10;
-        let sk = AccSecretKey::<Bls12_377>::rand(&mut rng).into();
-        let pk = AccPublicKey::<Bls12_377>::gen_key(&sk, q);
+        let sk = AccSecretKey::<Bls12_381>::rand(&mut rng).into();
+        let pk = AccPublicKey::<Bls12_381>::gen_key(&sk, q);
 
         let s1 = set! {1, 2, 3};
         let s2 = set! {1, 5};
@@ -429,7 +429,7 @@ mod tests {
         let s1_acc = AccValue::from_set_sk(&s1, &sk, q);
         let s2_acc = AccValue::from_set_sk(&s2, &sk, q);
 
-        let proof = IntersectionProof::<Bls12_377>::new(
+        let proof = IntersectionProof::<Bls12_381>::new(
             &s3,
             &q_poly,
             R,
@@ -463,8 +463,8 @@ mod tests {
     fn test_intermediate_proof() {
         let mut rng = rand::thread_rng();
         let q = 10;
-        let sk = AccSecretKey::<Bls12_377>::rand(&mut rng).into();
-        let pk = AccPublicKey::<Bls12_377>::gen_key(&sk, q);
+        let sk = AccSecretKey::<Bls12_381>::rand(&mut rng).into();
+        let pk = AccPublicKey::<Bls12_381>::gen_key(&sk, q);
 
         let s1 = set! {1, 2, 3};
         let s2 = set! {1, 5};
@@ -476,7 +476,7 @@ mod tests {
         let _difference_acc = AccValue::from_set_sk(&set! {2, 3}, &sk, q);
 
         let (intersection_result_set, intersection_result_acc, intersection_proof) =
-            compute_set_operation_intermediate::<Bls12_377>(
+            compute_set_operation_intermediate::<Bls12_381>(
                 Op::Intersection,
                 &s1,
                 &s1_acc,
@@ -497,7 +497,7 @@ mod tests {
         );
 
         let (union_result_set, union_result_acc, union_proof) =
-            compute_set_operation_intermediate::<Bls12_377>(
+            compute_set_operation_intermediate::<Bls12_381>(
                 Op::Union,
                 &s1,
                 &s1_acc,
@@ -518,7 +518,7 @@ mod tests {
         );
 
         let (diff_result_set, diff_result_acc, diff_proof) =
-            compute_set_operation_intermediate::<Bls12_377>(
+            compute_set_operation_intermediate::<Bls12_381>(
                 Op::Difference,
                 &s1,
                 &s1_acc,
@@ -543,8 +543,8 @@ mod tests {
     fn test_final_proof() {
         let mut rng = rand::thread_rng();
         let q = 10;
-        let sk = AccSecretKey::<Bls12_377>::rand(&mut rng).into();
-        let pk = AccPublicKey::<Bls12_377>::gen_key(&sk, q);
+        let sk = AccSecretKey::<Bls12_381>::rand(&mut rng).into();
+        let pk = AccPublicKey::<Bls12_381>::gen_key(&sk, q);
 
         let s1 = set! {1, 2, 3};
         let s2 = set! {1, 5};
@@ -553,7 +553,7 @@ mod tests {
         let s2_acc = AccValue::from_set_sk(&s2, &sk, q);
 
         let (intersection_result, intersection_proof) =
-            compute_set_operation_final::<Bls12_377>(Op::Intersection, &s1, &s2, &pk);
+            compute_set_operation_final::<Bls12_381>(Op::Intersection, &s1, &s2, &pk);
         assert_eq!(intersection_result, set! {1});
         intersection_proof
             .verify(&s1_acc, &s2_acc, &intersection_result, &pk)
@@ -566,7 +566,7 @@ mod tests {
         );
 
         let (union_result, union_proof) =
-            compute_set_operation_final::<Bls12_377>(Op::Union, &s1, &s2, &pk);
+            compute_set_operation_final::<Bls12_381>(Op::Union, &s1, &s2, &pk);
         assert_eq!(union_result, set! {1, 2, 3, 5});
         union_proof
             .verify(&s1_acc, &s2_acc, &union_result, &pk)
@@ -579,7 +579,7 @@ mod tests {
         );
 
         let (diff_result, diff_proof) =
-            compute_set_operation_final::<Bls12_377>(Op::Difference, &s1, &s2, &pk);
+            compute_set_operation_final::<Bls12_381>(Op::Difference, &s1, &s2, &pk);
         assert_eq!(diff_result, set! {2, 3});
         diff_proof
             .verify(&s1_acc, &s2_acc, &diff_result, &pk)
