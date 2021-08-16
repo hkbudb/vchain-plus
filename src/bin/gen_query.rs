@@ -24,6 +24,7 @@ use vchain_plus::{
 
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.1;
+const GAP: u32 = 100;
 
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     time_win: u64,
@@ -88,11 +89,11 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         || cur_res_set.len() > (obj_num as f64 * (selectivity * (1_f64 + err_rate))) as usize
     {
         sub_results.sort_by(|a, b| a.0.cmp(&b.0));
-        debug!("enter while loop ==============");
         flag = true;
         let new_sub_range;
         let modified_dim;
         if cur_res_set.len() < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize {
+            debug!("less than target");
             let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
             let h = sub_range.get_high();
@@ -102,19 +103,20 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
                     .context("Range does not exist")?
                     .get_high()
             {
-                new_sub_range = Range::new(l, h + 1);
+                new_sub_range = Range::new(l, h + GAP);
             } else {
-                new_sub_range = Range::new(l - 1, h);
+                new_sub_range = Range::new(l - GAP, h);
             }
             modified_dim = dim;
         } else {
+            debug!("more than target");
             let sub_res_len = sub_results.len();
             let (_, sub_range, dim, _) = sub_results.remove(sub_res_len - 1);
 
             let l = sub_range.get_low();
             let h = sub_range.get_high();
             if h > l {
-                new_sub_range = Range::new(l, h - 1);
+                new_sub_range = Range::new(l, h - GAP);
             } else {
                 bail!("Cannot reduce the range anymore");
             }
