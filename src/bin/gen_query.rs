@@ -25,7 +25,7 @@ use vchain_plus::{
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.1;
 const GAP: u32 = 10000;
-const START_COEFFICIENT: u32 = 100;
+const START_COEFFICIENT: u32 = 1000;
 // 0: no special requirement
 // 1: all opt should be AND
 // 2: all opt should be OR
