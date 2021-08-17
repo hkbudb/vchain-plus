@@ -2,10 +2,12 @@ pub mod query_obj;
 pub mod query_param;
 pub mod query_plan;
 
-use crate::{acc::{
+use crate::{
+    acc::{
         compute_set_operation_final, compute_set_operation_intermediate, ops::Op, AccPublicKey,
         AccValue, Set,
-    }, chain::{
+    },
+    chain::{
         block::{hash::obj_id_nums_hash, Height},
         bplus_tree,
         id_tree::{self, ObjId},
@@ -17,7 +19,10 @@ use crate::{acc::{
             MerkleProof, VOBlkRtNode, VOFinalDiff, VOFinalIntersec, VOFinalUnion, VOInterDiff,
             VOInterIntersec, VOInterUnion, VOKeywordNode, VONode, VORangeNode, VoDag, VO,
         },
-    }, digest::{Digest, Digestible}, utils::{QueryTime, Time}};
+    },
+    digest::{Digest, Digestible},
+    utils::{QueryTime, Time},
+};
 use anyhow::{bail, Context, Result};
 use howlong::ProcessDuration;
 use petgraph::algo::toposort;
