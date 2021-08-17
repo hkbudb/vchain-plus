@@ -25,6 +25,10 @@ use vchain_plus::{
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.1;
 const GAP: u32 = 1;
+// 0: no special requirement
+// 1: all opt should be AND
+// 2: all opt should be OR
+const FIX_OPT: u32 = 10000;
 
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     time_win: u64,
@@ -138,6 +142,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         )?;
         sub_results.push((new_sub_res.len(), new_sub_range, modified_dim, new_sub_res));
 
+        debug!("start_blk: {}, end_blk: {}", start_blk_height, end_blk_height);
         debug!("ranges:");
         for (_, sub_range, _, sub_res) in &sub_results {
             if flag {
@@ -254,27 +259,37 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
     let mut node: Node = Node::Input("init".to_string());
     for keyword in keywords_selected {
         if lock {
-            let idx = rng.gen_range(0..2); // 0: and, 1: or
-            if idx == 0 {
-                if with_not {
-                    node = Node::And(Box::new(AndNode(
+            if FIX_OPT == 0 {
+                let idx = rng.gen_range(0..2); // 0: and, 1: or
+                if idx == 0 {
+                    if with_not {
+                        node = Node::And(Box::new(AndNode(
+                            node,
+                            gen_node_with_not(not_prob, keyword.to_string()),
+                        )));
+                    } else {
+                        node = Node::And(Box::new(AndNode(node, Node::Input(keyword.to_string()))));
+                    }
+                } else if with_not {
+                    node = Node::Or(Box::new(OrNode(
                         node,
                         gen_node_with_not(not_prob, keyword.to_string()),
                     )));
                 } else {
-                    node = Node::And(Box::new(AndNode(node, Node::Input(keyword.to_string()))));
+                    node = Node::Or(Box::new(OrNode(node, Node::Input(keyword.to_string()))));
                 }
-            } else if with_not {
-                node = Node::Or(Box::new(OrNode(
-                    node,
-                    gen_node_with_not(not_prob, keyword.to_string()),
-                )));
+            } else if FIX_OPT == 1 {
+                node = Node::And(Box::new(AndNode(node, Node::Input(keyword.to_string()))));
             } else {
                 node = Node::Or(Box::new(OrNode(node, Node::Input(keyword.to_string()))));
             }
         } else {
-            if with_not {
-                node = gen_node_with_not(not_prob, keyword.to_string())
+            if FIX_OPT == 0 {
+                if with_not {
+                    node = gen_node_with_not(not_prob, keyword.to_string())
+                } else {
+                    node = Node::Input(keyword.to_string());
+                }
             } else {
                 node = Node::Input(keyword.to_string());
             }
