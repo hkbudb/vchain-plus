@@ -344,9 +344,12 @@ impl ScanQueryInterface for &SimChain {
     }
 
     #[allow(clippy::type_complexity)]
-    fn get_range_info(&self, dim_num: usize) -> Result<(u64, u64, Vec<Range<Self::K>>)> {
-        let mut total_num = 0;
-        let mut cur_height_num = 0;
+    fn get_range_info(
+        &self,
+        start_blk_height: Height,
+        end_blk_height: Height,
+        dim_num: usize,
+    ) -> Result<Vec<Range<Self::K>>> {
         let mut num_ranges = Vec::<Range<Self::K>>::new();
         let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
         let mut num_range_scope = Vec::<(Self::K, Self::K)>::new();
@@ -355,35 +358,37 @@ impl ScanQueryInterface for &SimChain {
         }
         for (_key, val) in db_iter {
             let o = bincode::deserialize::<Object<u32>>(&val[..])?;
-            let o_num_vals = o.num_data;
-            for (i, num_val) in o_num_vals.iter().enumerate() {
-                let lower_bound = &num_range_scope
-                    .get(i)
-                    .with_context(|| format!("Object does not have numerical value at dim {}", i))?
-                    .0;
-                let upper_bound = &num_range_scope
-                    .get(i)
-                    .with_context(|| format!("Object does not have numerical value at dim {}", i))?
-                    .1;
-                if num_val < lower_bound {
-                    num_range_scope
-                        .get_mut(i)
+            if o.blk_height <= end_blk_height && o.blk_height >= start_blk_height {
+                let o_num_vals = o.num_data;
+                for (i, num_val) in o_num_vals.iter().enumerate() {
+                    let lower_bound = &num_range_scope
+                        .get(i)
                         .with_context(|| {
                             format!("Object does not have numerical value at dim {}", i)
                         })?
-                        .0 = *num_val;
-                } else if num_val > upper_bound {
-                    num_range_scope
-                        .get_mut(i)
+                        .0;
+                    let upper_bound = &num_range_scope
+                        .get(i)
                         .with_context(|| {
                             format!("Object does not have numerical value at dim {}", i)
                         })?
-                        .1 = *num_val;
+                        .1;
+                    if num_val < lower_bound {
+                        num_range_scope
+                            .get_mut(i)
+                            .with_context(|| {
+                                format!("Object does not have numerical value at dim {}", i)
+                            })?
+                            .0 = *num_val;
+                    } else if num_val > upper_bound {
+                        num_range_scope
+                            .get_mut(i)
+                            .with_context(|| {
+                                format!("Object does not have numerical value at dim {}", i)
+                            })?
+                            .1 = *num_val;
+                    }
                 }
-            }
-            total_num += 1;
-            if cur_height_num < o.blk_height.0 {
-                cur_height_num = o.blk_height.0;
             }
         }
 
@@ -391,22 +396,37 @@ impl ScanQueryInterface for &SimChain {
             num_ranges.push(Range::new(min, max));
         }
 
-        Ok((total_num, cur_height_num, num_ranges))
+        Ok(num_ranges)
     }
 
-    fn get_keyword_info(&self) -> Result<(u64, HashSet<String>)> {
+    fn get_keyword_info(
+        &self,
+        start_blk_height: Height,
+        end_blk_height: Height,
+    ) -> Result<HashSet<String>> {
         let mut res = HashSet::<String>::new();
         let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
-        let mut cur_height_num = 0;
         for (_key, val) in db_iter {
             let o = bincode::deserialize::<Object<u32>>(&val[..])?;
-            for k in o.keyword_data.iter() {
-                res.insert(k.to_string());
+            if o.blk_height < end_blk_height && o.blk_height > start_blk_height {
+                for k in o.keyword_data.iter() {
+                    res.insert(k.to_string());
+                }
             }
+        }
+        Ok(res)
+    }
+    fn get_chain_info(&self) -> Result<(u64, u64)> {
+        let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
+        let mut cur_height_num = 0;
+        let mut total_num = 0;
+        for (_key, val) in db_iter {
+            let o = bincode::deserialize::<Object<u32>>(&val[..])?;
             if cur_height_num < o.blk_height.0 {
                 cur_height_num = o.blk_height.0;
             }
+            total_num += 1;
         }
-        Ok((cur_height_num, res))
+        Ok((total_num, cur_height_num))
     }
 }

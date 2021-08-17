@@ -272,70 +272,87 @@ impl ScanQueryInterface for &FakeChain {
         Ok(res)
     }
 
-    fn get_range_info(&self, dim_num: usize) -> Result<(u64, u64, Vec<Range<Self::K>>)> {
-        let mut total_num = 0;
-        let mut cur_height_num = 0;
+    fn get_range_info(
+        &self,
+        start_blk_height: Height,
+        end_blk_height: Height,
+        dim_num: usize,
+    ) -> Result<Vec<Range<Self::K>>> {
         let mut num_ranges = Vec::<Range<Self::K>>::new();
         let mut num_range_scope = Vec::<(Self::K, Self::K)>::new();
         for _ in 0..dim_num {
             num_range_scope.push((std::u32::MAX, 0));
         }
         for (_hash, o) in &self.objects {
-            let o_num_vals = &o.num_data;
-            for (i, num_val) in o_num_vals.iter().enumerate() {
-                if num_val
-                    < &num_range_scope
-                        .get(i)
-                        .with_context(|| {
-                            format!("Object does not have numerical value at dim {}", i)
-                        })?
-                        .0
-                {
-                    num_range_scope
-                        .get_mut(i)
-                        .with_context(|| {
-                            format!("Object does not have numerical value at dim {}", i)
-                        })?
-                        .0 = *num_val;
-                } else if num_val
-                    > &num_range_scope
-                        .get(i)
-                        .with_context(|| {
-                            format!("Object does not have numerical value at dim {}", i)
-                        })?
-                        .1
-                {
-                    num_range_scope
-                        .get_mut(i)
-                        .with_context(|| {
-                            format!("Object does not have numerical value at dim {}", i)
-                        })?
-                        .1 = *num_val;
+            if o.blk_height < end_blk_height && o.blk_height > start_blk_height {
+                let o_num_vals = &o.num_data;
+                for (i, num_val) in o_num_vals.iter().enumerate() {
+                    if num_val
+                        < &num_range_scope
+                            .get(i)
+                            .with_context(|| {
+                                format!("Object does not have numerical value at dim {}", i)
+                            })?
+                            .0
+                    {
+                        num_range_scope
+                            .get_mut(i)
+                            .with_context(|| {
+                                format!("Object does not have numerical value at dim {}", i)
+                            })?
+                            .0 = *num_val;
+                    } else if num_val
+                        > &num_range_scope
+                            .get(i)
+                            .with_context(|| {
+                                format!("Object does not have numerical value at dim {}", i)
+                            })?
+                            .1
+                    {
+                        num_range_scope
+                            .get_mut(i)
+                            .with_context(|| {
+                                format!("Object does not have numerical value at dim {}", i)
+                            })?
+                            .1 = *num_val;
+                    }
                 }
             }
-            cur_height_num = o.blk_height.0;
-            total_num += 1;
         }
 
         for (min, max) in num_range_scope {
             num_ranges.push(Range::new(min, max));
         }
 
-        Ok((total_num, cur_height_num, num_ranges))
+        Ok(num_ranges)
     }
 
-    fn get_keyword_info(&self) -> Result<(u64, HashSet<String>)> {
+    fn get_keyword_info(
+        &self,
+        start_blk_height: Height,
+        end_blk_height: Height,
+    ) -> Result<HashSet<String>> {
         let mut res = HashSet::<String>::new();
-        let mut cur_height_num = 0;
         for (_, o) in &self.objects {
-            for k in o.keyword_data.iter() {
-                res.insert(k.to_string());
+            if o.blk_height < end_blk_height && o.blk_height > start_blk_height {
+                for k in o.keyword_data.iter() {
+                    res.insert(k.to_string());
+                }
             }
+        }
+        Ok(res)
+    }
+
+    fn get_chain_info(&self) -> Result<(u64, u64)> {
+        let mut cur_height_num = 0;
+        let mut total_num = 0;
+        for (_, o) in &self.objects {
             if cur_height_num < o.blk_height.0 {
                 cur_height_num = o.blk_height.0;
             }
+            total_num += 1;
         }
-        Ok((cur_height_num, res))
+        Ok((total_num, cur_height_num))
     }
 }
 

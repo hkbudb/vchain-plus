@@ -9,7 +9,7 @@ use std::{
     path::PathBuf,
 };
 use structopt::StructOpt;
-use tracing::debug;
+use tracing::{debug, info};
 use vchain_plus::{
     chain::{
         block::Height,
@@ -24,7 +24,7 @@ use vchain_plus::{
 
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.1;
-const GAP: u32 = 1000;
+const GAP: u32 = 1;
 
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     time_win: u64,
@@ -34,10 +34,8 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     chain: T,
     obj_num: u64,
     blk_num: u64,
-    num_scopes: &Vec<Range<u32>>,
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
-    let obj_num_per_blk = obj_num / blk_num;
     let mut start_blk_height;
     let mut end_blk_height;
     loop {
@@ -51,6 +49,9 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         "start_blk: {}, end_blk: {}",
         start_blk_height, end_blk_height
     );
+    let num_scopes = chain.get_range_info(start_blk_height, end_blk_height, dim_num)?;
+    debug!("num scpoes: {:?}", num_scopes);
+    let obj_num_per_blk = obj_num / blk_num;
     let height_selectivity = (end_blk_height.0 - start_blk_height.0 + 1) as f64 / blk_num as f64;
     debug!("height_selec: {}", height_selectivity);
     let dim_selectivity = selectivity / height_selectivity;
@@ -65,10 +66,17 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         debug!("selected_len for dim {} is: {}", dim, selected_len);
         let mut start_p;
         let mut end_p;
+        let mut counter = 0;
         loop {
-            start_p = rng.gen_range(range.get_low()..range.get_high());
+            let l = range.get_low();
+            let h = range.get_high();
+            start_p = rng.gen_range(l..(l + h) / 2);
             end_p = start_p + selected_len;
             if end_p <= range.get_high() {
+                break;
+            }
+            counter += 1;
+            if counter >= 500 {
                 break;
             }
         }
@@ -97,7 +105,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
             let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h + 1
+            if h + GAP
                 < num_scopes
                     .get(dim)
                     .context("Range does not exist")?
@@ -115,7 +123,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
 
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h > l {
+            if h > l + GAP {
                 new_sub_range = Range::new(l, h - GAP);
             } else {
                 bail!("Cannot reduce the range anymore");
@@ -217,20 +225,31 @@ fn gen_node_with_not(not_prob: f64, keyword: String) -> Node {
     }
 }
 
-fn gen_keyword_query(
+fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
     time_win: u64,
     with_not: bool,
     not_prob: f64,
     keyword_num: usize,
     blk_num: u64,
-    keyword_domain: &HashSet<String>,
+    chain: T,
 ) -> Result<(String, String)> {
-    let keyword_vec = Vec::from_iter(keyword_domain.clone());
+    let mut rng = rand::thread_rng();
+    let mut start_blk_height_num;
+    let mut end_blk_height_num;
+    loop {
+        start_blk_height_num = rng.gen_range(1..blk_num);
+        end_blk_height_num = start_blk_height_num + time_win - 1;
+        if end_blk_height_num <= blk_num {
+            break;
+        }
+    }
+    let keyword_domain =
+        chain.get_keyword_info(Height(start_blk_height_num), Height(end_blk_height_num))?;
+    let keyword_vec = Vec::from_iter(keyword_domain);
     let keywords_selected: Vec<&String> = keyword_vec
         .choose_multiple(&mut rand::thread_rng(), keyword_num)
         .collect();
 
-    let mut rng = rand::thread_rng();
     let mut lock = false;
     let mut node: Node = Node::Input("init".to_string());
     for keyword in keywords_selected {
@@ -266,15 +285,6 @@ fn gen_keyword_query(
     let cnf_set = node.to_cnf_set();
     let cnf_node = Node::set_to_cnf(&cnf_set);
 
-    let mut start_blk_height_num;
-    let mut end_blk_height_num;
-    loop {
-        start_blk_height_num = rng.gen_range(1..blk_num);
-        end_blk_height_num = start_blk_height_num + time_win - 1;
-        if end_blk_height_num <= blk_num {
-            break;
-        }
-    }
     let query_param = QueryParam {
         start_blk: start_blk_height_num,
         end_blk: end_blk_height_num,
@@ -366,13 +376,11 @@ fn main() -> Result<()> {
     let mut query_for_plus = Vec::<QueryParam<u32>>::new();
     let mut query_for_vchain = Vec::<VChainQuery>::new();
     if opts.range {
-        let (obj_num, blk_num, num_scopes) = (&chain).get_range_info(opts.dim_num)?;
-        debug!(
-            "obj num: {}, blk_num: {}, scopes in each dim: {:?}",
-            obj_num, blk_num, num_scopes
-        );
+        let (obj_num, blk_num) = (&chain).get_chain_info()?;
+        info!("obj num: {}, blk_num: {}", obj_num, blk_num);
         for selectivity in &opts.selectivities {
             for _ in 0..QUERY_NUM {
+                info!("Generating a range query...");
                 let (q_for_plus, q_for_vchain) = gen_range_query(
                     time_win,
                     *selectivity,
@@ -381,7 +389,6 @@ fn main() -> Result<()> {
                     &chain,
                     obj_num,
                     blk_num,
-                    &num_scopes,
                 )?;
                 let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
                 query_for_plus.push(query_param_plus);
@@ -390,15 +397,17 @@ fn main() -> Result<()> {
             }
         }
     } else if opts.keyword {
-        let (blk_num, keyword_domain) = (&chain).get_keyword_info()?;
+        let (obj_num, blk_num) = (&chain).get_chain_info()?;
+        info!("obj num: {}, blk_num: {}", obj_num, blk_num);
         for _ in 0..QUERY_NUM {
+            info!("Generating a keyword query...");
             let (q_for_plus, q_for_vchain) = gen_keyword_query(
                 time_win,
                 opts.with_not,
                 opts.prob_not,
                 opts.num_keywords,
                 blk_num,
-                &keyword_domain,
+                &chain,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
             query_for_plus.push(query_param_plus);
