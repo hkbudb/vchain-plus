@@ -25,6 +25,7 @@ use vchain_plus::{
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.1;
 const GAP: u32 = 10000;
+const START_COEFFICIENT: u32 = 100;
 // 0: no special requirement
 // 1: all opt should be AND
 // 2: all opt should be OR
@@ -74,7 +75,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         loop {
             let l = range.get_low();
             let h = range.get_high();
-            start_p = rng.gen_range(l..(l + h) / 2);
+            start_p = rng.gen_range(l..(l + h) / START_COEFFICIENT);
             end_p = start_p + selected_len;
             if end_p <= range.get_high() {
                 break;
