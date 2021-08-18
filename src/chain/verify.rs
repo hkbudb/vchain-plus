@@ -266,12 +266,24 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
 }
 
 fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<usize> {
-    info!("VO size profile: ");
-    info!("VO dag size: {}", bincode::serialize(&vo.vo_dag)?.len());
-    info!("trie_proofs size: {}", bincode::serialize(&vo.trie_proofs)?.len());
-    info!("id_tree_proof size: {}", bincode::serialize(&vo.id_tree_proof)?.len());
-    info!("cur_obj_id size: {}", bincode::serialize(&vo.cur_obj_id)?.len());
-    info!("merkle_proofs size: {}", bincode::serialize(&vo.merkle_proofs)?.len());
+    debug!("VO size profile: ");
+    debug!("VO dag size: {}", bincode::serialize(&vo.vo_dag)?.len());
+    debug!(
+        "trie_proofs size: {}",
+        bincode::serialize(&vo.trie_proofs)?.len()
+    );
+    debug!(
+        "id_tree_proof size: {}",
+        bincode::serialize(&vo.id_tree_proof)?.len()
+    );
+    debug!(
+        "cur_obj_id size: {}",
+        bincode::serialize(&vo.cur_obj_id)?.len()
+    );
+    debug!(
+        "merkle_proofs size: {}",
+        bincode::serialize(&vo.merkle_proofs)?.len()
+    );
     Ok(bincode::serialize(vo)?.len())
 }
 
