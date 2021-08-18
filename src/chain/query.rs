@@ -521,12 +521,12 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
         //let query = q_param.into_query_basic(s_win_size, e_win_size)?;
         let query = q_param.into_query_trimmed2(&chain, pk, s_win_size, e_win_size)?;
         let time = sub_timer.elapsed();
-        info!("Stage1: {}", time);
+        debug!("Stage1: {}", time);
         stage1_time.push(time);
         let sub_timer = howlong::ProcessCPUTimer::new();
         let mut query_plan = query_to_qp(query)?;
         let time = sub_timer.elapsed();
-        info!("Stage2: {}", time);
+        debug!("Stage2: {}", time);
         stage2_time.push(time);
         let sub_timer = howlong::ProcessCPUTimer::new();
         let cost = query_plan.estimate_cost(&chain, pk)?;
@@ -538,7 +538,7 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
         let sub_timer = howlong::ProcessCPUTimer::new();
         let res = query_final(&chain, query_plan, pk)?;
         let time = sub_timer.elapsed();
-        info!("Stage3: {}", time);
+        debug!("Stage3: {}", time);
         stage3_time.push(time);
         result.push(res);
     }
