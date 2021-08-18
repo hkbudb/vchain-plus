@@ -7,7 +7,7 @@ target_path = sys.argv[1]
 files = os.listdir(target_path)
 for f_name in files:
     print ("========processing file " + f_name)
-    results_info = json.load(open('./data/result/'+f_name))
+    results_info = json.load(open(target_path + f_name))
     stage1_t = []
     stage2_t = []
     stage3_t = []
