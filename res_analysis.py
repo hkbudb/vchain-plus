@@ -22,7 +22,7 @@ for f_name in files:
         stage3_t.append(int(query_info['stage3']['real']))
         query_time.append(int(query_info['total']['real']))
         verify_time.append(int(verify_info['verify_time']['real']))
-        vo_size.append(int(verify_info[vo_size]))
+        vo_size.append(int(verify_info['vo_size']))
     avg_stg1 = statistics.mean(stage1_t)
     avg_stg2 = statistics.mean(stage2_t)
     avg_stg3 = statistics.mean(stage3_t)
