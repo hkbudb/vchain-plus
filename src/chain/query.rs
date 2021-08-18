@@ -408,9 +408,13 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
             .context("Cannot find set in set_map")?;
         for i in set.iter() {
             let obj_id = ObjId(*i);
-            let obj_hash = id_tree_ctx
-                .query(obj_id, max_id_num, id_tree_fanout)?
-                .context("Cannot find object")?;
+            let obj_hash_opt = id_tree_ctx
+                .query(obj_id, max_id_num, id_tree_fanout)?;
+            let obj_hash;
+            match obj_hash_opt {
+                Some(d) => obj_hash = d,
+                None => continue,
+            }
             let obj = chain.read_object(obj_hash)?;
             obj_map.insert(obj_id, obj);
         }
