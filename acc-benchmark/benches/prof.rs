@@ -1,5 +1,5 @@
 use acc_benchmark::*;
-use criterion::{criterion_group, criterion_main, Criterion, SamplingMode};
+use criterion::{criterion_group, criterion_main, Criterion};
 use pprof::criterion::{Output, PProfProfiler};
 
 const Q: u64 = 500;
