@@ -226,15 +226,20 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
     fn div(self, rhs: &'rhs Poly<F>) -> Self::Output {
         let (rhs_lead_term, rhs_lead_coeff) =
             rhs.lead_term_and_coeff().expect("cannot divide by zero");
+        let rhs_lead_degree = rhs_lead_term.degree();
         let rhs_lead_coeff_inv = rhs_lead_coeff.inverse().expect("cannot divide by zero");
 
         let mut q = Poly::zero();
         let mut r = self.clone();
 
         while !r.is_zero() {
-            let r_lead = r.coeffs.iter().find(|(term, _)| {
-                term.s_pow >= rhs_lead_term.s_pow && term.r_pow >= rhs_lead_term.r_pow
-            });
+            let r_lead = r
+                .coeffs
+                .iter()
+                .take_while(|(term, _)| term.degree() >= rhs_lead_degree)
+                .find(|(term, _)| {
+                    term.s_pow >= rhs_lead_term.s_pow && term.r_pow >= rhs_lead_term.r_pow
+                });
 
             let (r_lead_term, r_lead_coeff) = match r_lead {
                 Some((t, c)) => (*t, *c),
