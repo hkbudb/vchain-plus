@@ -226,6 +226,7 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
     fn div(self, rhs: &'rhs Poly<F>) -> Self::Output {
         let (rhs_lead_term, rhs_lead_coeff) =
             rhs.lead_term_and_coeff().expect("cannot divide by zero");
+        let rhs_lead_coeff_inv = rhs_lead_coeff.inverse().expect("cannot divide by zero");
 
         let mut q = Poly::zero();
         let mut r = self.clone();
@@ -240,13 +241,22 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
                 None => break,
             };
 
-            let lead_div_coeff = r_lead_coeff / rhs_lead_coeff;
+            let lead_div_coeff = r_lead_coeff * rhs_lead_coeff_inv;
             let lead_div_term = Term::new(
                 r_lead_term.s_pow - rhs_lead_term.s_pow,
                 r_lead_term.r_pow - rhs_lead_term.r_pow,
             );
+            // q += div
             q.add_nonzero_term(lead_div_term, lead_div_coeff);
-            r -= &rhs.mul_nonzero_term(lead_div_term, lead_div_coeff);
+            // r -= rhs * div
+            for (rhs_t, rhs_c) in rhs.coeffs.iter() {
+                let sub_term = Term::new(
+                    lead_div_term.s_pow + rhs_t.s_pow,
+                    lead_div_term.r_pow + rhs_t.r_pow,
+                );
+                let sub_coeff = lead_div_coeff * rhs_c;
+                r.sub_nonzero_term(sub_term, sub_coeff);
+            }
         }
 
         (q, r)
@@ -291,6 +301,7 @@ impl<F: Field> Poly<F> {
 
     #[inline(always)]
     pub(crate) fn add_nonzero_term(&mut self, term: Term, coeff: F) {
+        debug_assert!(!coeff.is_zero());
         match self.coeffs.entry(term) {
             Entry::Vacant(e) => {
                 e.insert(coeff);
@@ -305,24 +316,19 @@ impl<F: Field> Poly<F> {
     }
 
     #[inline(always)]
-    pub(crate) fn mul_nonzero_term(&self, term: Term, coeff: F) -> Self {
-        // We can be sure there are no duplicated term.
-        self.coeffs
-            .par_iter()
-            .map(|(&self_term, &self_coeff)| {
-                let new_c = self_coeff * coeff;
-                let new_t = Term::new(self_term.s_pow + term.s_pow, self_term.r_pow + term.r_pow);
-                Poly::from_one_term(new_t, new_c)
-            })
-            .reduce(Poly::zero, |poly1, poly2| {
-                let (mut to_mutate, mut to_consume) = if poly1.num_terms() > poly2.num_terms() {
-                    (poly1, poly2)
-                } else {
-                    (poly2, poly1)
-                };
-                to_mutate.coeffs.append(&mut to_consume.coeffs);
-                to_mutate
-            })
+    pub(crate) fn sub_nonzero_term(&mut self, term: Term, coeff: F) {
+        debug_assert!(!coeff.is_zero());
+        match self.coeffs.entry(term) {
+            Entry::Vacant(e) => {
+                e.insert(-coeff);
+            }
+            Entry::Occupied(mut e) => {
+                *e.get_mut() -= coeff;
+                if e.get().is_zero() {
+                    e.remove();
+                }
+            }
+        }
     }
 }
 
