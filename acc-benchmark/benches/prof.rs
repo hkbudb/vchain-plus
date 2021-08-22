@@ -33,6 +33,7 @@ pub fn prof_update_acc(c: &mut Criterion) {
 pub fn prof_gen_intermediate_proof(c: &mut Criterion) {
     let mut group = c.benchmark_group("prof_gen_intermediate");
     group.sampling_mode(SamplingMode::Flat);
+    group.sample_size(10);
     let (set1, set2) = generate_two_sets(TEST_SET_SIZE);
     use_fixture!(|fixture: &Fixture<_>| {
         fixture.bench_gen_intermediate_proof(&mut group, &set1, &set2);
@@ -52,6 +53,7 @@ pub fn prof_verify_intermediate_proof(c: &mut Criterion) {
 pub fn prof_gen_final_proof(c: &mut Criterion) {
     let mut group = c.benchmark_group("prof_gen_final");
     group.sampling_mode(SamplingMode::Flat);
+    group.sample_size(10);
     let (set1, set2) = generate_two_sets(TEST_SET_SIZE);
     use_fixture!(|fixture: &Fixture<_>| {
         fixture.bench_gen_final_proof(&mut group, &set1, &set2);
