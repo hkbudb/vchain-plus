@@ -200,28 +200,10 @@ impl<'lhs, 'rhs, F: Field> Mul<&'rhs Poly<F>> for &'lhs Poly<F> {
                     })
                 })
                 .fold(Poly::zero, |mut poly, (t, c)| {
-                    match poly.coeffs.entry(t) {
-                        Entry::Vacant(e) => {
-                            e.insert(c);
-                        }
-                        Entry::Occupied(mut e) => {
-                            *e.get_mut() += c;
-                            if e.get().is_zero() {
-                                e.remove();
-                            }
-                        }
-                    }
+                    poly.add_nonzero_term(t, c);
                     poly
                 })
-                .reduce(Poly::zero, |poly1, poly2| {
-                    let (mut to_mutate, to_consume) = if poly1.num_terms() > poly2.num_terms() {
-                        (poly1, poly2)
-                    } else {
-                        (poly2, poly1)
-                    };
-                    to_mutate += &to_consume;
-                    to_mutate
-                })
+                .reduce(Poly::zero, |poly1, poly2| &poly1 + &poly2)
         }
     }
 }
