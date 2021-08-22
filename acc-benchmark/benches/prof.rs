@@ -70,7 +70,7 @@ pub fn prof_verify_final_proof(c: &mut Criterion) {
 
 criterion_group!(
     name = prof;
-    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    config = Criterion::default().with_profiler(PProfProfiler::new(1_000, Output::Flamegraph(None)));
     targets = prof_cal_acc, prof_update_acc, prof_gen_intermediate_proof, prof_verify_intermediate_proof, prof_gen_final_proof, prof_verify_final_proof
 );
 criterion_main!(prof);
