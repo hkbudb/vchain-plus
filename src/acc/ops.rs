@@ -233,7 +233,7 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
     let lhs_poly: Poly<E::Fr> = poly_a(lhs_set, S);
     let rhs_poly: Poly<E::Fr> = poly_b(rhs_set, R, S, pk.q);
     let mut q_poly = &lhs_poly * &rhs_poly;
-    q_poly.remove_partial_term(S, pk.q);
+    q_poly.remove_intersected_term(S, pk.q, &intersection_set);
     let inner_proof_r = IntersectionProof::<E>::new(
         &intersection_set,
         &q_poly,
@@ -381,7 +381,7 @@ pub fn compute_set_operation_final<E: PairingEngine>(
     let lhs_poly: Poly<E::Fr> = poly_a(lhs_set, S);
     let rhs_poly: Poly<E::Fr> = poly_b(rhs_set, R, S, pk.q);
     let mut q_poly = &lhs_poly * &rhs_poly;
-    q_poly.remove_partial_term(S, pk.q);
+    q_poly.remove_intersected_term(S, pk.q, &intersection_set);
     let inner_proof = IntersectionProof::new(
         &intersection_set,
         &q_poly,
@@ -422,7 +422,7 @@ mod tests {
         let s1_a_poly: Poly<Fr> = poly_a(&s1, S);
         let s2_b_poly: Poly<Fr> = poly_b(&s2, R, S, q);
         let mut q_poly = &s1_a_poly * &s2_b_poly;
-        q_poly.remove_partial_term(S, pk.q);
+        q_poly.remove_intersected_term(S, pk.q, &s3);
 
         let s1_acc = AccValue::from_set_sk(&s1, &sk, q);
         let s2_acc = AccValue::from_set_sk(&s2, &sk, q);

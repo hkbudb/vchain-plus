@@ -258,10 +258,17 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
 }
 
 impl<F: Field> Poly<F> {
-    /// Remove v^q term from the poly
+    /// Remove {x^i y^q for i in set} terms from the poly
     #[inline(always)]
-    pub(crate) fn remove_partial_term(&mut self, v: Variable, q: u64) {
-        self.coeffs.retain(|t, _c| t.get_power(v) != q);
+    pub(crate) fn remove_intersected_term(&mut self, y: Variable, q: u64, set: &Set) {
+        for i in set.iter() {
+            let i = i.get();
+            let term = match y {
+                Variable::S => Term::new(q, i),
+                Variable::R => Term::new(i, q),
+            };
+            self.coeffs.remove(&term);
+        }
     }
 
     #[inline(always)]
@@ -387,7 +394,7 @@ mod tests {
         };
         let p1 = &s1_a * &s2_b;
         let mut p2 = p1.clone();
-        p2.remove_partial_term(S, q);
+        p2.remove_intersected_term(S, q, &set! {1});
         assert_eq!(p1, p2 + (&s3_a * &r_q));
     }
 
