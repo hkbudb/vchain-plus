@@ -37,12 +37,14 @@ impl fmt::Debug for Term {
 }
 
 impl PartialOrd for Term {
+    #[inline(always)]
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for Term {
+    #[inline(always)]
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.degree()
             .cmp(&other.degree())
@@ -53,14 +55,17 @@ impl Ord for Term {
 }
 
 impl Term {
+    #[inline(always)]
     pub(crate) fn new(s_pow: u64, r_pow: u64) -> Self {
         Term { s_pow, r_pow }
     }
 
+    #[inline(always)]
     pub(crate) fn degree(self) -> u64 {
         self.s_pow + self.r_pow
     }
 
+    #[inline(always)]
     pub(crate) fn get_power(self, x: Variable) -> u64 {
         match x {
             Variable::S => self.s_pow,
@@ -92,12 +97,14 @@ impl<F: Field> fmt::Debug for Poly<F> {
 }
 
 impl<F: Field> Zero for Poly<F> {
+    #[inline(always)]
     fn zero() -> Self {
         Poly {
             coeffs: BTreeMap::new(),
         }
     }
 
+    #[inline(always)]
     fn is_zero(&self) -> bool {
         self.coeffs.is_empty()
     }
@@ -106,6 +113,7 @@ impl<F: Field> Zero for Poly<F> {
 impl<'lhs, 'rhs, F: Field> Add<&'rhs Poly<F>> for &'lhs Poly<F> {
     type Output = Poly<F>;
 
+    #[inline(always)]
     fn add(self, rhs: &'rhs Poly<F>) -> Self::Output {
         let (mut to_mutate, to_consume) = if self.num_terms() > rhs.num_terms() {
             (self.clone(), rhs)
@@ -121,12 +129,14 @@ impl<'lhs, 'rhs, F: Field> Add<&'rhs Poly<F>> for &'lhs Poly<F> {
 impl<F: Field> Add for Poly<F> {
     type Output = Poly<F>;
 
+    #[inline(always)]
     fn add(self, rhs: Self) -> Self::Output {
         &self + &rhs
     }
 }
 
 impl<'rhs, F: Field> AddAssign<&'rhs Poly<F>> for Poly<F> {
+    #[inline(always)]
     fn add_assign(&mut self, rhs: &'rhs Poly<F>) {
         for (t, c) in rhs.coeff_iter() {
             match self.coeffs.entry(*t) {
@@ -147,6 +157,7 @@ impl<'rhs, F: Field> AddAssign<&'rhs Poly<F>> for Poly<F> {
 impl<'lhs, 'rhs, F: Field> Sub<&'rhs Poly<F>> for &'lhs Poly<F> {
     type Output = Poly<F>;
 
+    #[inline(always)]
     fn sub(self, rhs: &'rhs Poly<F>) -> Self::Output {
         let mut poly = self.clone();
         poly.sub_assign(rhs);
@@ -157,12 +168,14 @@ impl<'lhs, 'rhs, F: Field> Sub<&'rhs Poly<F>> for &'lhs Poly<F> {
 impl<F: Field> Sub for Poly<F> {
     type Output = Poly<F>;
 
+    #[inline(always)]
     fn sub(self, rhs: Self) -> Self::Output {
         &self - &rhs
     }
 }
 
 impl<'rhs, F: Field> SubAssign<&'rhs Poly<F>> for Poly<F> {
+    #[inline(always)]
     fn sub_assign(&mut self, rhs: &'rhs Poly<F>) {
         for (t, c) in rhs.coeff_iter() {
             match self.coeffs.entry(*t) {
@@ -183,6 +196,7 @@ impl<'rhs, F: Field> SubAssign<&'rhs Poly<F>> for Poly<F> {
 impl<'lhs, 'rhs, F: Field> Mul<&'rhs Poly<F>> for &'lhs Poly<F> {
     type Output = Poly<F>;
 
+    #[inline(always)]
     fn mul(self, rhs: &'rhs Poly<F>) -> Self::Output {
         if self.is_zero() || rhs.is_zero() {
             Poly::zero()
@@ -212,6 +226,7 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
     type Output = (Poly<F>, Poly<F>);
 
     /// Return poly {lhs / rhs} = (q, r) s.t. rhs * q + r == lhs
+    #[inline(always)]
     fn div(self, rhs: &'rhs Poly<F>) -> Self::Output {
         let (rhs_lead_term, rhs_lead_coeff) =
             rhs.lead_term_and_coeff().expect("cannot divide by zero");
@@ -244,22 +259,27 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
 
 impl<F: Field> Poly<F> {
     /// Remove v^q term from the poly
+    #[inline(always)]
     pub(crate) fn remove_partial_term(&mut self, v: Variable, q: u64) {
         self.coeffs.retain(|t, _c| t.get_power(v) != q);
     }
 
+    #[inline(always)]
     pub(crate) fn num_terms(&self) -> usize {
         self.coeffs.len()
     }
 
+    #[inline(always)]
     pub(crate) fn lead_term_and_coeff(&self) -> Option<(Term, F)> {
         self.coeffs.iter().next().map(|(t, c)| (*t, *c))
     }
 
+    #[inline(always)]
     pub(crate) fn coeff_iter(&self) -> impl Iterator<Item = (&'_ Term, &'_ F)> {
         self.coeffs.iter()
     }
 
+    #[inline(always)]
     pub(crate) fn add_nonzero_term(&mut self, term: Term, coeff: F) {
         match self.coeffs.entry(term) {
             Entry::Vacant(e) => {
@@ -274,6 +294,7 @@ impl<F: Field> Poly<F> {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn mul_nonzero_term(&self, term: Term, coeff: F) -> Self {
         // We can be sure there are no duplicated term.
         self.coeffs
@@ -300,7 +321,7 @@ impl<F: Field> Poly<F> {
 }
 
 /// Return poly {\sum x^i}
-#[inline]
+#[inline(always)]
 pub(crate) fn poly_a<F: Field>(set: &Set, x: Variable) -> Poly<F> {
     let one = F::one();
     let mut coeffs = BTreeMap::new();
@@ -316,7 +337,7 @@ pub(crate) fn poly_a<F: Field>(set: &Set, x: Variable) -> Poly<F> {
 }
 
 /// Return poly {\sum x^i y^{q-i}}
-#[inline]
+#[inline(always)]
 pub(crate) fn poly_b<F: Field>(set: &Set, x: Variable, y: Variable, q: u64) -> Poly<F> {
     debug_assert_ne!(x, y);
     let one = F::one();
@@ -333,7 +354,7 @@ pub(crate) fn poly_b<F: Field>(set: &Set, x: Variable, y: Variable, q: u64) -> P
 }
 
 /// Return poly {x - 1}
-#[inline]
+#[inline(always)]
 pub(crate) fn poly_variable_minus_one<F: Field>(x: Variable) -> Poly<F> {
     let one = F::one();
     let mut coeffs = BTreeMap::new();
