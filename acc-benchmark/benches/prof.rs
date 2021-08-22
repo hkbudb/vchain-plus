@@ -1,5 +1,5 @@
 use acc_benchmark::*;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion, SamplingMode};
 use pprof::criterion::{Output, PProfProfiler};
 
 const Q: u64 = 1000;
@@ -32,6 +32,7 @@ pub fn prof_update_acc(c: &mut Criterion) {
 
 pub fn prof_gen_intermediate_proof(c: &mut Criterion) {
     let mut group = c.benchmark_group("prof_gen_intermediate");
+    group.sampling_mode(SamplingMode::Flat);
     let (set1, set2) = generate_two_sets(TEST_SET_SIZE);
     use_fixture!(|fixture: &Fixture<_>| {
         fixture.bench_gen_intermediate_proof(&mut group, &set1, &set2);
@@ -50,6 +51,7 @@ pub fn prof_verify_intermediate_proof(c: &mut Criterion) {
 
 pub fn prof_gen_final_proof(c: &mut Criterion) {
     let mut group = c.benchmark_group("prof_gen_final");
+    group.sampling_mode(SamplingMode::Flat);
     let (set1, set2) = generate_two_sets(TEST_SET_SIZE);
     use_fixture!(|fixture: &Fixture<_>| {
         fixture.bench_gen_final_proof(&mut group, &set1, &set2);
