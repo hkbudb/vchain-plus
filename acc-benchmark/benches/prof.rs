@@ -2,7 +2,7 @@ use acc_benchmark::*;
 use criterion::{criterion_group, criterion_main, Criterion, SamplingMode};
 use pprof::criterion::{Output, PProfProfiler};
 
-const Q: u64 = 1000;
+const Q: u64 = 500;
 const TEST_SET_SIZE: u64 = 100;
 
 macro_rules! use_fixture {
