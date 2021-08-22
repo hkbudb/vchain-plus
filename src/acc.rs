@@ -1,4 +1,4 @@
-//! Ref: http://users.umiacs.umd.edu/~zhangyp/papers/accum.pdf
+//! Ref: https://user.eng.umd.edu/~cpap/published/accumEUROSP2017.pdf
 
 pub mod acc_value;
 pub mod keys;
