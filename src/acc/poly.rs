@@ -107,9 +107,14 @@ impl<'lhs, 'rhs, F: Field> Add<&'rhs Poly<F>> for &'lhs Poly<F> {
     type Output = Poly<F>;
 
     fn add(self, rhs: &'rhs Poly<F>) -> Self::Output {
-        let mut poly = self.clone();
-        poly.add_assign(rhs);
-        poly
+        let (mut to_mutate, to_consume) = if self.num_terms() > rhs.num_terms() {
+            (self.clone(), rhs)
+        } else {
+            (rhs.clone(), self)
+        };
+
+        to_mutate.add_assign(to_consume);
+        to_mutate
     }
 }
 
@@ -283,16 +288,27 @@ impl<F: Field> Poly<F> {
     }
 
     pub(crate) fn mul_nonzero_term(&self, term: Term, coeff: F) -> Self {
-        let coeffs = self
-            .coeffs
+        // We can be sure there are no duplicated term.
+        self.coeffs
             .par_iter()
             .map(|(&self_term, &self_coeff)| {
                 let new_c = self_coeff * coeff;
                 let new_t = Term::new(self_term.s_pow + term.s_pow, self_term.r_pow + term.r_pow);
                 (new_t, new_c)
             })
-            .collect();
-        Poly { coeffs }
+            .fold(Poly::zero, |mut poly, (t, c)| {
+                poly.coeffs.insert(t, c);
+                poly
+            })
+            .reduce(Poly::zero, |poly1, poly2| {
+                let (mut to_mutate, to_consume) = if poly1.num_terms() > poly2.num_terms() {
+                    (poly1, poly2)
+                } else {
+                    (poly2, poly1)
+                };
+                to_mutate.coeffs.extend(to_consume.coeffs);
+                to_mutate
+            })
     }
 }
 
