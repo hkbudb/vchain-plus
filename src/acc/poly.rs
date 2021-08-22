@@ -210,12 +210,8 @@ impl<'lhs, 'rhs, F: Field> Mul<&'rhs Poly<F>> for &'lhs Poly<F> {
                             lhs_term.s_pow + rhs_term.s_pow,
                             lhs_term.r_pow + rhs_term.r_pow,
                         );
-                        (term, coeff)
+                        Poly::from_one_term(term, coeff)
                     })
-                })
-                .fold(Poly::zero, |mut poly, (t, c)| {
-                    poly.add_nonzero_term(t, c);
-                    poly
                 })
                 .reduce(Poly::zero, |poly1, poly2| &poly1 + &poly2)
         }
@@ -258,6 +254,13 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
 }
 
 impl<F: Field> Poly<F> {
+    #[inline(always)]
+    pub(crate) fn from_one_term(term: Term, coeff: F) -> Self {
+        let mut poly = Poly::zero();
+        poly.coeffs.insert(term, coeff);
+        poly
+    }
+
     /// Remove {x^i y^q for i in set} terms from the poly
     #[inline(always)]
     pub(crate) fn remove_intersected_term(&mut self, y: Variable, q: u64, set: &Set) {
@@ -309,11 +312,7 @@ impl<F: Field> Poly<F> {
             .map(|(&self_term, &self_coeff)| {
                 let new_c = self_coeff * coeff;
                 let new_t = Term::new(self_term.s_pow + term.s_pow, self_term.r_pow + term.r_pow);
-                (new_t, new_c)
-            })
-            .fold(Poly::zero, |mut poly, (t, c)| {
-                poly.coeffs.insert(t, c);
-                poly
+                Poly::from_one_term(new_t, new_c)
             })
             .reduce(Poly::zero, |poly1, poly2| {
                 let (mut to_mutate, mut to_consume) = if poly1.num_terms() > poly2.num_terms() {
@@ -389,9 +388,7 @@ mod tests {
         let s1_a: Poly<Fr> = poly_a(&s1, S);
         let s2_b: Poly<Fr> = poly_b(&s2, R, S, q);
         let s3_a: Poly<Fr> = poly_a(&(&s1 & &s2), R);
-        let r_q: Poly<Fr> = Poly {
-            coeffs: core::iter::once((Term::new(q, 0), Fr::one())).collect(),
-        };
+        let r_q: Poly<Fr> = Poly::from_one_term(Term::new(q, 0), Fr::one());
         let p1 = &s1_a * &s2_b;
         let mut p2 = p1.clone();
         p2.remove_intersected_term(S, q, &set! {1});
