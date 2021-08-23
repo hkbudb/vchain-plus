@@ -1,15 +1,10 @@
 pub mod hash;
 pub mod vo;
 
-use crate::{
-    acc::AccPublicKey,
-    chain::{
+use crate::{acc::{AccPublicKey, Set}, chain::{
         traits::Num,
         {block::Height, id_tree::ObjId, object::Object, traits::ReadInterface},
-    },
-    digest::{Digest, Digestible},
-    utils::Time,
-};
+    }, digest::{Digest, Digestible}, utils::Time};
 use anyhow::{ensure, Context, Result};
 use hash::{ads_hash, bplus_roots_hash};
 use hash::{id_tree_root_hash, obj_hash};
@@ -261,6 +256,16 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
             );
         }
     }
+
+    let mut vo_outputs = Set::new();
+    for set in vo_output_sets.values() {
+        vo_outputs = &vo_outputs | set;
+    }
+    let mut res_outputs: Set = Set::new();
+    for key in res.keys() {
+        res_outputs.insert(key.0);
+    }
+    ensure!(vo_outputs == res_outputs, "VO outputs do not match results!");
 
     Ok(())
 }
