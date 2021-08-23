@@ -261,7 +261,7 @@ impl<E: PairingEngine> AccPublicKey<E> {
         let mut g_r_i_s_j = Vec::with_capacity((2 * q_usize - 2) * (2 * q_usize - 2));
         r_i_s_j_list
             .par_iter()
-            .map(|r_i_s_j| sk.g_pow.apply(&r_i_s_j).into_affine())
+            .map(|r_i_s_j| sk.g_pow.apply(r_i_s_j).into_affine())
             .collect_into_vec(&mut g_r_i_s_j);
 
         let mut g_delta_r_i_s_j = Vec::with_capacity((2 * q_usize - 2) * (2 * q_usize - 2));

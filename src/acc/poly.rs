@@ -48,8 +48,8 @@ impl Ord for Term {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.degree()
             .cmp(&other.degree())
-            .then(self.s_pow.cmp(&other.s_pow))
-            .then(self.r_pow.cmp(&other.r_pow))
+            .then_with(|| self.s_pow.cmp(&other.s_pow))
+            .then_with(|| self.r_pow.cmp(&other.r_pow))
             .reverse()
     }
 }
@@ -196,6 +196,7 @@ impl<'rhs, F: Field> SubAssign<&'rhs Poly<F>> for Poly<F> {
 impl<'lhs, 'rhs, F: Field> Mul<&'rhs Poly<F>> for &'lhs Poly<F> {
     type Output = Poly<F>;
 
+    #[allow(clippy::suspicious_arithmetic_impl)]
     #[inline(always)]
     fn mul(self, rhs: &'rhs Poly<F>) -> Self::Output {
         if self.is_zero() || rhs.is_zero() {
