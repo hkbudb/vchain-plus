@@ -1,10 +1,7 @@
 use super::{
     acc_value::{cal_acc_pk, AccValue},
     keys::AccPublicKey,
-    poly::{
-        get_term_power, poly_a, poly_b, poly_div, poly_mul, poly_remove_term,
-        poly_variable_minus_one, Poly, Variable, R, S,
-    },
+    poly::{poly_a, poly_b, poly_variable_minus_one, Poly, Variable, R, S},
     set::Set,
 };
 use anyhow::{ensure, Context as _, Result};
@@ -55,13 +52,13 @@ impl<E: PairingEngine> IntersectionProof<E> {
         let g_x_beta = cal_acc_pk(set, &get_g_beta_x_i);
         let l_x = cal_acc_pk(set, |i| if i == 1 { g } else { get_g_x_i(i - 1) });
 
-        let mut bases: Vec<_> = Vec::with_capacity(q_poly.terms.len());
-        let mut delta_bases: Vec<_> = Vec::with_capacity(q_poly.terms.len());
-        let mut scalars: Vec<_> = Vec::with_capacity(q_poly.terms.len());
-        for (coeff, term) in &q_poly.terms {
+        let mut bases: Vec<_> = Vec::with_capacity(q_poly.num_terms());
+        let mut delta_bases: Vec<_> = Vec::with_capacity(q_poly.num_terms());
+        let mut scalars: Vec<_> = Vec::with_capacity(q_poly.num_terms());
+        for (term, coeff) in q_poly.coeff_iter() {
             scalars.push(coeff.into_repr());
-            let i = get_term_power(term, x) as u64;
-            let j = get_term_power(term, y) as u64;
+            let i = term.get_power(x);
+            let j = term.get_power(y);
             bases.push(get_g_x_i_y_j(i, j));
             delta_bases.push(get_g_delta_x_i_y_j(i, j));
         }
@@ -235,7 +232,8 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
     let intersection_set = lhs_set & rhs_set;
     let lhs_poly: Poly<E::Fr> = poly_a(lhs_set, S);
     let rhs_poly: Poly<E::Fr> = poly_b(rhs_set, R, S, pk.q);
-    let q_poly = poly_remove_term(&poly_mul(&lhs_poly, &rhs_poly), S, pk.q);
+    let mut q_poly = &lhs_poly * &rhs_poly;
+    q_poly.remove_intersected_term(S, pk.q, &intersection_set);
     let inner_proof_r = IntersectionProof::<E>::new(
         &intersection_set,
         &q_poly,
@@ -289,19 +287,17 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
 
     let result_y_poly = poly_a::<E::Fr>(&result_set, R);
     let result_x_y_poly = poly_b::<E::Fr>(&result_set, R, S, pk.q);
-    let (z_poly, r_poly) = poly_div::<E::Fr>(
-        &(&result_y_poly - &result_x_y_poly),
-        &poly_variable_minus_one::<E::Fr>(S),
-    );
+    let (z_poly, r_poly) =
+        &(&result_y_poly - &result_x_y_poly) / &poly_variable_minus_one::<E::Fr>(S);
     debug_assert!(r_poly.is_zero());
 
-    let mut z_s_r_bases: Vec<_> = Vec::with_capacity(z_poly.terms.len());
-    let mut z_r_s_bases: Vec<_> = Vec::with_capacity(z_poly.terms.len());
-    let mut scalars: Vec<_> = Vec::with_capacity(z_poly.terms.len());
-    for (coeff, term) in &z_poly.terms {
+    let mut z_s_r_bases: Vec<_> = Vec::with_capacity(z_poly.num_terms());
+    let mut z_r_s_bases: Vec<_> = Vec::with_capacity(z_poly.num_terms());
+    let mut scalars: Vec<_> = Vec::with_capacity(z_poly.num_terms());
+    for (term, coeff) in z_poly.coeff_iter() {
         scalars.push(coeff.into_repr());
-        let i = get_term_power(term, R) as u64;
-        let j = get_term_power(term, S) as u64;
+        let i = term.get_power(R);
+        let j = term.get_power(S);
         match (i, j) {
             (0, 0) => {
                 z_s_r_bases.push(pk.g);
@@ -384,7 +380,8 @@ pub fn compute_set_operation_final<E: PairingEngine>(
     let intersection_set = lhs_set & rhs_set;
     let lhs_poly: Poly<E::Fr> = poly_a(lhs_set, S);
     let rhs_poly: Poly<E::Fr> = poly_b(rhs_set, R, S, pk.q);
-    let q_poly = poly_remove_term(&poly_mul(&lhs_poly, &rhs_poly), S, pk.q);
+    let mut q_poly = &lhs_poly * &rhs_poly;
+    q_poly.remove_intersected_term(S, pk.q, &intersection_set);
     let inner_proof = IntersectionProof::new(
         &intersection_set,
         &q_poly,
@@ -424,7 +421,8 @@ mod tests {
 
         let s1_a_poly: Poly<Fr> = poly_a(&s1, S);
         let s2_b_poly: Poly<Fr> = poly_b(&s2, R, S, q);
-        let q_poly = poly_remove_term(&poly_mul(&s1_a_poly, &s2_b_poly), S, q);
+        let mut q_poly = &s1_a_poly * &s2_b_poly;
+        q_poly.remove_intersected_term(S, pk.q, &s3);
 
         let s1_acc = AccValue::from_set_sk(&s1, &sk, q);
         let s2_acc = AccValue::from_set_sk(&s2, &sk, q);

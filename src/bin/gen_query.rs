@@ -143,7 +143,10 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         )?;
         sub_results.push((new_sub_res.len(), new_sub_range, modified_dim, new_sub_res));
 
-        debug!("start_blk: {}, end_blk: {}", start_blk_height, end_blk_height);
+        debug!(
+            "start_blk: {}, end_blk: {}",
+            start_blk_height, end_blk_height
+        );
         debug!("ranges:");
         for (_, sub_range, _, sub_res) in &sub_results {
             if flag {

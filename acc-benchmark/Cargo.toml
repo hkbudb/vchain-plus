@@ -9,11 +9,19 @@ publish = false
 name = "bench"
 harness = false
 
+[[bench]]
+name = "prof"
+harness = false
+
+[profile.bench]
+debug = true
+
 [dependencies]
 ark-ec = { version = "0.3", features = ["parallel"] }
 ark-ff = { version = "0.3", features = ["asm", "parallel"] }
 criterion = { version = "0.3", features = ["html_reports"] }
 once_cell = "1.8"
+pprof = { version = "0.5", features = ["criterion", "flamegraph"] }
 rand = "0.8"
 vchain-plus = { path = "../" }
 
