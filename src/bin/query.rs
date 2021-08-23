@@ -13,6 +13,10 @@ use vchain_plus::{
 
 #[derive(StructOpt, Debug)]
 struct Opt {
+    /// verification thread number
+    #[structopt(short, long, default_value = "4")]
+    verify_thread_num: usize,
+
     /// pk path
     #[structopt(short, long, parse(from_os_str))]
     key_path: PathBuf,
@@ -33,6 +37,7 @@ struct Opt {
 fn main() -> Result<()> {
     init_tracing_subscriber("info")?;
     let opts = Opt::from_args();
+    let verify_thread_num = opts.verify_thread_num;
     let query_path = opts.query;
     let query_params = load_query_param_from_file(&query_path)?;
     let db_path = opts.input;
@@ -40,13 +45,14 @@ fn main() -> Result<()> {
     let res_path = opts.result;
     let pk = KeyPair::load(&opts.key_path)?.pk;
     let mut query_info = Vec::new();
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(verify_thread_num).build().unwrap();
     for (i, q) in query_params.into_iter().enumerate() {
         info!("Processing query {}...", i);
         let (results, time) = query(&chain, q, &pk)?;
         info!("Query time elapsed: {:?}", time);
 
         info!("Verifying query {}...", i);
-        let verify_info = verify(&chain, results, &pk)?;
+        let verify_info = pool.install(|| verify(&chain, results, &pk))?;
         info!("Verification time elapsed: {:?}", verify_info.verify_time);
         let res = json!({
             "query_info": time,
