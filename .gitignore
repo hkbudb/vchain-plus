@@ -2,4 +2,5 @@ target
 Cargo.lock
 /data/*
 !/data/dataset
+/data/dataset/*dbg*.dat
 /keys
