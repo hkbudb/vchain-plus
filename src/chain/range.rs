@@ -55,6 +55,6 @@ impl<K: Num> Range<K> {
 
 impl<K: Num> Digestible for Range<K> {
     fn to_digest(&self) -> Digest {
-        range_hash(&self)
+        range_hash(self)
     }
 }

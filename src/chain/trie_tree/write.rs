@@ -102,7 +102,6 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     id: leaf_id,
                                     hash: leaf_hash,
                                 });
-                                break;
                             } else {
                                 let (common_key, cur_idx, rest_cur_key, node_idx, rest_node_key) =
                                     split_at_common_prefix2(&cur_key, &n.rest);
@@ -138,8 +137,8 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     id: leaf_id,
                                     hash: leaf_hash,
                                 });
-                                break;
                             }
+                            break;
                         }
                         TrieNode::NonLeaf(n) => {
                             let (common_key, cur_idx, rest_cur_key, node_idx, rest_node_key) =
@@ -148,7 +147,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                             let sets_inter = (&set) & (&n.data_set);
                             let non_leaf_acc =
                                 new_acc + n.data_set_acc - AccValue::from_set(&sets_inter, pk);
-                            if SmolStr::from(&common_key) == n.nibble {
+                            if common_key == n.nibble {
                                 match n.children.get(&cur_idx) {
                                     Some((id, _digest)) => {
                                         // has path, go down
@@ -374,7 +373,7 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                         let mut a: String = new_str.to_string();
                                         let b = n.rest.as_str();
                                         a.push(c);
-                                        a.push_str(&b);
+                                        a.push_str(b);
                                         new_str = SmolStr::from(&a);
                                     }
                                     let new_set = n.data_set.clone();
@@ -385,18 +384,13 @@ impl<'a, L: TrieNodeLoader> WriteContext<'a, L> {
                                     new_root_hash = new_hash;
                                 }
                                 TrieNode::NonLeaf(n) => {
-                                    if c == '\0' {
-                                        let mut a: String = new_str.to_string();
-                                        let b = n.nibble.as_str();
-                                        a.push_str(b);
-                                        new_str = SmolStr::from(&a);
-                                    } else {
-                                        let mut a: String = new_str.to_string();
-                                        let b = n.nibble.as_str();
+                                    let mut a: String = new_str.to_string();
+                                    let b = n.nibble.as_str();
+                                    if c != '\0' {
                                         a.push(c);
-                                        a.push_str(b);
-                                        new_str = SmolStr::from(&a);
                                     }
+                                    a.push_str(b);
+                                    new_str = SmolStr::from(&a);
                                     let new_non_leaf = TrieNonLeafNode::new(
                                         new_str.clone(),
                                         n.data_set.clone(),

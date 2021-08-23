@@ -52,7 +52,7 @@ pub(crate) fn obj_hash<K: Num>(obj: &Object<K>, id: &ObjId) -> Digest {
 #[inline]
 pub(crate) fn id_tree_root_hash(cur_obj_id_hash: Digest, id_tree_root_node_hash: Digest) -> Digest {
     let mut state = blake2().to_state();
-    state.update(&cur_obj_id_hash.as_bytes());
+    state.update(cur_obj_id_hash.as_bytes());
     state.update(id_tree_root_node_hash.as_bytes());
     Digest::from(state.finalize())
 }

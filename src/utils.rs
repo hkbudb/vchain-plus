@@ -135,19 +135,19 @@ impl KeyPair {
         let path = path.as_ref();
         ensure!(!path.exists(), "{} already exists.", path.display());
         fs::create_dir_all(&path)?;
-        let sk_f = File::create(&Self::sk_path(&path))?;
+        let sk_f = File::create(&Self::sk_path(path))?;
         bincode::serialize_into(sk_f, &self.sk)?;
-        let pk_f = File::create(&Self::pk_path(&path))?;
+        let pk_f = File::create(&Self::pk_path(path))?;
         bincode::serialize_into(pk_f, &self.pk)?;
         Ok(())
     }
 
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let sk_file = File::open(Self::sk_path(&path))?;
+        let sk_file = File::open(Self::sk_path(path))?;
         let sk_reader = BufReader::new(sk_file);
         let sk: AccSecretKey = bincode::deserialize_from(sk_reader)?;
-        let pk_file = File::open(Self::pk_path(&path))?;
+        let pk_file = File::open(Self::pk_path(path))?;
         let pk_data = unsafe { Mmap::map(&pk_file) }?;
         let pk: AccPublicKey = bincode::deserialize(&pk_data[..])?;
         Ok(Self { sk, pk })

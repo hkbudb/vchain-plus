@@ -18,7 +18,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use howlong::ProcessDuration;
 use smol_str::SmolStr;
-use std::{collections::HashMap, iter::FromIterator, num::NonZeroU64};
+use std::{collections::HashMap, num::NonZeroU64};
 
 pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     blk_height: Height,
@@ -116,7 +116,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
                         *num_data,
                         ObjId(*obj_id_num),
                         param.bplus_tree_fanout,
-                        &pk,
+                        pk,
                     )?;
                 }
             }
@@ -139,7 +139,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
         // build trie
         for (_k, trie_ctx) in &mut trie_ctxes {
             for key in &obj.keyword_data {
-                trie_ctx.insert(SmolStr::from(key), obj_id, &pk)?;
+                trie_ctx.insert(SmolStr::from(key), obj_id, pk)?;
             }
         }
         debug!("inserting for trie finished");
@@ -148,7 +148,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
             for (dim, bplus_ctx) in bplus_ctx_vec.iter_mut().enumerate() {
                 debug!("processing dim {}", dim);
                 if let Some(key) = obj.num_data.get(dim) {
-                    bplus_ctx.insert(*key, obj_id, param.bplus_tree_fanout, &pk)?;
+                    bplus_ctx.insert(*key, obj_id, param.bplus_tree_fanout, pk)?;
                 }
             }
         }
@@ -223,7 +223,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     block_head.set_ads_root_hash(ads_root_hash);
 
     let obj_id_nums_iter = obj_id_nums.clone().into_iter();
-    let root_id_set = Set::from_iter(obj_id_nums_iter);
+    let root_id_set: Set = obj_id_nums_iter.collect();
     let root_acc = AccValue::from_set(&root_id_set, pk);
 
     block_content.set_multi_ads(blk_multi_ads);

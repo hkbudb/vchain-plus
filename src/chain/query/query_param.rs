@@ -282,7 +282,7 @@ impl<K: Num> QueryParam<K> {
                         dim: i,
                         set: None,
                     };
-                    range_node.estimate_size(chain, &pk)?;
+                    range_node.estimate_size(chain, pk)?;
                     let set = range_node.set.as_ref().context("No set found")?.0.clone();
                     let range_size = set.len();
                     let range_idx = query_dag.add_node(QueryNode::Range(range_node));
@@ -852,8 +852,8 @@ fn combine_query_graphs<K: Num>(
     }
 
     for (old_s, old_e, weight) in old_s_e_idx.iter().rev() {
-        let new_s = old_new_idx.get(&old_s).context("Cannot find idx in map")?;
-        let new_e = old_new_idx.get(&old_e).context("Cannot find idx in map")?;
+        let new_s = old_new_idx.get(old_s).context("Cannot find idx in map")?;
+        let new_e = old_new_idx.get(old_e).context("Cannot find idx in map")?;
         graph1.add_edge(*new_s, *new_e, *weight);
     }
 

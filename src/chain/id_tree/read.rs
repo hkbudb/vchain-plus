@@ -168,7 +168,7 @@ impl<'a, L: IdTreeNodeLoader> ReadContext<'a, L> {
     }
 
     pub fn get_node_loader(&self) -> &L {
-        &self.node_loader
+        self.node_loader
     }
 
     pub fn get_proof(&self) -> &Proof {

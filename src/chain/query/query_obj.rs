@@ -18,7 +18,6 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::{
     collections::{HashMap, HashSet},
-    iter::FromIterator,
     num::NonZeroU64,
 };
 
@@ -129,7 +128,7 @@ impl BlkRtNode {
                     a = a + sub_acc;
                 }
             }
-            let s = Set::from_iter(total_obj_id_nums.into_iter());
+            let s: Set = total_obj_id_nums.into_iter().collect();
             self.set = Some((s, a));
             Ok(())
         } else {

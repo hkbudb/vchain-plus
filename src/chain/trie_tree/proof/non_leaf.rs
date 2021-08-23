@@ -43,7 +43,7 @@ impl TrieNonLeaf {
 
     pub(crate) fn value_acc(&self, cur_key: &str, pk: &AccPublicKey) -> AccValue {
         let (_common_key, cur_idx, rest_cur_key, _node_idx, _rest_node_key) =
-            split_at_common_prefix2(&cur_key, &self.nibble);
+            split_at_common_prefix2(cur_key, &self.nibble);
         match self.children.get(&cur_idx) {
             Some(c) => c.value_acc(&rest_cur_key, pk),
             None => {
@@ -58,7 +58,7 @@ impl TrieNonLeaf {
         cur_key: &str,
     ) -> Option<(*mut SubProof, TrieNodeId, SmolStr)> {
         let (_common_key, cur_idx, rest_cur_key, _node_idx, _rest_node_key) =
-            split_at_common_prefix2(&cur_key, &self.nibble);
+            split_at_common_prefix2(cur_key, &self.nibble);
         match self.children.get_mut(&cur_idx) {
             Some(child) => child.search_prefix(&rest_cur_key),
             None => None,

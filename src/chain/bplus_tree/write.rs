@@ -382,9 +382,8 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                         for i in 0..ids.len() {
                             let n_id = ids[i];
                             let nd = self.get_node(n_id)?;
-                            #[allow(clippy::op_ref)]
                             if i <= mid {
-                                old_set = &old_set | &nd.get_set();
+                                old_set = &old_set | nd.get_set();
                                 if i == mid {
                                     node.range.set_high(nd.get_range().get_high());
                                 }
@@ -393,7 +392,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                     new_range.set_low(nd.get_range().get_low());
                                 }
                                 new_range.set_high(nd.get_range().get_high());
-                                new_set = &new_set | &nd.get_set();
+                                new_set = &new_set | nd.get_set();
                                 new_ids.push(nd.get_node_id());
                                 new_hashes.push(nd.get_node_hash());
 
@@ -903,13 +902,12 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                 match l_sib.as_ref() {
                                     BPlusTreeNode::Leaf(_l_n) => {}
                                     BPlusTreeNode::NonLeaf(l_n) => {
+                                        let mut new_l_n_c_ids = l_n.child_ids.clone();
+                                        let mut new_l_n_c_hashes = l_n.child_hashes.clone();
                                         if l_n.child_ids.len()
                                             > (fanout as f32 / 2_f32).ceil() as usize
                                         {
                                             // borrow from left
-                                            let mut new_l_n_c_ids = l_n.child_ids.clone();
-                                            let mut new_l_n_c_hashes = l_n.child_hashes.clone();
-
                                             let l_n_lower = l_n.range.get_low();
                                             let l_n_c_size = l_n.child_ids.len();
                                             let l_n_c0_inv_id = l_n.child_ids[l_n_c_size - 1];
@@ -985,9 +983,6 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                             }
                                         } else {
                                             // merge left
-                                            let mut l_n_ids = l_n.child_ids.clone();
-                                            let mut l_n_hashes = l_n.child_hashes.clone();
-
                                             let l_n_acc = l_n.data_set_acc;
                                             let new_n_lower = l_n.range.get_low();
                                             let n_id = new_root_id;
@@ -1005,8 +1000,8 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
 
                                                     let n_acc = n.data_set_acc;
                                                     let new_n_set = &n.data_set | &l_n.data_set;
-                                                    l_n_ids.append(&mut new_n_ids);
-                                                    l_n_hashes.append(&mut new_n_hashes);
+                                                    new_l_n_c_ids.append(&mut new_n_ids);
+                                                    new_l_n_c_hashes.append(&mut new_n_hashes);
                                                     let new_n_range =
                                                         Range::new(new_n_lower, n_higher);
                                                     let (new_n_id, new_n_hash) = self
@@ -1014,8 +1009,8 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                                             new_n_range,
                                                             new_n_set,
                                                             n_acc + l_n_acc,
-                                                            l_n_hashes,
-                                                            l_n_ids,
+                                                            new_l_n_c_hashes,
+                                                            new_l_n_c_ids,
                                                         ));
                                                     new_root_id = new_n_id;
                                                     *node.get_child_id_mut(idx).ok_or_else(

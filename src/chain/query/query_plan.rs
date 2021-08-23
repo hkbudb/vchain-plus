@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    iter::FromIterator,
     num::NonZeroU64,
 };
 
@@ -196,7 +195,7 @@ impl<K: Num> QueryPlan<K> {
                                     a = a + sub_acc;
                                 }
                             }
-                            let s = Set::from_iter(total_obj_id_nums.into_iter());
+                            let s: Set = total_obj_id_nums.into_iter().collect();
                             n.set = Some((s, a));
                         }
                         map.insert(idx, node.clone());

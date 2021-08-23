@@ -69,7 +69,7 @@ impl BlockMultiADS {
         trie_roots: impl Iterator<Item = &'a (u64, TrieRoot)>,
     ) {
         for (k, trie_root) in trie_roots {
-            if let Some(blk_ads) = self.0.get_mut(&k) {
+            if let Some(blk_ads) = self.0.get_mut(k) {
                 blk_ads.set_trie_root(*trie_root);
             } else {
                 let mut new_blk_ads = BlockADS::default();
@@ -84,7 +84,7 @@ impl BlockMultiADS {
         bplus_roots: impl Iterator<Item = &'a (u64, Vec<BPlusTreeRoot>)>,
     ) {
         for (k, vec) in bplus_roots {
-            if let Some(blk_ads) = self.0.get_mut(&k) {
+            if let Some(blk_ads) = self.0.get_mut(k) {
                 blk_ads.set_bplus_roots(vec.clone());
             }
         }

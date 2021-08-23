@@ -93,7 +93,7 @@ fn build_chain(
     let timer = howlong::ProcessCPUTimer::new();
     for (blk_height, objs) in raw_objs {
         let (blk_head, duration) =
-            build_block(blk_height, prev_hash, objs, &mut chain, &param, &pk)?;
+            build_block(blk_height, prev_hash, objs, &mut chain, param, &pk)?;
         prev_hash = blk_head.to_digest();
         time_set.push(BuildTime {
             blk_height,

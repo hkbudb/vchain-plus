@@ -153,7 +153,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
                 cur_res_set = sub_res.clone();
                 flag = false;
             } else {
-                cur_res_set = cur_res_set.intersection(&sub_res).cloned().collect();
+                cur_res_set = cur_res_set.intersection(sub_res).cloned().collect();
             }
             debug!("{:?}", sub_range);
         }
@@ -314,8 +314,7 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
 
     let mut total_bool = vec![];
     for n in &cnf_set {
-        let keys: Vec<&String> = get_exp_str(n).into_iter().collect();
-        let arr: Vec<String> = keys.into_iter().cloned().collect();
+        let arr: Vec<String> = get_exp_str(n).into_iter().cloned().collect();
         total_bool.push(arr);
     }
     let vchain_query_param_json = json!({

@@ -30,7 +30,6 @@ use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_param::QueryParam;
 use query_plan::QueryPlan;
 use smol_str::SmolStr;
-use std::iter::FromIterator;
 use std::{
     collections::{BTreeMap, HashMap},
     num::NonZeroU64,
@@ -162,7 +161,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                                 a = a + sub_acc;
                             }
                         }
-                        let s = Set::from_iter(total_obj_id_nums.into_iter());
+                        let s: Set = total_obj_id_nums.into_iter().collect();
                         set = s;
                         acc = a;
                     }
@@ -185,7 +184,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         .get(1)
                         .context("Cannot find the first qp child idx of union")?;
                     let vo_c_idx1 = idx_map
-                        .get(&qp_c_idx1)
+                        .get(qp_c_idx1)
                         .context("Cannot find the first vo node idx of Union in idx_map")?;
                     let vo_c1 = vo_dag
                         .node_weight(*vo_c_idx1)
@@ -197,7 +196,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         .get(0)
                         .context("Cannot find the second qp child idx of union")?;
                     let vo_c_idx2 = idx_map
-                        .get(&qp_c_idx2)
+                        .get(qp_c_idx2)
                         .context("Cannot find the vo node idx of Union in idx_map")?;
                     let vo_c2 = vo_dag
                         .node_weight(*vo_c_idx2)
@@ -244,7 +243,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         .get(1)
                         .context("Cannot find the first qp child idx of intersection")?;
                     let vo_c_idx1 = idx_map
-                        .get(&qp_c_idx1)
+                        .get(qp_c_idx1)
                         .context("Cannot find the first vo node idx of Intersec in idx_map")?;
                     let vo_c1 = vo_dag
                         .node_weight(*vo_c_idx1)
@@ -256,7 +255,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         .get(0)
                         .context("Cannot find the second qp child idx of intersection")?;
                     let vo_c_idx2 = idx_map
-                        .get(&qp_c_idx2)
+                        .get(qp_c_idx2)
                         .context("Cannot find the vo node idx of Intersec in idx_map")?;
                     let vo_c2 = vo_dag
                         .node_weight(*vo_c_idx2)
@@ -322,7 +321,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     }
 
                     let vo_c_idx1 = idx_map
-                        .get(&qp_c_idx1)
+                        .get(qp_c_idx1)
                         .context("Cannot find the first vo node idx of Difference in idx_map")?;
                     let vo_c1 = vo_dag
                         .node_weight(*vo_c_idx1)
@@ -332,7 +331,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         .context("Cannot find the set in set_map")?;
 
                     let vo_c_idx2 = idx_map
-                        .get(&qp_c_idx2)
+                        .get(qp_c_idx2)
                         .context("Cannot find the vo node idx of Difference in idx_map")?;
                     let vo_c2 = vo_dag
                         .node_weight(*vo_c_idx2)

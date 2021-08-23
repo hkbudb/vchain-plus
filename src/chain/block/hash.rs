@@ -19,8 +19,8 @@ pub(crate) fn block_head_hash(
     let mut state = blake2().to_state();
     state.update(&blk_height.to_le_bytes());
     state.update(prev_hash.as_bytes());
-    state.update(&ads_hash.as_bytes());
-    state.update(&obj_root_hash.as_bytes());
+    state.update(ads_hash.as_bytes());
+    state.update(obj_root_hash.as_bytes());
     Digest::from(state.finalize())
 }
 
