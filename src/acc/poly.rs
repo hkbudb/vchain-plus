@@ -202,10 +202,9 @@ impl<'lhs, 'rhs, F: Field> Mul<&'rhs Poly<F>> for &'lhs Poly<F> {
         if self.is_zero() || rhs.is_zero() {
             Poly::zero()
         } else {
-            self.coeffs
-                .par_iter()
+            self.coeff_par_iter()
                 .flat_map(|(&lhs_term, &lhs_coeff)| {
-                    rhs.coeffs.par_iter().map(move |(&rhs_term, &rhs_coeff)| {
+                    rhs.coeff_par_iter().map(move |(&rhs_term, &rhs_coeff)| {
                         let coeff = lhs_coeff * rhs_coeff;
                         let term = Term::new(
                             lhs_term.s_pow + rhs_term.s_pow,
@@ -235,8 +234,7 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
 
         while !r.is_zero() {
             let r_lead = r
-                .coeffs
-                .iter()
+                .coeff_iter()
                 .take_while(|(term, _)| term.degree() >= rhs_lead_degree)
                 .find(|(term, _)| {
                     term.s_pow >= rhs_lead_term.s_pow && term.r_pow >= rhs_lead_term.r_pow
@@ -255,7 +253,7 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
             // q += div
             q.add_nonzero_term(lead_div_term, lead_div_coeff);
             // r -= rhs * div
-            for (rhs_t, rhs_c) in rhs.coeffs.iter() {
+            for (rhs_t, rhs_c) in rhs.coeff_iter() {
                 let sub_term = Term::new(
                     lead_div_term.s_pow + rhs_t.s_pow,
                     lead_div_term.r_pow + rhs_t.r_pow,
@@ -297,12 +295,24 @@ impl<F: Field> Poly<F> {
 
     #[inline(always)]
     pub(crate) fn lead_term_and_coeff(&self) -> Option<(Term, F)> {
-        self.coeffs.iter().next().map(|(t, c)| (*t, *c))
+        self.coeff_iter().next().map(|(t, c)| (*t, *c))
     }
 
     #[inline(always)]
     pub(crate) fn coeff_iter(&self) -> impl Iterator<Item = (&'_ Term, &'_ F)> {
         self.coeffs.iter()
+    }
+
+    #[inline(always)]
+    pub(crate) fn coeff_par_iter(&self) -> impl ParallelIterator<Item = (&'_ Term, &'_ F)> {
+        self.coeffs.par_iter()
+    }
+
+    #[inline(always)]
+    pub(crate) fn coeff_par_iter_with_index(
+        &self,
+    ) -> impl ParallelIterator<Item = (usize, (&'_ Term, &'_ F))> {
+        self.coeffs.iter().enumerate().par_bridge()
     }
 
     #[inline(always)]

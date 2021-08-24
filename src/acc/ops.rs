@@ -8,7 +8,12 @@ use anyhow::{ensure, Context as _, Result};
 use ark_ec::{msm::VariableBaseMSM, PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, Zero};
 use core::marker::PhantomData;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+
+#[derive(Copy, Clone)]
+struct SendPtr<T>(*mut T);
+unsafe impl<T> Send for SendPtr<T> {}
 
 /// Set operation
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,24 +48,45 @@ impl<E: PairingEngine> IntersectionProof<E> {
         x: Variable,
         y: Variable,
         g: E::G1Affine,
-        get_g_x_i: impl Fn(u64) -> E::G1Affine + Sync,
-        get_g_beta_x_i: impl Fn(u64) -> E::G1Affine + Sync,
-        get_g_x_i_y_j: impl Fn(u64, u64) -> E::G1Affine + Sync,
-        get_g_delta_x_i_y_j: impl Fn(u64, u64) -> E::G1Affine + Sync,
+        get_g_x_i: impl Fn(u64) -> E::G1Affine + Sync + Send,
+        get_g_beta_x_i: impl Fn(u64) -> E::G1Affine + Sync + Send,
+        get_g_x_i_y_j: impl Fn(u64, u64) -> E::G1Affine + Sync + Send,
+        get_g_delta_x_i_y_j: impl Fn(u64, u64) -> E::G1Affine + Sync + Send,
     ) -> Self {
         let g_x = cal_acc_pk(set, &get_g_x_i);
         let g_x_beta = cal_acc_pk(set, &get_g_beta_x_i);
         let l_x = cal_acc_pk(set, |i| if i == 1 { g } else { get_g_x_i(i - 1) });
 
-        let mut bases: Vec<_> = Vec::with_capacity(q_poly.num_terms());
-        let mut delta_bases: Vec<_> = Vec::with_capacity(q_poly.num_terms());
-        let mut scalars: Vec<_> = Vec::with_capacity(q_poly.num_terms());
-        for (term, coeff) in q_poly.coeff_iter() {
-            scalars.push(coeff.into_repr());
-            let i = term.get_power(x);
-            let j = term.get_power(y);
-            bases.push(get_g_x_i_y_j(i, j));
-            delta_bases.push(get_g_delta_x_i_y_j(i, j));
+        let q_poly_num_terms = q_poly.num_terms();
+        let mut bases: Vec<E::G1Affine> = Vec::with_capacity(q_poly_num_terms);
+        let mut delta_bases: Vec<E::G1Affine> = Vec::with_capacity(q_poly_num_terms);
+        let mut scalars: Vec<<E::Fr as PrimeField>::BigInt> = Vec::with_capacity(q_poly_num_terms);
+
+        let bases_ptr = bases.as_mut_ptr();
+        let delta_bases_ptr = delta_bases.as_mut_ptr();
+        let scalars_ptr = scalars.as_mut_ptr();
+
+        q_poly.coeff_par_iter_with_index().for_each_with(
+            (
+                SendPtr(bases_ptr),
+                SendPtr(delta_bases_ptr),
+                SendPtr(scalars_ptr),
+            ),
+            |(bases_ptr, delta_bases_ptr, scalars_ptr), (idx, (term, coeff))| {
+                let i = term.get_power(x);
+                let j = term.get_power(y);
+                unsafe {
+                    *bases_ptr.0.add(idx) = get_g_x_i_y_j(i, j);
+                    *delta_bases_ptr.0.add(idx) = get_g_delta_x_i_y_j(i, j);
+                    *scalars_ptr.0.add(idx) = coeff.into_repr();
+                }
+            },
+        );
+
+        unsafe {
+            bases.set_len(q_poly_num_terms);
+            delta_bases.set_len(q_poly_num_terms);
+            scalars.set_len(q_poly_num_terms);
         }
 
         let q_x_y = VariableBaseMSM::multi_scalar_mul(&bases[..], &scalars[..]).into_affine();
@@ -291,31 +317,42 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
         &(&result_y_poly - &result_x_y_poly) / &poly_variable_minus_one::<E::Fr>(S);
     debug_assert!(r_poly.is_zero());
 
-    let mut z_s_r_bases: Vec<_> = Vec::with_capacity(z_poly.num_terms());
-    let mut z_r_s_bases: Vec<_> = Vec::with_capacity(z_poly.num_terms());
-    let mut scalars: Vec<_> = Vec::with_capacity(z_poly.num_terms());
-    for (term, coeff) in z_poly.coeff_iter() {
-        scalars.push(coeff.into_repr());
-        let i = term.get_power(R);
-        let j = term.get_power(S);
-        match (i, j) {
-            (0, 0) => {
-                z_s_r_bases.push(pk.g);
-                z_r_s_bases.push(pk.g);
+    let z_poly_num_terms = z_poly.num_terms();
+    let mut z_s_r_bases: Vec<E::G1Affine> = Vec::with_capacity(z_poly_num_terms);
+    let mut z_r_s_bases: Vec<E::G1Affine> = Vec::with_capacity(z_poly_num_terms);
+    let mut scalars: Vec<<E::Fr as PrimeField>::BigInt> = Vec::with_capacity(z_poly_num_terms);
+
+    let z_s_r_bases_ptr = z_s_r_bases.as_mut_ptr();
+    let z_r_s_bases_ptr = z_r_s_bases.as_mut_ptr();
+    let scalars_ptr = scalars.as_mut_ptr();
+
+    z_poly.coeff_par_iter_with_index().for_each_with(
+        (
+            SendPtr(z_s_r_bases_ptr),
+            SendPtr(z_r_s_bases_ptr),
+            SendPtr(scalars_ptr),
+        ),
+        |(z_s_r_bases_ptr, z_r_s_bases_ptr, scalars_ptr), (idx, (term, coeff))| {
+            let i = term.get_power(R);
+            let j = term.get_power(S);
+            let (z_s_r_base, z_r_s_base) = match (i, j) {
+                (0, 0) => (pk.g, pk.g),
+                (0, _) => (pk.get_g_s_i(j), pk.get_g_r_i(j)),
+                (_, 0) => (pk.get_g_r_i(i), pk.get_g_s_i(i)),
+                (_, _) => (pk.get_g_r_i_s_j(i, j), pk.get_g_r_i_s_j(j, i)),
+            };
+            unsafe {
+                *z_s_r_bases_ptr.0.add(idx) = z_s_r_base;
+                *z_r_s_bases_ptr.0.add(idx) = z_r_s_base;
+                *scalars_ptr.0.add(idx) = coeff.into_repr();
             }
-            (0, _) => {
-                z_s_r_bases.push(pk.get_g_s_i(j));
-                z_r_s_bases.push(pk.get_g_r_i(j));
-            }
-            (_, 0) => {
-                z_s_r_bases.push(pk.get_g_r_i(i));
-                z_r_s_bases.push(pk.get_g_s_i(i));
-            }
-            (_, _) => {
-                z_s_r_bases.push(pk.get_g_r_i_s_j(i, j));
-                z_r_s_bases.push(pk.get_g_r_i_s_j(j, i));
-            }
-        }
+        },
+    );
+
+    unsafe {
+        z_s_r_bases.set_len(z_poly_num_terms);
+        z_r_s_bases.set_len(z_poly_num_terms);
+        scalars.set_len(z_poly_num_terms);
     }
 
     let z_s_r = VariableBaseMSM::multi_scalar_mul(&z_s_r_bases[..], &scalars[..]).into_affine();
