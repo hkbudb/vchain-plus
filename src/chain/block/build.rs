@@ -112,12 +112,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
                     .get(idx)
                     .context("Cannot find object id number!")?;
                 if let Some(num_data) = raw_obj.num_data.get(dim) {
-                    bplus_ctx.delete(
-                        *num_data,
-                        ObjId(*obj_id_num),
-                        param.bplus_tree_fanout,
-                        pk,
-                    )?;
+                    bplus_ctx.delete(*num_data, ObjId(*obj_id_num), param.bplus_tree_fanout, pk)?;
                 }
             }
             bplus_ctx_vec.push(bplus_ctx);
