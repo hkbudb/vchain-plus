@@ -1,8 +1,8 @@
 use acc_benchmark::*;
 use criterion::{criterion_group, criterion_main, Criterion};
 
-const Q: u64 = 100;
-const TEST_SET_SIZE: &[u64] = &[10, 20, 30];
+const Q: u64 = 2048;
+const TEST_SET_SIZE: &[u64] = &[40, 50, 60];
 prepare_fixtures!(Q);
 
 pub fn bench_cal_acc(c: &mut Criterion) {
