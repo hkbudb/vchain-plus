@@ -45,7 +45,9 @@ fn main() -> Result<()> {
     let res_path = opts.result;
     let pk = KeyPair::load(&opts.key_path)?.pk;
     let mut query_info = Vec::new();
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(verify_thread_num).build().unwrap();
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(verify_thread_num)
+        .build()?;
     for (i, q) in query_params.into_iter().enumerate() {
         info!("Processing query {}...", i);
         let (results, time) = query(&chain, q, &pk)?;

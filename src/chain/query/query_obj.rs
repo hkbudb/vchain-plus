@@ -16,10 +16,7 @@ use anyhow::{bail, Context, Result};
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
-use std::{
-    collections::{HashMap, HashSet},
-    num::NonZeroU64,
-};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum QueryNode<K: Num> {
@@ -109,27 +106,15 @@ pub struct BlkRtNode {
 }
 
 impl BlkRtNode {
-    pub fn estimate_size<K: Num, T: ReadInterface<K = K>>(
-        &mut self,
-        chain: &T,
-        pk: &AccPublicKey,
-    ) -> Result<()> {
+    pub fn estimate_size<K: Num, T: ReadInterface<K = K>>(&mut self, chain: &T) -> Result<()> {
         if self.set.is_none() {
-            let mut a = AccValue::from_set(&Set::new(), pk);
-            let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
-            for i in 0..self.time_win {
-                if self.blk_height.0 > i {
-                    let blk_content = chain.read_block_content(Height(self.blk_height.0 - i))?;
-                    let mut obj_id_nums = blk_content.read_obj_id_nums();
-                    total_obj_id_nums.append(&mut obj_id_nums);
-                    let sub_acc = blk_content
-                        .read_acc()
-                        .context("The block does not have acc value")?;
-                    a = a + sub_acc;
-                }
-            }
-            let s: Set = total_obj_id_nums.into_iter().collect();
-            self.set = Some((s, a));
+            let blk_content = chain.read_block_content(Height(self.blk_height.0))?;
+            let bplus_root = blk_content.ads.read_bplus_root(self.time_win, 0)?;
+            let bplus_root_id = bplus_root.bplus_tree_root_id.context("Empty bplus root")?;
+            let bplus_root_node = bplus_tree::BPlusTreeNodeLoader::load_node(chain, bplus_root_id)?;
+            let set = bplus_root_node.get_set().clone();
+            let acc = bplus_root_node.get_node_acc();
+            self.set = Some((set, acc));
             Ok(())
         } else {
             Ok(())
@@ -314,7 +299,7 @@ pub(crate) fn estimate_query_cost<K: Num, T: ReadInterface<K = K>>(
                 }
                 QueryNode::BlkRt(n) => {
                     if n.set.is_none() {
-                        n.estimate_size(chain, pk)?;
+                        n.estimate_size(chain)?;
                     }
                     map.insert(*idx, node.clone());
                 }

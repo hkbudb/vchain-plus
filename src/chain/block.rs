@@ -3,7 +3,6 @@ pub mod build;
 pub mod hash;
 
 use crate::{
-    acc::AccValue,
     chain::id_tree::IdTreeRoot,
     digest::{Digest, Digestible},
 };
@@ -40,7 +39,6 @@ pub struct BlockContent {
     pub ads: BlockMultiADS,
     pub obj_hashes: Vec<Digest>,
     pub obj_id_nums: Vec<NonZeroU64>,
-    pub acc: Option<AccValue>,
 }
 
 impl BlockContent {
@@ -52,7 +50,6 @@ impl BlockContent {
             ads: BlockMultiADS::default(),
             obj_hashes: Vec::<Digest>::new(),
             obj_id_nums: Vec::<NonZeroU64>::new(),
-            acc: None,
         }
     }
 
@@ -74,14 +71,6 @@ impl BlockContent {
 
     pub fn read_obj_id_nums(&self) -> Vec<NonZeroU64> {
         self.obj_id_nums.clone()
-    }
-
-    pub fn set_acc(&mut self, new_acc: Option<AccValue>) {
-        self.acc = new_acc;
-    }
-
-    pub fn read_acc(&self) -> Option<AccValue> {
-        self.acc
     }
 }
 

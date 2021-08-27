@@ -4,8 +4,7 @@ pub mod query_plan;
 
 use crate::{
     acc::{
-        compute_set_operation_final, compute_set_operation_intermediate, ops::Op, AccPublicKey,
-        AccValue, Set,
+        compute_set_operation_final, compute_set_operation_intermediate, ops::Op, AccPublicKey, Set,
     },
     chain::{
         block::{hash::obj_id_nums_hash, Height},
@@ -30,10 +29,7 @@ use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_param::QueryParam;
 use query_plan::QueryPlan;
 use smol_str::SmolStr;
-use std::{
-    collections::{BTreeMap, HashMap},
-    num::NonZeroU64,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use super::traits::ScanQueryInterface;
 
@@ -147,23 +143,14 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         set = s;
                         acc = a;
                     } else {
-                        let mut a = AccValue::from_set(&Set::new(), pk);
-                        let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
-                        for i in 0..n.time_win {
-                            if n.blk_height.0 > i {
-                                let blk_content =
-                                    chain.read_block_content(Height(n.blk_height.0 - i))?;
-                                let mut obj_id_nums = blk_content.read_obj_id_nums();
-                                total_obj_id_nums.append(&mut obj_id_nums);
-                                let sub_acc = blk_content
-                                    .read_acc()
-                                    .context("The block does not have acc value")?;
-                                a = a + sub_acc;
-                            }
-                        }
-                        let s: Set = total_obj_id_nums.into_iter().collect();
-                        set = s;
-                        acc = a;
+                        let blk_content = chain.read_block_content(Height(n.blk_height.0))?;
+                        let bplus_root = blk_content.ads.read_bplus_root(n.time_win, 0)?;
+                        let bplus_root_id =
+                            bplus_root.bplus_tree_root_id.context("Empty bplus root")?;
+                        let bplus_root_node =
+                            bplus_tree::BPlusTreeNodeLoader::load_node(chain, bplus_root_id)?;
+                        set = bplus_root_node.get_set().clone();
+                        acc = bplus_root_node.get_node_acc();
                     }
 
                     let vo_blk_root = VOBlkRtNode {

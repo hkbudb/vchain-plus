@@ -74,6 +74,20 @@ impl TrieNode {
             TrieNode::NonLeaf(n) => &n.nibble,
         }
     }
+
+    pub fn get_set(&self) -> &Set {
+        match self {
+            TrieNode::Leaf(n) => &n.data_set,
+            TrieNode::NonLeaf(n) => &n.data_set,
+        }
+    }
+
+    pub fn get_acc(&self) -> &AccValue {
+        match self {
+            TrieNode::Leaf(n) => &n.data_set_acc,
+            TrieNode::NonLeaf(n) => &n.data_set_acc,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -181,73 +195,4 @@ pub fn split_at_common_prefix2(a: &str, b: &str) -> (String, char, String, char,
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn test_common_prefix_len() {
-        use super::common_prefix_len;
-
-        let a = "abcde";
-        let b = "abcfg";
-        let common_prefix_len = common_prefix_len(a, b);
-        let expect = 3 as usize;
-
-        assert_eq!(common_prefix_len, expect);
-    }
-
-    #[test]
-    fn test_split_at_common_prefix2() {
-        use super::split_at_common_prefix2;
-
-        let a = "abcdef";
-        let b = "abcfgh";
-        let res = split_at_common_prefix2(a, b);
-        let expect = (
-            "abc".to_string(),
-            'd',
-            "ef".to_string(),
-            'f',
-            "gh".to_string(),
-        );
-        assert_eq!(res, expect);
-
-        let a = "ecdef";
-        let b = "abcfgh";
-        let res = split_at_common_prefix2(a, b);
-        let expect = (
-            "".to_string(),
-            'e',
-            "cdef".to_string(),
-            'a',
-            "bcfgh".to_string(),
-        );
-        assert_eq!(res, expect);
-
-        let a = "abcde";
-        let b = "abcdf";
-        let res = split_at_common_prefix2(a, b);
-        let expect = ("abcd".to_string(), 'e', "".to_string(), 'f', "".to_string());
-        assert_eq!(res, expect);
-
-        let a = "abcde";
-        let b = "";
-        let res = split_at_common_prefix2(a, b);
-        let expect = (
-            "".to_string(),
-            'a',
-            "bcde".to_string(),
-            '\0',
-            "".to_string(),
-        );
-
-        assert_eq!(res, expect);
-    }
-
-    #[test]
-    fn test_box() {
-        use crate::digest::Digestible;
-        let a = "1".to_string();
-        let b = Box::new(a.clone());
-        assert_eq!(a.to_digest(), b.to_digest());
-        assert_eq!(a.to_digest(), b.as_ref().to_digest());
-    }
-}
+mod tests;
