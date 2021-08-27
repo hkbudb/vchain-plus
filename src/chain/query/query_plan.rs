@@ -12,10 +12,7 @@ use anyhow::{bail, Context, Result};
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    num::NonZeroU64,
-};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum QPNode<K: Num> {
@@ -181,22 +178,15 @@ impl<K: Num> QueryPlan<K> {
                     }
                     QPNode::BlkRt(n) => {
                         if n.set.is_none() {
-                            let mut a = AccValue::from_set(&Set::new(), pk);
-                            let mut total_obj_id_nums = Vec::<NonZeroU64>::new();
-                            for i in 0..n.time_win {
-                                if n.blk_height.0 > i {
-                                    let blk_content =
-                                        chain.read_block_content(Height(n.blk_height.0 - i))?;
-                                    let mut obj_id_nums = blk_content.read_obj_id_nums();
-                                    total_obj_id_nums.append(&mut obj_id_nums);
-                                    let sub_acc = blk_content
-                                        .read_acc()
-                                        .context("The block does not have acc value")?;
-                                    a = a + sub_acc;
-                                }
-                            }
-                            let s: Set = total_obj_id_nums.into_iter().collect();
-                            n.set = Some((s, a));
+                            let blk_content = chain.read_block_content(Height(n.blk_height.0))?;
+                            let bplus_root = blk_content.ads.read_bplus_root(n.time_win, 0)?;
+                            let bplus_root_id =
+                                bplus_root.bplus_tree_root_id.context("Empty bplus root")?;
+                            let bplus_root_node =
+                                bplus_tree::BPlusTreeNodeLoader::load_node(chain, bplus_root_id)?;
+                            let set = bplus_root_node.get_set().clone();
+                            let acc = bplus_root_node.get_node_acc();
+                            n.set = Some((set, acc));
                         }
                         map.insert(idx, node.clone());
                     }

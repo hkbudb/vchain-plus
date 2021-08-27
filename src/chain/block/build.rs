@@ -1,5 +1,5 @@
 use crate::{
-    acc::{AccPublicKey, AccValue, Set},
+    acc::AccPublicKey,
     chain::{
         block::{
             block_ads::BlockMultiADS,
@@ -217,15 +217,10 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     block_head.set_obj_root_hash(obj_root_hash);
     block_head.set_ads_root_hash(ads_root_hash);
 
-    let obj_id_nums_iter = obj_id_nums.clone().into_iter();
-    let root_id_set: Set = obj_id_nums_iter.collect();
-    let root_acc = AccValue::from_set(&root_id_set, pk);
-
     block_content.set_multi_ads(blk_multi_ads);
     block_content.set_obj_hashes(obj_hashes);
     block_content.set_obj_id_nums(obj_id_nums);
     block_content.set_id_tree_root(id_tree_changes.root);
-    block_content.set_acc(Some(root_acc));
 
     chain.write_block_content(blk_height, &block_content)?;
     chain.write_block_head(blk_height, &block_head)?;
