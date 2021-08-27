@@ -128,7 +128,7 @@ impl<F: PrimeField> FixedBaseScalarPow<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_bls12_381::{Fr, G1Projective, G2Projective};
+    use ark_bls12_377::{Fr, G1Projective, G2Projective};
     use ark_ff::Field;
     use core::ops::MulAssign;
     use rand::Rng;
