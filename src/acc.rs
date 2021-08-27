@@ -11,7 +11,7 @@ pub mod utils;
 pub use ops::Op;
 pub use set::Set;
 
-use ark_bls12_377::Bls12_377 as Curve;
+use ark_bn254::Bn254 as Curve;
 pub type AccSecretKey = keys::AccSecretKey<Curve>;
 pub type AccSecretKeyWithPowCache = keys::AccSecretKeyWithPowCache<Curve>;
 pub type AccPublicKey = keys::AccPublicKey<Curve>;

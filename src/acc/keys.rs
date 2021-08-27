@@ -440,7 +440,7 @@ fn map_i_j_to_index(i: u64, j: u64, q: u64) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_bls12_377::Bls12_377;
+    use ark_bn254::Bn254;
     use ark_ec::AffineCurve;
     use ark_ff::{Field, PrimeField};
 
@@ -448,15 +448,15 @@ mod tests {
     fn test_key_gen() {
         let mut rng = rand::thread_rng();
         let q = 5;
-        let sk = AccSecretKey::<Bls12_377>::rand(&mut rng).into();
-        let pk = AccPublicKey::<Bls12_377>::gen_key(&sk, q);
+        let sk = AccSecretKey::<Bn254>::rand(&mut rng).into();
+        let pk = AccPublicKey::<Bn254>::gen_key(&sk, q);
 
         let g = pk.g;
         let h = pk.h;
-        let q_fr = <Bls12_377 as PairingEngine>::Fr::from(q);
+        let q_fr = <Bn254 as PairingEngine>::Fr::from(q);
 
         for i in 1..=(q - 1) {
-            let i_fr = <Bls12_377 as PairingEngine>::Fr::from(i);
+            let i_fr = <Bn254 as PairingEngine>::Fr::from(i);
             let s_i = sk.s.pow(i_fr.into_repr());
             let r_i = sk.r.pow(i_fr.into_repr());
             let s_q_i = sk.s.pow((q_fr - i_fr).into_repr());
@@ -495,8 +495,8 @@ mod tests {
                     assert!(pk.try_get_g_r_i_s_j(i, j).is_none());
                     assert!(pk.try_get_g_delta_r_i_s_j(i, j).is_none());
                 } else {
-                    let i_fr = <Bls12_377 as PairingEngine>::Fr::from(i);
-                    let j_fr = <Bls12_377 as PairingEngine>::Fr::from(j);
+                    let i_fr = <Bn254 as PairingEngine>::Fr::from(i);
+                    let j_fr = <Bn254 as PairingEngine>::Fr::from(j);
                     let r_i = sk.r.pow(i_fr.into_repr());
                     let s_j = sk.s.pow(j_fr.into_repr());
                     assert_eq!(

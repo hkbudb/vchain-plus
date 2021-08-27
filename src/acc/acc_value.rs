@@ -166,18 +166,18 @@ impl<E: PairingEngine> AccValue<E> {
 mod tests {
     use super::*;
     use crate::{acc::keys::AccSecretKey, set};
-    use ark_bls12_377::Bls12_377;
+    use ark_bn254::Bn254;
 
     #[test]
     fn test_compute_acc() {
         let mut rng = rand::thread_rng();
         let q = 5;
-        let sk = AccSecretKey::<Bls12_377>::rand(&mut rng).into();
-        let pk = AccPublicKey::<Bls12_377>::gen_key(&sk, q);
+        let sk = AccSecretKey::<Bn254>::rand(&mut rng).into();
+        let pk = AccPublicKey::<Bn254>::gen_key(&sk, q);
 
         let s = set! {1, 2, 3};
-        let acc1 = AccValue::<Bls12_377>::from_set(&s, &pk);
-        let acc2 = AccValue::<Bls12_377>::from_set_sk(&s, &sk, q);
+        let acc1 = AccValue::<Bn254>::from_set(&s, &pk);
+        let acc2 = AccValue::<Bn254>::from_set_sk(&s, &sk, q);
         assert_eq!(acc1, acc2);
     }
 
@@ -185,11 +185,11 @@ mod tests {
     fn test_update_acc() {
         let mut rng = rand::thread_rng();
         let q = 5;
-        let sk = AccSecretKey::<Bls12_377>::rand(&mut rng).into();
+        let sk = AccSecretKey::<Bn254>::rand(&mut rng).into();
 
-        let acc1 = AccValue::<Bls12_377>::from_set_sk(&set! {1, 2, 3}, &sk, q);
-        let acc2 = AccValue::<Bls12_377>::from_set_sk(&set! {1, 2}, &sk, q);
-        let acc3 = AccValue::<Bls12_377>::from_set_sk(&set! {3}, &sk, q);
+        let acc1 = AccValue::<Bn254>::from_set_sk(&set! {1, 2, 3}, &sk, q);
+        let acc2 = AccValue::<Bn254>::from_set_sk(&set! {1, 2}, &sk, q);
+        let acc3 = AccValue::<Bn254>::from_set_sk(&set! {3}, &sk, q);
         assert_eq!(acc1, acc2 + acc3);
         assert_eq!(acc1 - acc2, acc3);
     }

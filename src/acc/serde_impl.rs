@@ -117,7 +117,7 @@ pub mod unchecked {
 
 #[cfg(test)]
 mod tests {
-    use ark_bls12_377::{G1Affine, G2Affine};
+    use ark_bn254::{G1Affine, G2Affine};
     use ark_ec::AffineCurve;
     use serde::{Deserialize, Serialize};
 
