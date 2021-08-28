@@ -1,5 +1,8 @@
 #!/bin.bash
 DB_DIR='eth_small_254'
+mkdir -p ./data/db/${DB_DIR}
+mkdir -p ./data/result/${DB_DIR}
+
 echo "building db with t_w: 4, id_fanout: 4, bplus_fanout: 4"
 cargo run --release --bin build_chain -- -t 2 -t 4 --id-fanout 4 -m 4095 -b 4 -d 1 -k ./keys/254_4096 -i ./data/dataset/eth-small.dat -r ./data/result/${DB_DIR}/t4_id4_b4_build_res.json -o ./data/db/${DB_DIR}/t4_id4_b4
 echo "building db with t_w: 4, id_fanout: 8, bplus_fanout: 4"
