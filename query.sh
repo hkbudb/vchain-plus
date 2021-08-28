@@ -5,7 +5,7 @@ QS=`eval ls ./data/query/generated_query`
 
 for db in ${DBS[*]}
 do
-    mkdir -p ./data/result/${db}
+    mkdir -p ./data/result/${DB_DIR}/${db}
 done
 for db in ${DBS[*]}
 do
