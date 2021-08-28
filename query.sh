@@ -1,7 +1,7 @@
 #!/bin.bash
-DBS=`eval ls ./data/db/eth_small_254`
-QS=`eval ls ./data/query/generated_query`
 DB_DIR='eth_small_254'
+DBS=`eval ls ./data/db/${DB_DIR}`
+QS=`eval ls ./data/query/generated_query`
 
 for db in ${DBS[*]}
 do
