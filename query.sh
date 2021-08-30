@@ -12,6 +12,6 @@ do
     for q in ${QS[*]}
     do
         printf "query: %s, db: %s\n" ${q} ${db}
-        cargo run --release --bin query -- -k ./keys/keys_2048 -i data/db/${DB_DIR}/${db} -q ./data/query/generated_query/${q}/vchain_plus.json -r ./data/result/${DB_DIR}/${db}/${q}_query_res.json
+        cargo run --release --bin query -- -k ./keys/254_4096 -i data/db/${DB_DIR}/${db} -q ./data/query/generated_query/${q}/vchain_plus.json -r ./data/result/${DB_DIR}/${db}/${q}_query_res.json
     done
 done
