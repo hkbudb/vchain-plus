@@ -79,8 +79,12 @@ pub fn in_place_set_union(lhs: Set, rhs: Set) -> Set {
 }
 
 pub fn in_place_set_difference(mut lhs: Set, rhs: &Set) -> Set {
-    for v in rhs.iter() {
-        lhs.remove(v);
+    if lhs.len() > rhs.len() {
+        rhs.iter().for_each(|v| {
+            lhs.remove(v);
+        });
+    } else {
+        lhs.retain(|v| !rhs.contains(v));
     }
 
     lhs
