@@ -221,7 +221,7 @@ impl<'lhs, 'rhs, F: Field> Mul<&'rhs Poly<F>> for &'lhs Poly<F> {
                         Poly::from_one_term(term, coeff)
                     })
                 })
-                .reduce(Poly::zero, |poly1, poly2| &poly1 + &poly2)
+                .reduce(Poly::zero, |poly1, poly2| poly1 + poly2)
         }
     }
 }
