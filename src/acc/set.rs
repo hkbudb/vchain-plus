@@ -46,6 +46,39 @@ impl Set {
     }
 }
 
+pub fn in_place_set_intersection(lhs: Set, rhs: Set) -> Set {
+    let (mut to_mutate, to_check) = if lhs.len() < rhs.len() {
+        (lhs, rhs)
+    } else {
+        (rhs, lhs)
+    };
+
+    to_mutate.retain(|v| to_check.contains(v));
+    to_mutate
+}
+
+pub fn in_place_set_union(lhs: Set, rhs: Set) -> Set {
+    let (mut to_mutate, to_consume) = if lhs.len() > rhs.len() {
+        (lhs, rhs)
+    } else {
+        (rhs, lhs)
+    };
+
+    for v in to_consume.0.into_iter() {
+        to_mutate.insert(v);
+    }
+
+    to_mutate
+}
+
+pub fn in_place_set_difference(mut lhs: Set, rhs: &Set) -> Set {
+    for v in rhs.iter() {
+        lhs.remove(v);
+    }
+
+    lhs
+}
+
 impl Deref for Set {
     type Target = HashSet<NonZeroU64>;
 
@@ -80,6 +113,14 @@ impl FromIterator<u64> for Set {
     }
 }
 
+impl BitAnd<Set> for Set {
+    type Output = Set;
+
+    fn bitand(self, rhs: Set) -> Self::Output {
+        in_place_set_intersection(self, rhs)
+    }
+}
+
 impl BitAnd<&'_ Set> for &'_ Set {
     type Output = Set;
 
@@ -88,11 +129,27 @@ impl BitAnd<&'_ Set> for &'_ Set {
     }
 }
 
+impl BitOr<Set> for Set {
+    type Output = Set;
+
+    fn bitor(self, rhs: Set) -> Self::Output {
+        in_place_set_union(self, rhs)
+    }
+}
+
 impl BitOr<&'_ Set> for &'_ Set {
     type Output = Set;
 
     fn bitor(self, rhs: &'_ Set) -> Self::Output {
         self.set_union(rhs)
+    }
+}
+
+impl Div<Set> for Set {
+    type Output = Set;
+
+    fn div(self, rhs: Set) -> Self::Output {
+        in_place_set_difference(self, &rhs)
     }
 }
 
@@ -133,18 +190,22 @@ mod tests {
     fn test_intersection() {
         let a = set! {1, 2, 3};
         let b = set! {2, 3, 4, 5};
-        let actual = (&a) & (&b);
+        let actual1 = (&a) & (&b);
+        let actual2 = a & b;
         let expect = set! {2, 3};
-        assert_eq!(actual, expect);
+        assert_eq!(actual1, expect);
+        assert_eq!(actual2, expect);
     }
 
     #[test]
     fn test_union() {
         let a = set! {1, 2, 3};
         let b = set! {2, 3, 4, 5};
-        let actual = (&a) | (&b);
+        let actual1 = (&a) | (&b);
+        let actual2 = a | b;
         let expect = set! {1, 2, 3, 4, 5};
-        assert_eq!(actual, expect);
+        assert_eq!(actual1, expect);
+        assert_eq!(actual2, expect);
         let c = set! {};
         let d = set! {1};
         let e = set! {2};
@@ -157,9 +218,11 @@ mod tests {
     fn test_difference() {
         let a = set! {1, 2, 3, 6};
         let b = set! {2, 3, 4, 5};
-        let actual = (&a) / (&b);
+        let actual1 = (&a) / (&b);
+        let actual2 = a / b;
         let expect = set! {1, 6};
-        assert_eq!(actual, expect);
+        assert_eq!(actual1, expect);
+        assert_eq!(actual2, expect);
     }
 
     #[test]
