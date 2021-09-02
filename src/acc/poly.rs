@@ -226,7 +226,7 @@ impl<'lhs, 'rhs, F: Field> Mul<&'rhs Poly<F>> for &'lhs Poly<F> {
     }
 }
 
-impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
+impl<'rhs, F: Field> Div<&'rhs Poly<F>> for Poly<F> {
     type Output = (Poly<F>, Poly<F>);
 
     /// Return poly {lhs / rhs} = (q, r) s.t. rhs * q + r == lhs
@@ -238,7 +238,7 @@ impl<'lhs, 'rhs, F: Field> Div<&'rhs Poly<F>> for &'lhs Poly<F> {
         let rhs_lead_coeff_inv = rhs_lead_coeff.inverse().expect("cannot divide by zero");
 
         let mut q = Poly::zero();
-        let mut r = self.clone();
+        let mut r = self;
 
         while !r.is_zero() {
             let r_lead = r
@@ -433,7 +433,7 @@ mod tests {
         let s_b: Poly<Fr> = poly_b(&s, S, R, q);
         let p1 = &s_a - &s_b;
         let p2 = poly_variable_minus_one(R);
-        let (p3, r) = &p1 / &p2;
+        let (p3, r) = p1.clone() / &p2;
         assert!(r.is_zero());
         assert_eq!(&p3 * &p2, p1);
     }

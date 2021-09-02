@@ -313,8 +313,7 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
 
     let result_y_poly = poly_a::<E::Fr>(&result_set, R);
     let result_x_y_poly = poly_b::<E::Fr>(&result_set, R, S, pk.q);
-    let (z_poly, r_poly) =
-        &(&result_y_poly - &result_x_y_poly) / &poly_variable_minus_one::<E::Fr>(S);
+    let (z_poly, r_poly) = (result_y_poly - result_x_y_poly) / &poly_variable_minus_one::<E::Fr>(S);
     debug_assert!(r_poly.is_zero());
 
     let z_poly_num_terms = z_poly.num_terms();
