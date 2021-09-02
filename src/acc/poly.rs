@@ -131,7 +131,14 @@ impl<F: Field> Add for Poly<F> {
 
     #[inline(always)]
     fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+        let (mut to_mutate, to_consume) = if self.num_terms() > rhs.num_terms() {
+            (self, rhs)
+        } else {
+            (rhs, self)
+        };
+
+        to_mutate.add_assign(&to_consume);
+        to_mutate
     }
 }
 
@@ -169,8 +176,9 @@ impl<F: Field> Sub for Poly<F> {
     type Output = Poly<F>;
 
     #[inline(always)]
-    fn sub(self, rhs: Self) -> Self::Output {
-        &self - &rhs
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self.sub_assign(&rhs);
+        self
     }
 }
 
