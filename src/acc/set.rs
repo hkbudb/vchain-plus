@@ -43,10 +43,7 @@ impl Set {
             (rhs.clone(), self)
         };
 
-        for v in to_consume.iter() {
-            to_mutate.insert(*v);
-        }
-
+        to_mutate.extend(to_consume.iter().copied());
         to_mutate
     }
 
@@ -77,10 +74,7 @@ pub fn in_place_set_union(lhs: Set, rhs: Set) -> Set {
         (rhs, lhs)
     };
 
-    for v in to_consume.0.into_iter() {
-        to_mutate.insert(v);
-    }
-
+    to_mutate.extend(to_consume.0.into_iter());
     to_mutate
 }
 
