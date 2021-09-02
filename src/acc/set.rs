@@ -26,19 +26,32 @@ impl Set {
     }
 
     pub fn set_intersection(&self, rhs: &Self) -> Self {
-        if self.len() < rhs.len() {
-            self.iter().filter(|v| rhs.contains(v)).copied().collect()
+        let (mut to_mutate, to_check) = if self.len() < rhs.len() {
+            (self.clone(), rhs)
         } else {
-            rhs.iter().filter(|v| self.contains(v)).copied().collect()
-        }
+            (rhs.clone(), self)
+        };
+
+        to_mutate.retain(|v| to_check.contains(v));
+        to_mutate
     }
 
     pub fn set_union(&self, rhs: &Self) -> Self {
-        self.iter().chain(rhs.iter()).copied().collect()
+        let (mut to_mutate, to_consume) = if self.len() > rhs.len() {
+            (self.clone(), rhs)
+        } else {
+            (rhs.clone(), self)
+        };
+
+        for v in to_consume.iter() {
+            to_mutate.insert(*v);
+        }
+
+        to_mutate
     }
 
     pub fn set_difference(&self, rhs: &Self) -> Self {
-        self.iter().filter(|v| !rhs.contains(v)).copied().collect()
+        in_place_set_difference(self.clone(), rhs)
     }
 
     pub fn is_subset_of(&self, rhs: &Self) -> bool {
