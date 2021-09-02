@@ -392,18 +392,23 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
         let set = set_map
             .remove(vo_idx)
             .context("Cannot find set in set_map")?;
+        let mut delta_set = Set::new();
         for i in set.iter() {
             let obj_id = ObjId(*i);
             let obj_hash_opt = id_tree_ctx.query(obj_id, max_id_num, id_tree_fanout)?;
             let obj_hash;
             match obj_hash_opt {
                 Some(d) => obj_hash = d,
-                None => continue,
+                None => {
+                    delta_set = &delta_set | &Set::from_single_element(*i);
+                    continue
+                },
             }
             let obj = chain.read_object(obj_hash)?;
             obj_map.insert(obj_id, obj);
         }
-        vo_ouput_sets.insert(*vo_idx, set.clone());
+        let sub_res_set = &set / &delta_set;
+        vo_ouput_sets.insert(*vo_idx, sub_res_set);
     }
     let id_tree_proof = id_tree_ctx.into_proof();
 
