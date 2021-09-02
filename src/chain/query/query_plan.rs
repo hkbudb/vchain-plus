@@ -191,82 +191,88 @@ impl<K: Num> QueryPlan<K> {
                         map.insert(idx, node.clone());
                     }
                     QPNode::Union(n) => {
-                        let qp_c_idx1 = child_idxs
-                            .get(1)
-                            .context("Cannot find the first child idx of union")?;
-                        let qp_c1 = map
-                            .get(qp_c_idx1)
-                            .context("Cannot find the first child node in map")?;
-                        let s1 = qp_c1.get_set()?;
-                        let qp_c_idx2 = child_idxs
-                            .get(0)
-                            .context("Cannot find the first child idx of union")?;
-                        let qp_c2 = map
-                            .get(qp_c_idx2)
-                            .context("Cannot find the second child node in map")?;
-                        let s2 = qp_c2.get_set()?;
-                        let res_set = (s1) | (s2);
-                        let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
-                        let mut final_cost = s1.len() * s2.len();
-                        if self.outputs.contains(&idx) {
-                            final_cost = 0;
-                            cost += final_cost;
-                        } else {
-                            cost += inter_cost;
+                        if n.set.is_none() {
+                            let qp_c_idx1 = child_idxs
+                                .get(1)
+                                .context("Cannot find the first child idx of union")?;
+                            let qp_c1 = map
+                                .get(qp_c_idx1)
+                                .context("Cannot find the first child node in map")?;
+                            let s1 = qp_c1.get_set()?;
+                            let qp_c_idx2 = child_idxs
+                                .get(0)
+                                .context("Cannot find the first child idx of union")?;
+                            let qp_c2 = map
+                                .get(qp_c_idx2)
+                                .context("Cannot find the second child node in map")?;
+                            let s2 = qp_c2.get_set()?;
+                            let res_set = (s1) | (s2);
+                            let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
+                            let mut final_cost = s1.len() * s2.len();
+                            if self.outputs.contains(&idx) {
+                                final_cost = 0;
+                                cost += final_cost;
+                            } else {
+                                cost += inter_cost;
+                            }
+                            n.set = Some((res_set, inter_cost, final_cost));
                         }
-                        n.set = Some((res_set, inter_cost, final_cost));
                         map.insert(idx, node.clone());
                     }
                     QPNode::Intersec(n) => {
-                        let qp_c_idx1 = child_idxs
-                            .get(1)
-                            .context("Cannot find the first child idx of intersection")?;
-                        let qp_c1 = map
-                            .get(qp_c_idx1)
-                            .context("Cannot find the first child node in map")?;
-                        let s1 = qp_c1.get_set()?;
-                        let qp_c_idx2 = child_idxs
-                            .get(0)
-                            .context("Cannot find the first child idx of intersection")?;
-                        let qp_c2 = map
-                            .get(qp_c_idx2)
-                            .context("Cannot find the second child node in map")?;
-                        let s2 = qp_c2.get_set()?;
-                        let res_set = (s1) & (s2);
-                        let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
-                        let final_cost = s1.len() * s2.len();
-                        if self.outputs.contains(&idx) {
-                            cost += final_cost
-                        } else {
-                            cost += inter_cost;
+                        if n.set.is_none() {
+                            let qp_c_idx1 = child_idxs
+                                .get(1)
+                                .context("Cannot find the first child idx of intersection")?;
+                            let qp_c1 = map
+                                .get(qp_c_idx1)
+                                .context("Cannot find the first child node in map")?;
+                            let s1 = qp_c1.get_set()?;
+                            let qp_c_idx2 = child_idxs
+                                .get(0)
+                                .context("Cannot find the first child idx of intersection")?;
+                            let qp_c2 = map
+                                .get(qp_c_idx2)
+                                .context("Cannot find the second child node in map")?;
+                            let s2 = qp_c2.get_set()?;
+                            let res_set = (s1) & (s2);
+                            let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
+                            let final_cost = s1.len() * s2.len();
+                            if self.outputs.contains(&idx) {
+                                cost += final_cost
+                            } else {
+                                cost += inter_cost;
+                            }
+                            n.set = Some((res_set, inter_cost, final_cost));
                         }
-                        n.set = Some((res_set, inter_cost, final_cost));
                         map.insert(idx, node.clone());
                     }
                     QPNode::Diff(n) => {
-                        let qp_c_idx1 = child_idxs
-                            .get(1)
-                            .context("Cannot find the first child idx of difference")?;
-                        let qp_c1 = map
-                            .get(qp_c_idx1)
-                            .context("Cannot find the first child node in map")?;
-                        let s1 = qp_c1.get_set()?;
-                        let qp_c_idx2 = child_idxs
-                            .get(0)
-                            .context("Cannot find the first child idx of difference")?;
-                        let qp_c2 = map
-                            .get(qp_c_idx2)
-                            .context("Cannot find the second child node in map")?;
-                        let s2 = qp_c2.get_set()?;
-                        let res_set = (s1) / (s2);
-                        let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
-                        let final_cost = s1.len() * s2.len();
-                        if self.outputs.contains(&idx) {
-                            cost += final_cost
-                        } else {
-                            cost += inter_cost;
+                        if n.set.is_none() {
+                            let qp_c_idx1 = child_idxs
+                                .get(1)
+                                .context("Cannot find the first child idx of difference")?;
+                            let qp_c1 = map
+                                .get(qp_c_idx1)
+                                .context("Cannot find the first child node in map")?;
+                            let s1 = qp_c1.get_set()?;
+                            let qp_c_idx2 = child_idxs
+                                .get(0)
+                                .context("Cannot find the first child idx of difference")?;
+                            let qp_c2 = map
+                                .get(qp_c_idx2)
+                                .context("Cannot find the second child node in map")?;
+                            let s2 = qp_c2.get_set()?;
+                            let res_set = (s1) / (s2);
+                            let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
+                            let final_cost = s1.len() * s2.len();
+                            if self.outputs.contains(&idx) {
+                                cost += final_cost
+                            } else {
+                                cost += inter_cost;
+                            }
+                            n.set = Some((res_set, inter_cost, final_cost));
                         }
-                        n.set = Some((res_set, inter_cost, final_cost));
                         map.insert(idx, node.clone());
                     }
                 }
