@@ -1,3 +1,4 @@
+pub mod egg_qp;
 pub mod query_obj;
 pub mod query_param;
 pub mod query_plan;
@@ -401,8 +402,8 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                 Some(d) => obj_hash = d,
                 None => {
                     delta_set = &delta_set | &Set::from_single_element(*i);
-                    continue
-                },
+                    continue;
+                }
             }
             let obj = chain.read_object(obj_hash)?;
             obj_map.insert(obj_id, obj);
