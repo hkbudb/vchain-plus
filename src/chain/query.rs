@@ -453,11 +453,10 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
 
 #[allow(clippy::type_complexity)]
 fn select_win_size<K: Num>(
-    mut win_sizes: Vec<u64>,
+    win_sizes: &Vec<u64>,
     query_param: QueryParam<K>,
 ) -> Result<Vec<(QueryParam<K>, Option<u64>, u64)>> {
     let mut res = Vec::<(QueryParam<K>, Option<u64>, u64)>::new();
-    win_sizes.sort_unstable();
     let mut cur_param = query_param;
     let max = *win_sizes.last().context("No time window")?;
     while cur_param.get_end() + 1 >= max + cur_param.get_start() {
@@ -503,14 +502,15 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
     pk: &AccPublicKey,
 ) -> Result<(Vec<(HashMap<ObjId, Object<K>>, VO<K>)>, QueryTime)> {
     let chain_param = &chain.get_parameter()?;
-    let chain_win_sizes = chain_param.time_win_sizes.clone();
+    let chain_win_sizes = &chain_param.time_win_sizes;
     let mut result = Vec::<(HashMap<ObjId, Object<K>>, VO<K>)>::new();
     let mut stage1_time = Vec::<ProcessDuration>::new();
     let mut stage2_time = Vec::<ProcessDuration>::new();
     let mut stage3_time = Vec::<ProcessDuration>::new();
     let timer = howlong::ProcessCPUTimer::new();
     let query_params = select_win_size(chain_win_sizes, query_param)?;
-
+    let time = timer.elapsed();
+    debug!("Select time win: {}", time);
     for (q_param, s_win_size, e_win_size) in query_params {
         let sub_timer = howlong::ProcessCPUTimer::new();
         //let query = q_param.into_query_basic(s_win_size, e_win_size)?;
@@ -575,7 +575,7 @@ mod tests {
             range: vec![],
             keyword_exp: Some(Node::Input("a".to_string())),
         };
-        let res = select_win_size(vec![4], query_param.clone()).unwrap();
+        let res = select_win_size(&vec![4], query_param.clone()).unwrap();
         let exp = vec![(query_param, Some(4), 4)];
         assert_eq!(res, exp);
         let query_param = QueryParam::<u32> {
@@ -584,7 +584,7 @@ mod tests {
             range: vec![],
             keyword_exp: Some(Node::Input("a".to_string())),
         };
-        let res = select_win_size(vec![4], query_param.clone()).unwrap();
+        let res = select_win_size(&vec![4], query_param.clone()).unwrap();
         let exp = vec![(query_param, None, 4)];
         assert_eq!(res, exp);
         let query_param = QueryParam::<u32> {
@@ -593,7 +593,7 @@ mod tests {
             range: vec![],
             keyword_exp: Some(Node::Input("a".to_string())),
         };
-        let res = select_win_size(vec![4], query_param).unwrap();
+        let res = select_win_size(&vec![4], query_param).unwrap();
         let exp = vec![
             (
                 QueryParam::<u32> {
@@ -623,7 +623,7 @@ mod tests {
             range: vec![],
             keyword_exp: Some(Node::Input("a".to_string())),
         };
-        let res = select_win_size(vec![4, 8], query_param.clone()).unwrap();
+        let res = select_win_size(&vec![4, 8], query_param.clone()).unwrap();
         let exp = vec![(query_param, Some(4), 8)];
         assert_eq!(res, exp);
         let query_param = QueryParam::<u32> {
@@ -632,7 +632,7 @@ mod tests {
             range: vec![],
             keyword_exp: Some(Node::Input("a".to_string())),
         };
-        let res = select_win_size(vec![4, 8], query_param.clone()).unwrap();
+        let res = select_win_size(&vec![4, 8], query_param.clone()).unwrap();
         let exp = vec![(query_param, None, 8)];
         assert_eq!(res, exp);
         let query_param = QueryParam::<u32> {
@@ -641,7 +641,7 @@ mod tests {
             range: vec![],
             keyword_exp: Some(Node::Input("a".to_string())),
         };
-        let res = select_win_size(vec![4, 8], query_param).unwrap();
+        let res = select_win_size(&vec![4, 8], query_param).unwrap();
         let exp = vec![
             (
                 QueryParam::<u32> {
@@ -671,7 +671,7 @@ mod tests {
             range: vec![],
             keyword_exp: Some(Node::Input("a".to_string())),
         };
-        let res = select_win_size(vec![4, 8], query_param).unwrap();
+        let res = select_win_size(&vec![4, 8], query_param).unwrap();
         let exp = vec![
             (
                 QueryParam::<u32> {

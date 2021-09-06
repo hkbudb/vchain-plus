@@ -986,7 +986,7 @@ mod tests {
         });
         let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
         let time_wins: Vec<u64> = vec![4];
-        let query_params = select_win_size(time_wins, query_param).unwrap();
+        let query_params = select_win_size(&time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
             let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
@@ -1001,7 +1001,7 @@ mod tests {
         });
         let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
         let time_wins: Vec<u64> = vec![4];
-        let query_params = select_win_size(time_wins, query_param).unwrap();
+        let query_params = select_win_size(&time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
             let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
@@ -1016,7 +1016,7 @@ mod tests {
         });
         let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
         let time_wins: Vec<u64> = vec![4];
-        let query_params = select_win_size(time_wins, query_param).unwrap();
+        let query_params = select_win_size(&time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
             let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
@@ -1033,7 +1033,7 @@ mod tests {
         });
         let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
         let time_wins: Vec<u64> = vec![4];
-        let query_params = select_win_size(time_wins, query_param).unwrap();
+        let query_params = select_win_size(&time_wins, query_param).unwrap();
         for (q_param, s_win_size, e_win_size) in query_params {
             let query = q_param.into_query_basic(s_win_size, e_win_size).unwrap();
             let query_dag = query.query_dag;
