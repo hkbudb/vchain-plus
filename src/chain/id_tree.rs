@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Result;
 use hash::{id_tree_leaf_hash, id_tree_non_leaf_hash, id_tree_root_hash};
 use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::num::NonZeroU64;
 
 create_id_type!(IdTreeNodeId);
@@ -158,8 +158,8 @@ impl IdTreeNonLeafNode {
     pub fn new_ept() -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
-            child_hashes: SmallVec::from_vec(vec![Digest::zero(); MAX_INLINE_FANOUT]),
-            child_ids: SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_INLINE_FANOUT]),
+            child_hashes: smallvec![Digest::zero(); MAX_INLINE_FANOUT],
+            child_ids: smallvec![IdTreeNodeId(0); MAX_INLINE_FANOUT],
         }
     }
 
