@@ -199,7 +199,17 @@ impl From<ProcessDuration> for Time {
 #[cfg(test)]
 mod tests {
     use super::{load_query_param_from_file, KeyPair};
-    use crate::{chain::{block::Height, object::Object, query::{query_param::QueryParam, query_plan::{QPKeywordNode, QPNode, QPUnion}}}, utils::load_raw_obj_from_str};
+    use crate::{
+        chain::{
+            block::Height,
+            object::Object,
+            query::{
+                query_param::QueryParam,
+                query_plan::{QPKeywordNode, QPNode, QPUnion},
+            },
+        },
+        utils::load_raw_obj_from_str,
+    };
     use petgraph::Graph;
     use serde_json::json;
     use std::{collections::BTreeMap, path::Path};
