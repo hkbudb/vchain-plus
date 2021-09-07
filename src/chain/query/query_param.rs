@@ -145,115 +145,6 @@ impl<K: Num> QueryParam<K> {
             keyword_exp: self.keyword_exp.clone(),
         }
     }
-
-    pub fn into_query_trimmed<T: ReadInterface<K = K>>(
-        self,
-        chain: &T,
-        pk: &AccPublicKey,
-        start_win_size: Option<u64>,
-        end_win_size: u64,
-    ) -> Result<Query<K>> {
-        // query at start point, without any planning
-        let start_blk_height = Height(self.start_blk);
-        let end_blk_height = Height(self.end_blk);
-        let keyword_exp_opt = self.keyword_exp;
-        let mut query_dag = Graph::<QueryNode<K>, bool>::new();
-        let mut heights = Vec::<(u64, Height)>::new();
-        if let Some(win_size) = start_win_size {
-            if start_blk_height.0 > 1 {
-                heights.push((win_size, Height(start_blk_height.0 - 1)));
-            }
-        }
-        heights.push((end_win_size, end_blk_height));
-        debug!("heights: {:?}", heights);
-
-        let has_keyword_query: bool;
-        let has_range_query: bool;
-
-        match keyword_exp_opt {
-            Some(_) => has_keyword_query = true,
-            None => has_keyword_query = false,
-        }
-
-        if self.range.is_empty() {
-            has_range_query = false;
-        } else {
-            has_range_query = true;
-        }
-
-        let mut sub_root_idxes = Vec::<NodeIndex>::new();
-        for (win_size, height) in heights {
-            let mut keyword_root_idx: NodeIndex = NodeIndex::default();
-            let mut range_root_idx: NodeIndex = NodeIndex::default();
-
-            if let Some(keyword_exp) = keyword_exp_opt.as_ref() {
-                keyword_root_idx =
-                    dag_add_keyword_exp(keyword_exp, &mut query_dag, height, win_size)?;
-            }
-
-            if has_range_query {
-                let mut range_nodes = Vec::<(usize, NodeIndex, Set)>::new();
-                for (i, r) in self.range.iter().enumerate() {
-                    let mut range_node = RangeNode {
-                        range: *r,
-                        blk_height: height,
-                        time_win: win_size,
-                        dim: i,
-                        set: None,
-                    };
-                    range_node.estimate_size(chain, pk)?;
-                    let set = range_node.set.as_ref().context("No set found")?.0.clone();
-                    let range_size = set.len();
-                    let range_idx = query_dag.add_node(QueryNode::Range(range_node));
-                    range_nodes.push((range_size, range_idx, set));
-                }
-                let sorted_idxes = get_range_idxs_sorted(range_nodes);
-                let mut range_lock = false;
-                for idx in sorted_idxes {
-                    if range_lock {
-                        let intersec_idx =
-                            query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                        query_dag.add_edge(intersec_idx, range_root_idx, true);
-                        query_dag.add_edge(intersec_idx, idx, false);
-                        range_root_idx = intersec_idx;
-                        continue;
-                    }
-                    range_root_idx = idx;
-                    range_lock = true;
-                }
-            }
-            let sub_root_idx: NodeIndex;
-
-            if has_keyword_query && has_range_query {
-                debug!("has both keyword and range query");
-                sub_root_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                query_dag.add_edge(sub_root_idx, range_root_idx, true);
-                query_dag.add_edge(sub_root_idx, keyword_root_idx, false);
-            } else if has_keyword_query {
-                debug!("has keyword query only");
-                sub_root_idx = keyword_root_idx;
-            } else if has_range_query {
-                debug!("has range query only");
-                sub_root_idx = range_root_idx;
-            } else {
-                debug!("invalid query");
-                bail!("query invalid");
-            }
-            sub_root_idxes.push(sub_root_idx);
-        }
-        if sub_root_idxes.len() > 1 {
-            let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-            query_dag.add_edge(diff_idx, *sub_root_idxes.get(0).context("")?, true);
-            query_dag.add_edge(diff_idx, *sub_root_idxes.get(1).context("")?, false);
-        }
-        let res_query = Query {
-            end_blk_height,
-            query_dag,
-            trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
-        };
-
-        Ok(res_query)
-    }
 }
 
 #[allow(clippy::type_complexity)]
@@ -343,6 +234,115 @@ pub fn param_to_query_basic<K: Num>(
         query_dag,
         trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
     };
+    Ok(res_query)
+}
+
+pub fn param_to_query_trimmed<K: Num, T: ReadInterface<K = K>>(
+    time_win: TimeWin,
+    query_content: &QueryContent<K>,
+    chain: &T,
+    pk: &AccPublicKey,
+    start_win_size: Option<u64>,
+    end_win_size: u64,
+) -> Result<Query<K>> {
+    // query at start point, without any planning
+    let start_blk_height = Height(time_win.start_blk);
+    let end_blk_height = Height(time_win.end_blk);
+    let keyword_exp_opt = query_content.keyword_exp.as_ref();
+    let mut query_dag = Graph::<QueryNode<K>, bool>::new();
+    let mut heights = Vec::<(u64, Height)>::new();
+    if let Some(win_size) = start_win_size {
+        if start_blk_height.0 > 1 {
+            heights.push((win_size, Height(start_blk_height.0 - 1)));
+        }
+    }
+    heights.push((end_win_size, end_blk_height));
+    debug!("heights: {:?}", heights);
+
+    let has_keyword_query: bool;
+    let has_range_query: bool;
+
+    match keyword_exp_opt {
+        Some(_) => has_keyword_query = true,
+        None => has_keyword_query = false,
+    }
+
+    if query_content.range.is_empty() {
+        has_range_query = false;
+    } else {
+        has_range_query = true;
+    }
+
+    let mut sub_root_idxes = Vec::<NodeIndex>::new();
+    for (win_size, height) in heights {
+        let mut keyword_root_idx: NodeIndex = NodeIndex::default();
+        let mut range_root_idx: NodeIndex = NodeIndex::default();
+
+        if let Some(keyword_exp) = keyword_exp_opt.as_ref() {
+            keyword_root_idx = dag_add_keyword_exp(keyword_exp, &mut query_dag, height, win_size)?;
+        }
+
+        if has_range_query {
+            let mut range_nodes = Vec::<(usize, NodeIndex, Set)>::new();
+            for (i, r) in query_content.range.iter().enumerate() {
+                let mut range_node = RangeNode {
+                    range: *r,
+                    blk_height: height,
+                    time_win: win_size,
+                    dim: i,
+                    set: None,
+                };
+                range_node.estimate_size(chain, pk)?;
+                let set = range_node.set.as_ref().context("No set found")?.0.clone();
+                let range_size = set.len();
+                let range_idx = query_dag.add_node(QueryNode::Range(range_node));
+                range_nodes.push((range_size, range_idx, set));
+            }
+            let sorted_idxes = get_range_idxs_sorted(range_nodes);
+            let mut range_lock = false;
+            for idx in sorted_idxes {
+                if range_lock {
+                    let intersec_idx =
+                        query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
+                    query_dag.add_edge(intersec_idx, range_root_idx, true);
+                    query_dag.add_edge(intersec_idx, idx, false);
+                    range_root_idx = intersec_idx;
+                    continue;
+                }
+                range_root_idx = idx;
+                range_lock = true;
+            }
+        }
+        let sub_root_idx: NodeIndex;
+
+        if has_keyword_query && has_range_query {
+            debug!("has both keyword and range query");
+            sub_root_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
+            query_dag.add_edge(sub_root_idx, range_root_idx, true);
+            query_dag.add_edge(sub_root_idx, keyword_root_idx, false);
+        } else if has_keyword_query {
+            debug!("has keyword query only");
+            sub_root_idx = keyword_root_idx;
+        } else if has_range_query {
+            debug!("has range query only");
+            sub_root_idx = range_root_idx;
+        } else {
+            debug!("invalid query");
+            bail!("query invalid");
+        }
+        sub_root_idxes.push(sub_root_idx);
+    }
+    if sub_root_idxes.len() > 1 {
+        let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode { set: None }));
+        query_dag.add_edge(diff_idx, *sub_root_idxes.get(0).context("")?, true);
+        query_dag.add_edge(diff_idx, *sub_root_idxes.get(1).context("")?, false);
+    }
+    let res_query = Query {
+        end_blk_height,
+        query_dag,
+        trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
+    };
+
     Ok(res_query)
 }
 
