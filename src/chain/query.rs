@@ -15,7 +15,7 @@ use crate::{
         object::Object,
         query::{
             query_obj::query_to_qp,
-            query_param::{param_to_query_basic, param_to_query_trimmed2},
+            query_param::{param_to_query_basic, param_to_query_trimmed, param_to_query_trimmed2},
             query_plan::QPNode,
         },
         range::Range,
@@ -36,10 +36,12 @@ use petgraph::algo::toposort;
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use query_param::QueryParam;
 use query_plan::QueryPlan;
+use rayon::prelude::*;
 use smol_str::SmolStr;
 use std::collections::{BTreeMap, HashMap};
+use std::sync::mpsc::channel;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TimeWin {
     pub start_blk: u64,
     pub end_blk: u64,
@@ -61,6 +63,13 @@ impl TimeWin {
 pub struct QueryContent<K: Num> {
     pub range: Vec<Range<K>>,
     pub keyword_exp: Option<Node>,
+}
+
+pub struct QueryResInfo<K: Num> {
+    stage1: ProcessDuration,
+    stage2: ProcessDuration,
+    stage3: ProcessDuration,
+    res: (HashMap<ObjId, Object<K>>, VO<K>),
 }
 
 #[allow(clippy::type_complexity)]
@@ -506,7 +515,43 @@ fn select_win_size(
 }
 
 #[allow(clippy::type_complexity)]
-pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
+pub fn sub_query_process<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
+    opt_level: u8,
+    time_win: TimeWin,
+    s_win_size: Option<u64>,
+    e_win_size: u64,
+    query_content: &QueryContent<K>,
+    chain: &T,
+    pk: &AccPublicKey,
+) -> Result<QueryResInfo<K>> {
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let query = match opt_level {
+        0 => param_to_query_basic(time_win, query_content, s_win_size, e_win_size)?,
+        1 => param_to_query_trimmed2(time_win, query_content, chain, pk, s_win_size, e_win_size)?,
+        2 => param_to_query_trimmed(time_win, query_content, chain, pk, s_win_size, e_win_size)?,
+        _ => bail!("invalid opt level"),
+    };
+    let time1 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let query_plan = query_to_qp(query)?;
+    let time2 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    //let cost = query_plan.estimate_cost(&chain, pk)?;
+    let res = query_final(chain, query_plan, pk)?;
+    let time3 = sub_timer.elapsed();
+    Ok(QueryResInfo {
+        stage1: time1,
+        stage2: time2,
+        stage3: time3,
+        res,
+    })
+}
+
+#[allow(clippy::type_complexity)]
+pub fn query<
+    K: Num,
+    T: ReadInterface<K = K> + ScanQueryInterface<K = K> + std::marker::Sync + std::marker::Send,
+>(
     opt_level: u8,
     chain: T,
     query_param: QueryParam<K>,
@@ -522,43 +567,30 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
     let query_time_win = query_param.gen_time_win();
     let query_content = query_param.gen_query_content();
     let query_time_wins = select_win_size(chain_win_sizes, query_time_win)?;
-    let time = timer.elapsed();
-    debug!("Select time win: {}", time);
-    for (time_win, s_win_size, e_win_size) in query_time_wins {
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        let query = match opt_level {
-            0 => param_to_query_basic(time_win, &query_content, s_win_size, e_win_size)?,
-            1 => param_to_query_trimmed2(
-                time_win,
+    let (sender, receiver) = channel();
+
+    query_time_wins
+        .par_iter()
+        .for_each_with(sender, |s, (time_win, s_win_size, e_win_size)| {
+            s.send(sub_query_process(
+                opt_level,
+                *time_win,
+                *s_win_size,
+                *e_win_size,
                 &query_content,
                 &chain,
                 pk,
-                s_win_size,
-                e_win_size,
-            )?,
-            _ => bail!("invalid opt level"),
-        };
-        let time = sub_timer.elapsed();
-        debug!("Stage1: {}", time);
-        stage1_time.push(time);
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        let mut query_plan = query_to_qp(query)?;
-        let time = sub_timer.elapsed();
-        debug!("Stage2: {}", time);
-        stage2_time.push(time);
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        let cost = query_plan.estimate_cost(&chain, pk)?;
-        let time = sub_timer.elapsed();
-        debug!(
-            "cost estimate for the query plan: {}, time elapsed: {}",
-            cost, time
-        );
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        let res = query_final(&chain, query_plan, pk)?;
-        let time = sub_timer.elapsed();
-        debug!("Stage3: {}", time);
-        stage3_time.push(time);
-        result.push(res);
+            ))
+            .expect("Sending msg between threads failed");
+        });
+    let responses: Vec<_> = receiver.iter().collect();
+
+    for response in responses {
+        let a = response?;
+        stage1_time.push(a.stage1);
+        stage2_time.push(a.stage2);
+        stage3_time.push(a.stage3);
+        result.push(a.res);
     }
     let total_query_time = Time::from(timer.elapsed());
     let mut stage1_total_time: ProcessDuration = ProcessDuration::default();
@@ -587,9 +619,23 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
 mod tests {
     use super::TimeWin;
     use crate::chain::query::select_win_size;
+    use rayon::prelude::*;
+    use std::sync::mpsc::channel;
+
+    fn fibonacci(n: u64) -> u64 {
+        match n {
+            0 => 0,
+            1 => 1,
+            m => fibonacci(m - 1) + fibonacci(m - 2),
+        }
+    }
+
+    fn transf(n: u64) -> (u64, String) {
+        (n, "a".to_string())
+    }
 
     #[test]
-    fn test_select_win_size2() {
+    fn test_select_win_size() {
         let query_time_win = TimeWin::new(1, 12);
         let res = select_win_size(&vec![2, 4, 8], query_time_win).unwrap();
         let exp = vec![
@@ -613,5 +659,29 @@ mod tests {
             (TimeWin::new(13, 14), None, 2),
         ];
         assert_eq!(res, exp);
+    }
+
+    #[test]
+    fn test_rayon() {
+        let timer = howlong::ProcessCPUTimer::new();
+        let mut arr = [40, 40, 40, 40];
+        arr.par_iter_mut().for_each(|p| *p = fibonacci(*p));
+        let time = timer.elapsed();
+        println!("time: {:?}, res: {:?}", time, arr);
+        let timer = howlong::ProcessCPUTimer::new();
+        let mut arr = [40, 40, 40, 40];
+        for i in arr.iter_mut() {
+            *i = fibonacci(*i);
+        }
+        let time = timer.elapsed();
+        println!("time: {:?}, res: {:?}", time, arr);
+
+        let (sender, receiver) = channel();
+        let arr = [1, 2, 3, 4];
+        arr.par_iter()
+            .for_each_with(sender, |s, p| s.send(transf(*p)).unwrap());
+        let res: Vec<_> = receiver.iter().collect();
+        println!("{:?}", res);
+        assert_eq!(1, 1);
     }
 }
