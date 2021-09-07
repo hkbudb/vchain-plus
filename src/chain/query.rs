@@ -482,7 +482,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
 
 #[allow(clippy::type_complexity)]
 fn select_win_size(
-    win_sizes: &Vec<u64>,
+    win_sizes: &[u64],
     query_time_win: TimeWin,
 ) -> Result<Vec<(TimeWin, Option<u64>, u64)>> {
     let mut res = Vec::<(TimeWin, Option<u64>, u64)>::new();
@@ -507,6 +507,7 @@ fn select_win_size(
 
 #[allow(clippy::type_complexity)]
 pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
+    opt_level: u8,
     chain: T,
     query_param: QueryParam<K>,
     pk: &AccPublicKey,
@@ -525,9 +526,18 @@ pub fn query<K: Num, T: ReadInterface<K = K> + ScanQueryInterface<K = K>>(
     debug!("Select time win: {}", time);
     for (time_win, s_win_size, e_win_size) in query_time_wins {
         let sub_timer = howlong::ProcessCPUTimer::new();
-        //let query = param_to_query_basic(time_win, &query_content, s_win_size, e_win_size)?;
-        let query =
-            param_to_query_trimmed2(time_win, &query_content, &chain, pk, s_win_size, e_win_size)?;
+        let query = match opt_level {
+            0 => param_to_query_basic(time_win, &query_content, s_win_size, e_win_size)?,
+            1 => param_to_query_trimmed2(
+                time_win,
+                &query_content,
+                &chain,
+                pk,
+                s_win_size,
+                e_win_size,
+            )?,
+            _ => bail!("invalid opt level"),
+        };
         let time = sub_timer.elapsed();
         debug!("Stage1: {}", time);
         stage1_time.push(time);
