@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Result;
 use hash::{id_tree_leaf_hash, id_tree_non_leaf_hash, id_tree_root_hash};
 use serde::{Deserialize, Serialize};
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 use std::num::NonZeroU64;
 
 create_id_type!(IdTreeNodeId);
