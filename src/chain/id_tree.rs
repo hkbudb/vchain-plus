@@ -1,5 +1,5 @@
 use crate::{
-    chain::MAX_INLINE_FANOUT,
+    chain::ID_FANOUT,
     create_id_type,
     digest::{Digest, Digestible},
 };
@@ -139,14 +139,14 @@ impl Digestible for IdTreeLeafNode {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct IdTreeNonLeafNode {
     pub id: IdTreeNodeId,
-    pub child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
-    pub child_ids: SmallVec<[IdTreeNodeId; MAX_INLINE_FANOUT]>,
+    pub child_hashes: SmallVec<[Digest; ID_FANOUT]>,
+    pub child_ids: SmallVec<[IdTreeNodeId; ID_FANOUT]>,
 }
 
 impl IdTreeNonLeafNode {
     pub fn new(
-        child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
-        child_ids: SmallVec<[IdTreeNodeId; MAX_INLINE_FANOUT]>,
+        child_hashes: SmallVec<[Digest; ID_FANOUT]>,
+        child_ids: SmallVec<[IdTreeNodeId; ID_FANOUT]>,
     ) -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
@@ -158,8 +158,8 @@ impl IdTreeNonLeafNode {
     pub fn new_ept() -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
-            child_hashes: smallvec![Digest::zero(); MAX_INLINE_FANOUT],
-            child_ids: smallvec![IdTreeNodeId(0); MAX_INLINE_FANOUT],
+            child_hashes: smallvec![Digest::zero(); ID_FANOUT],
+            child_ids: smallvec![IdTreeNodeId(0); ID_FANOUT],
         }
     }
 
