@@ -9,21 +9,21 @@ cargo run --release --bin gen_query -- -r -t 500 -d 1 -s 0.05 -i ./data/db/eth-s
 cargo run --release --bin gen_query -- -r -t 1000 -d 1 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/range_t1000_s1
 
 printf "generating keyword queries"
-cargo run --release --bin gen_query -- -k -f -t 10 -n 1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t10_n1
-cargo run --release --bin gen_query -- -k -f -t 10 -n 2 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t10_n2
-cargo run --release --bin gen_query -- -k -f -t 10 -n 4 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t10_n4
-cargo run --release --bin gen_query -- -k -f -t 50 -n 1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t50_n1
-cargo run --release --bin gen_query -- -k -f -t 50 -n 2 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t50_n2
-cargo run --release --bin gen_query -- -k -f -t 50 -n 4 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t50_n4
-cargo run --release --bin gen_query -- -k -f -t 100 -n 1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t100_n1
-cargo run --release --bin gen_query -- -k -f -t 100 -n 2 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t100_n2
-cargo run --release --bin gen_query -- -k -f -t 100 -n 4 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t100_n4
-cargo run --release --bin gen_query -- -k -f -t 500 -n 1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t500_n1
-cargo run --release --bin gen_query -- -k -f -t 500 -n 2 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t500_n2
-cargo run --release --bin gen_query -- -k -f -t 500 -n 4 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t500_n4
-cargo run --release --bin gen_query -- -k -f -t 1000 -n 1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t1000_n1
-cargo run --release --bin gen_query -- -k -f -t 1000 -n 2 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t1000_n2
-cargo run --release --bin gen_query -- -k -f -t 1000 -n 4 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t1000_n4
+cargo run --release --bin gen_query -- -k -f -t 10 -n 1 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t10_n1
+cargo run --release --bin gen_query -- -k -f -t 10 -n 2 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t10_n2
+cargo run --release --bin gen_query -- -k -f -t 10 -n 4 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t10_n4
+cargo run --release --bin gen_query -- -k -f -t 50 -n 1 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t50_n1
+cargo run --release --bin gen_query -- -k -f -t 50 -n 2 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t50_n2
+cargo run --release --bin gen_query -- -k -f -t 50 -n 4 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t50_n4
+cargo run --release --bin gen_query -- -k -f -t 100 -n 1 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t100_n1
+cargo run --release --bin gen_query -- -k -f -t 100 -n 2 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t100_n2
+cargo run --release --bin gen_query -- -k -f -t 100 -n 4 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t100_n4
+cargo run --release --bin gen_query -- -k -f -t 500 -n 1 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t500_n1
+cargo run --release --bin gen_query -- -k -f -t 500 -n 2 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t500_n2
+cargo run --release --bin gen_query -- -k -f -t 500 -n 4 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t500_n4
+cargo run --release --bin gen_query -- -k -f -t 1000 -n 1 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t1000_n1
+cargo run --release --bin gen_query -- -k -f -t 1000 -n 2 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t1000_n2
+cargo run --release --bin gen_query -- -k -f -t 1000 -n 4 -s 0.1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/keyword_t1000_n4
 
 printf "generating keyword range queries"
 cargo run --release --bin gen_query -- -b -f -t 10 -d 1 -s 0.0001 -n 1 -i ./data/db/eth-small_381_t8_id4_b8 -o ./data/query/generated_query/both_t10_n1
