@@ -24,7 +24,6 @@ use vchain_plus::{
 
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.1;
-const GAP: u32 = 10000;
 const START_COEFFICIENT: u32 = 10000000;
 // 0: no special requirement
 // 1: all opt should be AND
@@ -39,6 +38,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     chain: T,
     obj_num: u64,
     blk_num: u64,
+    gap: u32,
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
     let mut start_blk_height;
@@ -110,15 +110,15 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
             let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h + GAP
+            if h + gap
                 < num_scopes
                     .get(dim)
                     .context("Range does not exist")?
                     .get_high()
             {
-                new_sub_range = Range::new(l, h + GAP);
+                new_sub_range = Range::new(l, h + gap);
             } else {
-                new_sub_range = Range::new(l - GAP, h);
+                new_sub_range = Range::new(l - gap, h);
             }
             modified_dim = dim;
         } else {
@@ -128,8 +128,8 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
 
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h > l + GAP {
-                new_sub_range = Range::new(l, h - GAP);
+            if h > l + gap {
+                new_sub_range = Range::new(l, h - gap);
             } else {
                 bail!("Cannot reduce the range anymore");
             }
@@ -379,6 +379,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     not_prob: f64,
     keyword_num: usize,
     for_tx: bool,
+    gap: u32,
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
     let mut start_blk_height;
@@ -440,15 +441,15 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
             let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h + GAP
+            if h + gap
                 < num_scopes
                     .get(dim)
                     .context("Range does not exist")?
                     .get_high()
             {
-                new_sub_range = Range::new(l, h + GAP);
+                new_sub_range = Range::new(l, h + gap);
             } else {
-                new_sub_range = Range::new(l - GAP, h);
+                new_sub_range = Range::new(l - gap, h);
             }
             modified_dim = dim;
         } else {
@@ -457,8 +458,8 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
 
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h > l + GAP {
-                new_sub_range = Range::new(l, h - GAP);
+            if h > l + gap {
+                new_sub_range = Range::new(l, h - gap);
             } else {
                 bail!("Cannot reduce the range anymore");
             }
@@ -644,6 +645,10 @@ struct Opt {
     #[structopt(short, long, default_value = "1")]
     dim_num: usize,
 
+    /// gap
+    #[structopt(short, long, default_value = "1000")]
+    gap: u32,
+
     /// selectivity for range query
     #[structopt(short, long)]
     selectivity: f64,
@@ -691,6 +696,7 @@ fn main() -> Result<()> {
                 &chain,
                 obj_num,
                 blk_num,
+                opts.gap,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
             query_for_plus.push(query_param_plus);
@@ -733,6 +739,7 @@ fn main() -> Result<()> {
                 opts.prob_not,
                 opts.num_keywords,
                 opts.for_tx,
+                opts.gap,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
             query_for_plus.push(query_param_plus);
