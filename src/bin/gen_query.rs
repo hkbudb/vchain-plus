@@ -269,7 +269,7 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
             v_1.push(Node::Input(keyword.to_string()));
         }
         if v_1.len() == 1 {
-            node = v_1.get(0).cloned().context("")?;
+            node = v_1.get(0).cloned().context("v_1 is empty")?;
         } else {
             while v_1.len() > 1 {
                 loop {
@@ -281,16 +281,16 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
                     let n_1 = v_1.pop();
                     let n_2 = v_1.pop();
                     let new_n = if and_flag {
-                        Node::And(Box::new(AndNode(n_1.context("")?, n_2.context("")?)))
+                        Node::And(Box::new(AndNode(n_1.context("n_1 is none")?, n_2.context("n_2 is none")?)))
                     } else {
-                        Node::Or(Box::new(OrNode(n_1.context("")?, n_2.context("")?)))
+                        Node::Or(Box::new(OrNode(n_1.context("n_1 is none")?, n_2.context("n_2 is none")?)))
                     };
                     v_2.push(new_n);
                 }
                 and_flag = false;
                 v_1.append(&mut v_2);
             }
-            node = v_1.pop().context("")?;
+            node = v_1.pop().context("root is none")?;
         }
     } else {
         let mut lock = false;
@@ -517,7 +517,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
             v_1.push(Node::Input(keyword.to_string()));
         }
         if v_1.len() == 1 {
-            node = v_1.get(0).cloned().context("")?;
+            node = v_1.get(0).cloned().context("v_1 is empty")?;
         } else {
             while v_1.len() > 1 {
                 loop {
@@ -529,16 +529,16 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
                     let n_1 = v_1.pop();
                     let n_2 = v_1.pop();
                     let new_n = if and_flag {
-                        Node::And(Box::new(AndNode(n_1.context("")?, n_2.context("")?)))
+                        Node::And(Box::new(AndNode(n_1.context("n_1 is none")?, n_2.context("n_2 is none")?)))
                     } else {
-                        Node::Or(Box::new(OrNode(n_1.context("")?, n_2.context("")?)))
+                        Node::Or(Box::new(OrNode(n_1.context("n_1 is none")?, n_2.context("n_2 is none")?)))
                     };
                     v_2.push(new_n);
                 }
                 and_flag = false;
                 v_1.append(&mut v_2);
             }
-            node = v_1.pop().context("")?;
+            node = v_1.pop().context("root is none")?;
         }
     } else {
         let mut lock = false;
