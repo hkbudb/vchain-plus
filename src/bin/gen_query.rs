@@ -502,7 +502,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     vchain_range.push(vchain_range_end);
 
     // for keyword query
-    let keyword_domain = chain.get_keyword_info(start_blk_height, start_blk_height)?;
+    let keyword_domain = chain.get_keyword_info(start_blk_height, end_blk_height)?;
     let keyword_vec = Vec::from_iter(keyword_domain);
     let keywords_selected: Vec<&String> = keyword_vec
         .choose_multiple(&mut rand::thread_rng(), keyword_num)
