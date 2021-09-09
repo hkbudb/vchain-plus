@@ -481,6 +481,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
                 cur_res_set = cur_res_set.intersection(sub_res).cloned().collect();
             }
         }
+        debug!("cur_res_set_len: {}", cur_res_set.len());
     }
 
     let mut ranges = BTreeMap::<usize, Range<u32>>::new();
