@@ -40,7 +40,7 @@ with open(output,'a') as f:
                 stage3_t.append(int(query_info['stage3']['real']))
                 query_time.append(int(query_info['total']['real']))
                 verify_time.append(int(verify_info['verify_time']['real']))
-                total_vo_size.append(int(verify_info['vo_size']['total_vo_size']))
+                total_vo_size.append(int(verify_info['vo_size']['total_s']))
                 cur_id_s.append(int(verify_info['vo_size']['cur_id_s']))
                 merkle_s.append(int(verify_info['vo_size']['merkle_s']))
                 trie_proof_s.append(int(verify_info['vo_size']['trie_proof_s']))
