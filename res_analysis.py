@@ -14,9 +14,11 @@ with open(output,'a') as f:
     writer = csv.writer(f)
     writer.writerow(head)
     for db in db_dirs:
-        for q in q_dirs:
-            file_path = './data/result/'+DB_DIR+'/'+db+'/'+q+'.json'
-            file_id = db+'_'+q
+        files = os.listdir('./data/result/'+DB_DIR+'/'+db+'/')
+        for f in files:
+            file_path = './data/result/'+DB_DIR+'/'+db+'/'+f
+            file_id = db+'_'+f
+            file_id = file_id.replace('.json', '')
             print ("========processing file " + file_path)
             results_info = json.load(open(file_path))
             stage1_t = []
