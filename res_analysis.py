@@ -64,7 +64,7 @@ with open(output,'a') as f:
             print ("stage3: " + str(avg_stg3) + "ms")
             print ("query: " + str(avg_query_t) + "ms")
             print ("verify: " + str(avg_verify_t) + "ms")
-            print ("VO: " + str(avg_vo_size) + "bytes")
+            print ("VO: " + str(avg_total_vo_size) + "bytes")
 
 # target_path = sys.argv[1]
 # files = os.listdir(target_path) # os.listdir will list files and dirs
