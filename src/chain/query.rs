@@ -39,7 +39,6 @@ use query_plan::QueryPlan;
 use rayon::prelude::*;
 use smol_str::SmolStr;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::mpsc::channel;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TimeWin {
@@ -567,12 +566,12 @@ pub fn query<
     let query_time_win = query_param.gen_time_win();
     let query_content = query_param.gen_query_content();
     let query_time_wins = select_win_size(chain_win_sizes, query_time_win)?;
-    let (sender, receiver) = channel();
 
+    let mut responses = Vec::with_capacity(query_time_wins.len());
     query_time_wins
         .par_iter()
-        .for_each_with(sender, |s, (time_win, s_win_size, e_win_size)| {
-            s.send(sub_query_process(
+        .map(|(time_win, s_win_size, e_win_size)| {
+             sub_query_process(
                 opt_level,
                 *time_win,
                 *s_win_size,
@@ -580,10 +579,8 @@ pub fn query<
                 &query_content,
                 &chain,
                 pk,
-            ))
-            .expect("Sending msg between threads failed");
-        });
-    let responses: Vec<_> = receiver.iter().collect();
+            )
+        }).collect_into_vec(&mut responses);
 
     for response in responses {
         let a = response?;
@@ -619,20 +616,6 @@ pub fn query<
 mod tests {
     use super::TimeWin;
     use crate::chain::query::select_win_size;
-    use rayon::prelude::*;
-    use std::sync::mpsc::channel;
-
-    fn fibonacci(n: u64) -> u64 {
-        match n {
-            0 => 0,
-            1 => 1,
-            m => fibonacci(m - 1) + fibonacci(m - 2),
-        }
-    }
-
-    fn transf(n: u64) -> (u64, String) {
-        (n, "a".to_string())
-    }
 
     #[test]
     fn test_select_win_size() {
@@ -661,27 +644,4 @@ mod tests {
         assert_eq!(res, exp);
     }
 
-    #[test]
-    fn test_rayon() {
-        let timer = howlong::ProcessCPUTimer::new();
-        let mut arr = [40, 40, 40, 40];
-        arr.par_iter_mut().for_each(|p| *p = fibonacci(*p));
-        let time = timer.elapsed();
-        println!("time: {:?}, res: {:?}", time, arr);
-        let timer = howlong::ProcessCPUTimer::new();
-        let mut arr = [40, 40, 40, 40];
-        for i in arr.iter_mut() {
-            *i = fibonacci(*i);
-        }
-        let time = timer.elapsed();
-        println!("time: {:?}, res: {:?}", time, arr);
-
-        let (sender, receiver) = channel();
-        let arr = [1, 2, 3, 4];
-        arr.par_iter()
-            .for_each_with(sender, |s, p| s.send(transf(*p)).unwrap());
-        let res: Vec<_> = receiver.iter().collect();
-        println!("{:?}", res);
-        assert_eq!(1, 1);
-    }
 }
