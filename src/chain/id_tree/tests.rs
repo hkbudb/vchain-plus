@@ -9,7 +9,7 @@ use crate::{
         block::Height,
         id_tree::{IdTreeRoot, ObjId},
         object::Object,
-        MAX_INLINE_FANOUT,
+        ID_FANOUT,
     },
     digest::{blake2, Digest, Digestible},
 };
@@ -34,8 +34,8 @@ fn create_id_tree_leaf(
 
 fn create_id_tree_non_leaf(
     id: IdTreeNodeId,
-    child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
-    child_ids: SmallVec<[IdTreeNodeId; MAX_INLINE_FANOUT]>,
+    child_hashes: SmallVec<[Digest; ID_FANOUT]>,
+    child_ids: SmallVec<[IdTreeNodeId; ID_FANOUT]>,
 ) -> IdTreeNonLeafNode {
     IdTreeNonLeafNode {
         id,
@@ -172,11 +172,11 @@ fn build_test_id_tree0() -> TestIdTree {
     let leaf3_hash = leaf3.to_digest();
     id_tree.nodes.insert(leaf3_id, IdTreeNode::Leaf(leaf3));
 
-    let mut non_leaf1_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_INLINE_FANOUT]);
+    let mut non_leaf1_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); ID_FANOUT]);
     non_leaf1_child_ids[0] = leaf1_id;
     non_leaf1_child_ids[1] = leaf2_id;
     non_leaf1_child_ids[2] = leaf3_id;
-    let mut non_leaf1_child_hashes = SmallVec::from_vec(vec![Digest::zero(); MAX_INLINE_FANOUT]);
+    let mut non_leaf1_child_hashes = SmallVec::from_vec(vec![Digest::zero(); ID_FANOUT]);
     non_leaf1_child_hashes[0] = leaf1_hash;
     non_leaf1_child_hashes[1] = leaf2_hash;
     non_leaf1_child_hashes[2] = leaf3_hash;
@@ -213,11 +213,11 @@ fn build_test_id_tree1() -> TestIdTree {
     let leaf3_hash = leaf3.to_digest();
     id_tree.nodes.insert(leaf3_id, IdTreeNode::Leaf(leaf3));
 
-    let mut non_leaf1_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_INLINE_FANOUT]);
+    let mut non_leaf1_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); ID_FANOUT]);
     non_leaf1_child_ids[0] = leaf1_id;
     non_leaf1_child_ids[1] = leaf2_id;
     non_leaf1_child_ids[2] = leaf3_id;
-    let mut non_leaf1_child_hashes = SmallVec::from_vec(vec![Digest::zero(); MAX_INLINE_FANOUT]);
+    let mut non_leaf1_child_hashes = SmallVec::from_vec(vec![Digest::zero(); ID_FANOUT]);
     non_leaf1_child_hashes[0] = leaf1_hash;
     non_leaf1_child_hashes[1] = leaf2_hash;
     non_leaf1_child_hashes[2] = leaf3_hash;
@@ -250,11 +250,11 @@ fn build_test_id_tree1() -> TestIdTree {
     let leaf6_hash = leaf6.to_digest();
     id_tree.nodes.insert(leaf6_id, IdTreeNode::Leaf(leaf6));
 
-    let mut non_leaf2_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_INLINE_FANOUT]);
+    let mut non_leaf2_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); ID_FANOUT]);
     non_leaf2_child_ids[0] = leaf4_id;
     non_leaf2_child_ids[1] = leaf5_id;
     non_leaf2_child_ids[2] = leaf6_id;
-    let mut non_leaf2_child_hashes = SmallVec::from_vec(vec![Digest::zero(); MAX_INLINE_FANOUT]);
+    let mut non_leaf2_child_hashes = SmallVec::from_vec(vec![Digest::zero(); ID_FANOUT]);
     non_leaf2_child_hashes[0] = leaf4_hash;
     non_leaf2_child_hashes[1] = leaf5_hash;
     non_leaf2_child_hashes[2] = leaf6_hash;
@@ -287,11 +287,11 @@ fn build_test_id_tree1() -> TestIdTree {
     let leaf9_hash = leaf9.to_digest();
     id_tree.nodes.insert(leaf9_id, IdTreeNode::Leaf(leaf9));
 
-    let mut non_leaf3_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_INLINE_FANOUT]);
+    let mut non_leaf3_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); ID_FANOUT]);
     non_leaf3_child_ids[0] = leaf7_id;
     non_leaf3_child_ids[1] = leaf8_id;
     non_leaf3_child_ids[2] = leaf9_id;
-    let mut non_leaf3_child_hashes = SmallVec::from_vec(vec![Digest::zero(); MAX_INLINE_FANOUT]);
+    let mut non_leaf3_child_hashes = SmallVec::from_vec(vec![Digest::zero(); ID_FANOUT]);
     non_leaf3_child_hashes[0] = leaf7_hash;
     non_leaf3_child_hashes[1] = leaf8_hash;
     non_leaf3_child_hashes[2] = leaf9_hash;
@@ -306,11 +306,11 @@ fn build_test_id_tree1() -> TestIdTree {
         .nodes
         .insert(non_leaf3_id, IdTreeNode::NonLeaf(Box::new(non_leaf3)));
 
-    let mut non_leaf4_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_INLINE_FANOUT]);
+    let mut non_leaf4_child_ids = SmallVec::from_vec(vec![IdTreeNodeId(0); ID_FANOUT]);
     non_leaf4_child_ids[0] = non_leaf1_id;
     non_leaf4_child_ids[1] = non_leaf2_id;
     non_leaf4_child_ids[2] = non_leaf3_id;
-    let mut non_leaf4_child_hashes = SmallVec::from_vec(vec![Digest::zero(); MAX_INLINE_FANOUT]);
+    let mut non_leaf4_child_hashes = SmallVec::from_vec(vec![Digest::zero(); ID_FANOUT]);
     non_leaf4_child_hashes[0] = non_leaf1_hash;
     non_leaf4_child_hashes[1] = non_leaf2_hash;
     non_leaf4_child_hashes[2] = non_leaf3_hash;

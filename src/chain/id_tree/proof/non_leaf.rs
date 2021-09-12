@@ -2,7 +2,7 @@ use crate::{
     chain::id_tree::{
         hash::id_tree_non_leaf_proof_hash,
         proof::{sub_proof::SubProof, sub_tree::IdTreeSubTree},
-        IdTreeInternalId, IdTreeNodeId, MAX_INLINE_FANOUT,
+        IdTreeInternalId, IdTreeNodeId, ID_FANOUT,
     },
     digest::{Digest, Digestible},
 };
@@ -11,7 +11,7 @@ use smallvec::SmallVec;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct IdTreeNonLeaf {
-    pub(crate) children: SmallVec<[Option<Box<SubProof>>; MAX_INLINE_FANOUT]>,
+    pub(crate) children: SmallVec<[Option<Box<SubProof>>; ID_FANOUT]>,
 }
 
 impl Digestible for IdTreeNonLeaf {
@@ -32,7 +32,7 @@ impl Default for IdTreeNonLeaf {
                     IdTreeNodeId(0),
                     Digest::zero()
                 )));
-                MAX_INLINE_FANOUT
+                ID_FANOUT
             ]),
         }
     }
@@ -40,8 +40,8 @@ impl Default for IdTreeNonLeaf {
 
 impl IdTreeNonLeaf {
     pub(crate) fn from_hashes(
-        children: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
-        child_node_ids: SmallVec<[IdTreeNodeId; MAX_INLINE_FANOUT]>,
+        children: SmallVec<[Digest; ID_FANOUT]>,
+        child_node_ids: SmallVec<[IdTreeNodeId; ID_FANOUT]>,
     ) -> Self {
         let mut node = IdTreeNonLeaf::default();
         for (i, child) in children.iter().enumerate() {

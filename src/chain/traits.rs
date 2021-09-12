@@ -17,7 +17,17 @@ use rand::distributions::uniform::SampleUniform;
 use std::{collections::HashSet, fmt};
 
 pub trait Num:
-    num_traits::Num + Ord + Eq + Clone + Copy + fmt::Debug + Digestible + FromStr + SampleUniform
+    num_traits::Num
+    + Ord
+    + Eq
+    + Clone
+    + Copy
+    + fmt::Debug
+    + Digestible
+    + FromStr
+    + SampleUniform
+    + std::marker::Sync
+    + std::marker::Send
 {
 }
 
@@ -31,6 +41,8 @@ impl<T> Num for T where
         + Digestible
         + FromStr
         + SampleUniform
+        + std::marker::Sync
+        + std::marker::Send
 {
 }
 
