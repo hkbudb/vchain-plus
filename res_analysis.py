@@ -51,7 +51,7 @@ with open(output,'a') as f:
             avg_stg3 = statistics.mean(stage3_t) / 1000
             avg_query_t = statistics.mean(query_time) / 1000
             avg_verify_t = statistics.mean(verify_time) / 1000
-            avg_total_vo_size = statistics.mean(total_vo_size)
+            avg_total_vo_size = int(statistics.mean(total_vo_size))
             avg_cur_id_s = statistics.mean(cur_id_s)
             avg_merkle_s = statistics.mean(merkle_s)
             avg_trie_proof_s = statistics.mean(trie_proof_s)
