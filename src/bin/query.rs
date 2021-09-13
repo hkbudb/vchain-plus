@@ -13,6 +13,10 @@ use vchain_plus::{
 
 #[derive(StructOpt, Debug)]
 struct Opt {
+    /// optimization level
+    #[structopt(short, long, default_value = "1")]
+    opt_level: u8,
+
     /// verification thread number
     #[structopt(short, long, default_value = "4")]
     verify_thread_num: usize,
@@ -50,7 +54,7 @@ fn main() -> Result<()> {
         .build()?;
     for (i, q) in query_params.into_iter().enumerate() {
         info!("Processing query {}...", i);
-        let (results, time) = query(&chain, q, &pk)?;
+        let (results, time) = query(opts.opt_level, &chain, q, &pk)?;
         info!("Query time elapsed: {:?}", time);
 
         info!("Verifying query {}...", i);

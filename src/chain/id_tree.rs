@@ -1,5 +1,5 @@
 use crate::{
-    chain::MAX_INLINE_FANOUT,
+    chain::MAX_ININE_ID_FANOUT,
     create_id_type,
     digest::{Digest, Digestible},
 };
@@ -139,14 +139,14 @@ impl Digestible for IdTreeLeafNode {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct IdTreeNonLeafNode {
     pub id: IdTreeNodeId,
-    pub child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
-    pub child_ids: SmallVec<[IdTreeNodeId; MAX_INLINE_FANOUT]>,
+    pub child_hashes: SmallVec<[Digest; MAX_ININE_ID_FANOUT]>,
+    pub child_ids: SmallVec<[IdTreeNodeId; MAX_ININE_ID_FANOUT]>,
 }
 
 impl IdTreeNonLeafNode {
     pub fn new(
-        child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
-        child_ids: SmallVec<[IdTreeNodeId; MAX_INLINE_FANOUT]>,
+        child_hashes: SmallVec<[Digest; MAX_ININE_ID_FANOUT]>,
+        child_ids: SmallVec<[IdTreeNodeId; MAX_ININE_ID_FANOUT]>,
     ) -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
@@ -158,8 +158,8 @@ impl IdTreeNonLeafNode {
     pub fn new_ept() -> Self {
         Self {
             id: IdTreeNodeId::next_id(),
-            child_hashes: SmallVec::from_vec(vec![Digest::zero(); MAX_INLINE_FANOUT]),
-            child_ids: SmallVec::from_vec(vec![IdTreeNodeId(0); MAX_INLINE_FANOUT]),
+            child_hashes: SmallVec::new(),
+            child_ids: SmallVec::new(),
         }
     }
 
@@ -171,12 +171,20 @@ impl IdTreeNonLeafNode {
         self.child_ids.get_mut(idx)
     }
 
+    pub fn push_child_id(&mut self, id: IdTreeNodeId) {
+        self.child_ids.push(id);
+    }
+
     pub fn get_child_hash(&self, idx: usize) -> Option<&Digest> {
         self.child_hashes.get(idx)
     }
 
     pub fn get_child_hash_mut(&mut self, idx: usize) -> Option<&mut Digest> {
         self.child_hashes.get_mut(idx)
+    }
+
+    pub fn push_child_hash(&mut self, hash: Digest) {
+        self.child_hashes.push(hash);
     }
 }
 

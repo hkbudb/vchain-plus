@@ -5,7 +5,7 @@ use crate::{
         bplus_tree::{hash::bplus_tree_non_leaf_proof_hash, proof::sub_proof::SubProof},
         range::Range,
         traits::Num,
-        MAX_INLINE_FANOUT,
+        MAX_INLINE_BTREE_FANOUT,
     },
     digest::Digestible,
 };
@@ -16,7 +16,7 @@ use smallvec::SmallVec;
 pub(crate) struct BPlusTreeNonLeaf<K: Num> {
     pub(crate) range: Range<K>,
     pub(crate) acc_val: AccValue,
-    pub(crate) children: SmallVec<[Option<Box<SubProof<K>>>; MAX_INLINE_FANOUT]>,
+    pub(crate) children: SmallVec<[Option<Box<SubProof<K>>>; MAX_INLINE_BTREE_FANOUT]>,
 }
 
 impl<K: Num> Digestible for BPlusTreeNonLeaf<K> {
@@ -34,7 +34,7 @@ impl<K: Num> BPlusTreeNonLeaf<K> {
     pub(crate) fn from_hashes(
         range: Range<K>,
         acc_val: AccValue,
-        children: SmallVec<[Option<Box<SubProof<K>>>; MAX_INLINE_FANOUT]>,
+        children: SmallVec<[Option<Box<SubProof<K>>>; MAX_INLINE_BTREE_FANOUT]>,
     ) -> Self {
         Self {
             range,

@@ -15,13 +15,59 @@ use hash::{ads_hash, bplus_roots_hash};
 use hash::{id_tree_root_hash, obj_hash};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::AddAssign,
+};
 use vo::VO;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerifyInfo {
-    pub vo_size: usize,
+    pub vo_size: VOSize,
     pub verify_time: Time,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VOSize {
+    pub vo_dag_s: usize,
+    pub trie_proof_s: usize,
+    pub id_proof_s: usize,
+    pub cur_id_s: usize,
+    pub merkle_s: usize,
+    pub total_s: usize,
+}
+
+impl AddAssign for VOSize {
+    fn add_assign(&mut self, other: Self) {
+        *self = Self {
+            vo_dag_s: self.vo_dag_s + other.vo_dag_s,
+            trie_proof_s: self.trie_proof_s + other.trie_proof_s,
+            id_proof_s: self.id_proof_s + other.id_proof_s,
+            cur_id_s: self.cur_id_s + other.cur_id_s,
+            merkle_s: self.merkle_s + other.merkle_s,
+            total_s: self.total_s + other.total_s,
+        };
+    }
+}
+
+impl VOSize {
+    pub fn new(
+        vo_dag_s: usize,
+        trie_proof_s: usize,
+        id_proof_s: usize,
+        cur_id_s: usize,
+        merkle_s: usize,
+        total_s: usize,
+    ) -> Self {
+        Self {
+            vo_dag_s,
+            trie_proof_s,
+            id_proof_s,
+            cur_id_s,
+            merkle_s,
+            total_s,
+        }
+    }
 }
 
 fn inner_verify<K: Num, T: ReadInterface<K = K>>(
@@ -278,26 +324,15 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     Ok(())
 }
 
-fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<usize> {
-    debug!("VO size profile: ");
-    debug!("VO dag size: {}", bincode::serialize(&vo.vo_dag)?.len());
-    debug!(
-        "trie_proofs size: {}",
-        bincode::serialize(&vo.trie_proofs)?.len()
-    );
-    debug!(
-        "id_tree_proof size: {}",
-        bincode::serialize(&vo.id_tree_proof)?.len()
-    );
-    debug!(
-        "cur_obj_id size: {}",
-        bincode::serialize(&vo.cur_obj_id)?.len()
-    );
-    debug!(
-        "merkle_proofs size: {}",
-        bincode::serialize(&vo.merkle_proofs)?.len()
-    );
-    Ok(bincode::serialize(vo)?.len())
+fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<VOSize> {
+    Ok(VOSize {
+        vo_dag_s: bincode::serialize(&vo.vo_dag)?.len(),
+        trie_proof_s: bincode::serialize(&vo.trie_proofs)?.len(),
+        id_proof_s: bincode::serialize(&vo.id_tree_proof)?.len(),
+        cur_id_s: bincode::serialize(&vo.cur_obj_id)?.len(),
+        merkle_s: bincode::serialize(&vo.merkle_proofs)?.len(),
+        total_s: bincode::serialize(&vo)?.len(),
+    })
 }
 
 #[allow(clippy::type_complexity)]
@@ -311,12 +346,11 @@ pub fn verify<K: Num + Serialize, T: ReadInterface<K = K>>(
     for (res, vo) in &res {
         inner_verify(&chain, res, vo, pk)?;
         obj_num += res.len();
-        debug!("{:?}", res);
     }
     let time = Time::from(timer.elapsed());
     info!("Total number of result object returned: {}", obj_num);
 
-    let mut total_vo_size = 0;
+    let mut total_vo_size = VOSize::new(0, 0, 0, 0, 0, 0);
     for (_, vo) in &res {
         total_vo_size += cal_vo_size(vo)?;
     }

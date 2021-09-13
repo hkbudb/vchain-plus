@@ -1,6 +1,7 @@
 #!/bin.bash
 DB_DIR='eth_small_254'
-DBS=`eval ls ./data/db/${DB_DIR}`
+ID_FANOUT="*_id2_*"
+DBS=`eval find ./data/db/${DB_DIR}/ -maxdepth 1 -name ${ID_FANOUT} | xargs -n 1 basename`
 QS=`eval ls ./data/query/generated_query`
 
 for db in ${DBS[*]}

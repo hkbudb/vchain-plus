@@ -200,9 +200,17 @@ impl From<ProcessDuration> for Time {
 mod tests {
     use super::{load_query_param_from_file, KeyPair};
     use crate::{
-        chain::{block::Height, object::Object, query::query_param::QueryParam},
+        chain::{
+            block::Height,
+            object::Object,
+            query::{
+                query_param::QueryParam,
+                query_plan::{QPKeywordNode, QPNode, QPUnion},
+            },
+        },
         utils::load_raw_obj_from_str,
     };
+    use petgraph::Graph;
     use serde_json::json;
     use std::{collections::BTreeMap, path::Path};
 
@@ -292,5 +300,60 @@ mod tests {
 
         let read_key_pair = KeyPair::load(&path).unwrap();
         assert_eq!(key_pair, read_key_pair);
+    }
+
+    #[test]
+    fn test_petgraph_serialize() {
+        let k1 = QPKeywordNode {
+            keyword: "a".to_string(),
+            blk_height: Height(0),
+            time_win: 2,
+            set: None,
+        };
+        let k2 = QPKeywordNode {
+            keyword: "b".to_string(),
+            blk_height: Height(0),
+            time_win: 2,
+            set: None,
+        };
+        let k3 = QPKeywordNode {
+            keyword: "c".to_string(),
+            blk_height: Height(0),
+            time_win: 2,
+            set: None,
+        };
+        let k4 = QPKeywordNode {
+            keyword: "d".to_string(),
+            blk_height: Height(0),
+            time_win: 2,
+            set: None,
+        };
+        let union = QPUnion { set: None };
+
+        let mut qp_dag = Graph::<QPNode<u32>, bool>::new();
+        let idx0 = qp_dag.add_node(QPNode::Keyword(Box::new(k1.clone())));
+        let idx1 = qp_dag.add_node(QPNode::Keyword(Box::new(k2.clone())));
+        let idx2 = qp_dag.add_node(QPNode::Keyword(Box::new(k3.clone())));
+        let idx3 = qp_dag.add_node(QPNode::Keyword(Box::new(k4.clone())));
+        let idx4 = qp_dag.add_node(QPNode::Union(union.clone()));
+        let idx5 = qp_dag.add_node(QPNode::Union(union.clone()));
+        let idx6 = qp_dag.add_node(QPNode::Union(union.clone()));
+
+        qp_dag.add_edge(idx4, idx0, true);
+        qp_dag.add_edge(idx4, idx1, false);
+        qp_dag.add_edge(idx5, idx2, true);
+        qp_dag.add_edge(idx5, idx3, false);
+        qp_dag.add_edge(idx6, idx4, true);
+        qp_dag.add_edge(idx6, idx5, false);
+
+        let size_original = bincode::serialize(&qp_dag).unwrap().len();
+        qp_dag.remove_node(idx0);
+        qp_dag.remove_node(idx1);
+        qp_dag.remove_node(idx2);
+        qp_dag.remove_node(idx3);
+        let size_update = bincode::serialize(&qp_dag).unwrap().len();
+        println!("before: {}", size_original);
+        println!("after: {}", size_update);
+        assert_eq!(1, 1);
     }
 }

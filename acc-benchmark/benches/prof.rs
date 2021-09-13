@@ -2,12 +2,12 @@ use acc_benchmark::*;
 use criterion::{criterion_group, criterion_main, Criterion};
 use pprof::criterion::{Output, PProfProfiler};
 
-const Q: u64 = 500;
+const Q: u64 = 4096;
 const TEST_SET_SIZE: u64 = 100;
 
 macro_rules! use_fixture {
     ($x: expr) => {
-        ($x)(once_cell::sync::Lazy::force(&F_BLS12_377))
+        ($x)(once_cell::sync::Lazy::force(&F_BN254))
     };
 }
 
