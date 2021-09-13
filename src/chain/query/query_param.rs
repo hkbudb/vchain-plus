@@ -8,7 +8,7 @@ use crate::{
         },
         range::Range,
         traits::{Num, ReadInterface},
-        trie_tree,
+        trie_tree, COST_COEFFICIENT,
     },
 };
 use anyhow::{bail, Context, Result};
@@ -385,7 +385,7 @@ pub fn param_to_query_trimmed2<K: Num, T: ReadInterface<K = K>>(
         let mut trie_ctx = trie_tree::read::ReadContext::new(chain, trie_root.trie_root_id);
 
         let mut sub_graphs = Vec::<(usize, NodeIndex, Graph<QueryNode<K>, bool>)>::new();
-        if let Some(keyword_exp) = keyword_exp_opt.as_ref() {
+        if let Some(keyword_exp) = keyword_exp_opt {
             let k_exp_set = keyword_exp.to_cnf_set();
             for k_exp in &k_exp_set {
                 let (cost, sub_rt_idx, sub_graph) =
@@ -410,7 +410,7 @@ pub fn param_to_query_trimmed2<K: Num, T: ReadInterface<K = K>>(
                 sub_graphs.push((0, rt_idx, sub_graph));
             }
         }
-        sub_graphs.sort_by(|a, b| a.0.cmp(&b.0));
+
         if height == end_blk_height {
             let mut lock = false;
             for (_, sub_rt_idx, sub_graph) in &mut sub_graphs {
@@ -432,31 +432,63 @@ pub fn param_to_query_trimmed2<K: Num, T: ReadInterface<K = K>>(
                 .get_set()?
                 .len();
         } else {
-            let cur_cost = std::usize::MAX;
+            sub_graphs.sort_by(|a, b| a.0.cmp(&b.0));
+            let mut cur_cost = std::usize::MAX;
             let mut lock = false;
+            let mut pre_set = Set::new();
+            let mut pre_set_len = 0;
+            let mut intersec;
             for (sub_cost, sub_rt_idx, sub_graph) in &mut sub_graphs {
-                let sub_res_size = sub_graph
-                    .node_weight(*sub_rt_idx)
-                    .context("")?
-                    .get_set()?
-                    .len();
-                let cost = *sub_cost + sub_res_size * end_blk_res_size;
-                if cur_cost > cost {
-                    if lock {
+                let cur_set = sub_graph.node_weight(*sub_rt_idx).context("")?.get_set()?;
+                if !lock {
+                    cur_cost = *sub_cost + cur_set.len() * end_blk_res_size;
+                    pre_set = cur_set.clone();
+                    pre_set_len = pre_set.len();
+                    sub_root_idx = combine_query_graphs(&mut query_dag, sub_graph, *sub_rt_idx)?;
+                    lock = true;
+                } else {
+                    let cur_set_len = cur_set.len();
+                    intersec = (&pre_set) & cur_set;
+                    let cost = pre_set_len * cur_set_len * COST_COEFFICIENT
+                        + intersec.len() * end_blk_res_size;
+                    if cost >= cur_cost {
+                        break;
+                    } else {
+                        cur_cost = cost;
+                        pre_set = intersec;
+                        pre_set_len = pre_set.len();
                         sub_root_idx = combine_query_graphs_by_intersec(
                             &mut query_dag,
                             sub_root_idx,
                             sub_graph,
                             *sub_rt_idx,
                         )?;
-                        continue;
                     }
-                    sub_root_idx = combine_query_graphs(&mut query_dag, sub_graph, *sub_rt_idx)?;
-                    lock = true;
-                } else {
-                    break;
                 }
             }
+            // for (sub_cost, sub_rt_idx, sub_graph) in &mut sub_graphs {
+            //     let sub_res_size = sub_graph
+            //         .node_weight(*sub_rt_idx)
+            //         .context("")?
+            //         .get_set()?
+            //         .len();
+            //     let cost = *sub_cost + sub_res_size * end_blk_res_size;
+            //     if cur_cost > cost {
+            //         if lock {
+            //             sub_root_idx = combine_query_graphs_by_intersec(
+            //                 &mut query_dag,
+            //                 sub_root_idx,
+            //                 sub_graph,
+            //                 *sub_rt_idx,
+            //             )?;
+            //             continue;
+            //         }
+            //         sub_root_idx = combine_query_graphs(&mut query_dag, sub_graph, *sub_rt_idx)?;
+            //         lock = true;
+            //     } else {
+            //         break;
+            //     }
+            // }
         }
         sub_root_idxes.push(sub_root_idx);
     }
