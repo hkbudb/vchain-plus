@@ -30,6 +30,7 @@ const START_COEFFICIENT: u32 = 1000000;
 // 2: all opt should be OR
 const FIX_OPT: u32 = 1;
 
+#[allow(clippy::too_many_arguments)]
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     time_win: u64,
     selectivity: f64,
@@ -281,9 +282,15 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
                     let n_1 = v_1.pop();
                     let n_2 = v_1.pop();
                     let new_n = if and_flag {
-                        Node::And(Box::new(AndNode(n_1.context("n_1 is none")?, n_2.context("n_2 is none")?)))
+                        Node::And(Box::new(AndNode(
+                            n_1.context("n_1 is none")?,
+                            n_2.context("n_2 is none")?,
+                        )))
                     } else {
-                        Node::Or(Box::new(OrNode(n_1.context("n_1 is none")?, n_2.context("n_2 is none")?)))
+                        Node::Or(Box::new(OrNode(
+                            n_1.context("n_1 is none")?,
+                            n_2.context("n_2 is none")?,
+                        )))
                     };
                     v_2.push(new_n);
                 }
@@ -531,9 +538,15 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
                     let n_1 = v_1.pop();
                     let n_2 = v_1.pop();
                     let new_n = if and_flag {
-                        Node::And(Box::new(AndNode(n_1.context("n_1 is none")?, n_2.context("n_2 is none")?)))
+                        Node::And(Box::new(AndNode(
+                            n_1.context("n_1 is none")?,
+                            n_2.context("n_2 is none")?,
+                        )))
                     } else {
-                        Node::Or(Box::new(OrNode(n_1.context("n_1 is none")?, n_2.context("n_2 is none")?)))
+                        Node::Or(Box::new(OrNode(
+                            n_1.context("n_1 is none")?,
+                            n_2.context("n_2 is none")?,
+                        )))
                     };
                     v_2.push(new_n);
                 }
