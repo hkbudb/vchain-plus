@@ -8,7 +8,7 @@ use crate::{
         id_tree::ObjId,
         range::Range,
         traits::Num,
-        MAX_INLINE_FANOUT,
+        MAX_INLINE_BTREE_FANOUT,
     },
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -134,8 +134,8 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                                 new_range,
                                 set_union,
                                 old_acc + new_acc,
-                                SmallVec::<[Digest; MAX_INLINE_FANOUT]>::new(),
-                                SmallVec::<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>::new(),
+                                SmallVec::<[Digest; MAX_INLINE_BTREE_FANOUT]>::new(),
+                                SmallVec::<[BPlusTreeNodeId; MAX_INLINE_BTREE_FANOUT]>::new(),
                             );
                             temp_nodes.push(TempNode::NonLeaf {
                                 node: non_leaf,
@@ -374,8 +374,9 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                         let mut old_acc = node.data_set_acc;
                         let mut new_set: Set = Set::new();
                         let mut new_range = node.range;
-                        let mut new_ids = SmallVec::<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>::new();
-                        let mut new_hashes = SmallVec::<[Digest; MAX_INLINE_FANOUT]>::new();
+                        let mut new_ids =
+                            SmallVec::<[BPlusTreeNodeId; MAX_INLINE_BTREE_FANOUT]>::new();
+                        let mut new_hashes = SmallVec::<[Digest; MAX_INLINE_BTREE_FANOUT]>::new();
                         let mut new_acc = old_acc;
 
                         let ids = node.child_ids.clone();
@@ -421,9 +422,9 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
 
                         if cur_tmp_len == 1 {
                             let mut new_root_child_ids =
-                                SmallVec::<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>::new();
+                                SmallVec::<[BPlusTreeNodeId; MAX_INLINE_BTREE_FANOUT]>::new();
                             let mut new_root_child_hashes =
-                                SmallVec::<[Digest; MAX_INLINE_FANOUT]>::new();
+                                SmallVec::<[Digest; MAX_INLINE_BTREE_FANOUT]>::new();
                             for i in 0..child_ids.len() {
                                 new_root_child_ids.push(child_ids[i]);
                                 new_root_child_hashes.push(child_hashes[i]);

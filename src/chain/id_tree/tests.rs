@@ -9,7 +9,7 @@ use crate::{
         block::Height,
         id_tree::{IdTreeRoot, ObjId},
         object::Object,
-        ID_FANOUT,
+        MAX_ININE_ID_FANOUT,
     },
     digest::{blake2, Digest, Digestible},
 };
@@ -34,8 +34,8 @@ fn create_id_tree_leaf(
 
 fn create_id_tree_non_leaf(
     id: IdTreeNodeId,
-    child_hashes: SmallVec<[Digest; ID_FANOUT]>,
-    child_ids: SmallVec<[IdTreeNodeId; ID_FANOUT]>,
+    child_hashes: SmallVec<[Digest; MAX_ININE_ID_FANOUT]>,
+    child_ids: SmallVec<[IdTreeNodeId; MAX_ININE_ID_FANOUT]>,
 ) -> IdTreeNonLeafNode {
     IdTreeNonLeafNode {
         id,

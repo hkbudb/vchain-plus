@@ -1,6 +1,6 @@
 use crate::{
     acc::{set::Set, AccValue},
-    chain::{range::Range, traits::Num, MAX_INLINE_FANOUT},
+    chain::{range::Range, traits::Num, MAX_INLINE_BTREE_FANOUT},
     create_id_type,
     digest::{Digest, Digestible},
 };
@@ -133,8 +133,8 @@ pub struct BPlusTreeNonLeafNode<K: Num> {
     pub range: Range<K>,
     pub data_set: Set,
     pub data_set_acc: AccValue,
-    pub child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
-    pub child_ids: SmallVec<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>,
+    pub child_hashes: SmallVec<[Digest; MAX_INLINE_BTREE_FANOUT]>,
+    pub child_ids: SmallVec<[BPlusTreeNodeId; MAX_INLINE_BTREE_FANOUT]>,
 }
 
 impl<K: Num> BPlusTreeNonLeafNode<K> {
@@ -142,8 +142,8 @@ impl<K: Num> BPlusTreeNonLeafNode<K> {
         range: Range<K>,
         data_set: Set,
         data_set_acc: AccValue,
-        child_hashes: SmallVec<[Digest; MAX_INLINE_FANOUT]>,
-        child_ids: SmallVec<[BPlusTreeNodeId; MAX_INLINE_FANOUT]>,
+        child_hashes: SmallVec<[Digest; MAX_INLINE_BTREE_FANOUT]>,
+        child_ids: SmallVec<[BPlusTreeNodeId; MAX_INLINE_BTREE_FANOUT]>,
     ) -> Self {
         Self {
             id: BPlusTreeNodeId::next_id(),

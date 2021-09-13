@@ -7,7 +7,7 @@ use crate::{
         },
         range::Range,
         traits::Num,
-        MAX_INLINE_FANOUT,
+        MAX_INLINE_BTREE_FANOUT,
     },
     digest::{Digest, Digestible},
 };
@@ -91,7 +91,7 @@ fn inner_range_query<K: Num>(
                 } else if n.range.intersects(range) {
                     // non_leaf
                     let mut cur_proof_children =
-                        SmallVec::<[Option<Box<SubProof<K>>>; MAX_INLINE_FANOUT]>::new();
+                        SmallVec::<[Option<Box<SubProof<K>>>; MAX_INLINE_BTREE_FANOUT]>::new();
 
                     for child_id in &n.child_ids {
                         let child_node = node_loader.load_node(*child_id)?;
