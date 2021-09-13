@@ -27,13 +27,7 @@ impl Digestible for IdTreeNonLeaf {
 impl Default for IdTreeNonLeaf {
     fn default() -> Self {
         Self {
-            children: SmallVec::from_vec(vec![
-                Some(Box::new(SubProof::from_hash(
-                    IdTreeNodeId(0),
-                    Digest::zero()
-                )));
-                ID_FANOUT
-            ]),
+            children: SmallVec::new(),
         }
     }
 }
@@ -45,9 +39,8 @@ impl IdTreeNonLeaf {
     ) -> Self {
         let mut node = IdTreeNonLeaf::default();
         for (i, child) in children.iter().enumerate() {
-            node.children[i] = Some(Box::new(SubProof::Hash(Box::new(IdTreeSubTree::new(
-                child_node_ids[i],
-                *child,
+            node.children.push(Some(Box::new(SubProof::Hash(Box::new(
+                IdTreeSubTree::new(child_node_ids[i], *child),
             )))));
         }
         node
@@ -70,10 +63,12 @@ impl IdTreeNonLeaf {
     ) -> Digest {
         let child_idx = match cur_path_rev.pop() {
             Some(idx) => idx,
-            None => return Digest::zero(),
+            //None => return Digest::zero(),
+            None => panic!("impossible"),
         };
         match self.get_child(child_idx) {
-            None => Digest::zero(),
+            //None => Digest::zero(),
+            None => panic!("impossible"),
             Some(child) => child.value_hash(obj_id, cur_path_rev),
         }
     }

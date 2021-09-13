@@ -106,14 +106,7 @@ impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
                                 idx,
                             });
 
-                            let cur_id = *n
-                                .get_child_id(idx)
-                                .ok_or_else(|| anyhow!("Cannot find child id!"))?;
-                            if cur_id == IdTreeNodeId(0) {
-                                cur_id_opt = None;
-                            } else {
-                                cur_id_opt = Some(cur_id);
-                            }
+                            cur_id_opt = n.get_child_id(idx).cloned();
                         }
                     }
                 }
@@ -151,12 +144,16 @@ impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
                     new_root_hash = hash;
                 }
                 TempNode::NonLeaf { mut node, idx } => {
-                    *node
-                        .get_child_id_mut(idx)
-                        .ok_or_else(|| anyhow!("Cannot find child id!"))? = new_root_id;
-                    *node
-                        .get_child_hash_mut(idx)
-                        .ok_or_else(|| anyhow!("Cannot find child hash!"))? = new_root_hash;
+                    let updated_id = node.get_child_id_mut(idx);
+                    match updated_id {
+                        Some(id) => *id = new_root_id,
+                        None => node.push_child_id(new_root_id),
+                    }
+                    let updated_hash = node.get_child_hash_mut(idx);
+                    match updated_hash {
+                        Some(hash) => *hash = new_root_hash,
+                        None => node.push_child_hash(new_root_hash),
+                    }
                     let (id, hash) = self.write_non_leaf(node);
                     new_root_id = id;
                     new_root_hash = hash;
