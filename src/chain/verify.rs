@@ -15,7 +15,10 @@ use hash::{ads_hash, bplus_roots_hash};
 use hash::{id_tree_root_hash, obj_hash};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing};
 use serde::{Deserialize, Serialize};
-use std::{collections::{BTreeMap, HashMap}, ops::{AddAssign}};
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::AddAssign,
+};
 use vo::VO;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,7 +51,14 @@ impl AddAssign for VOSize {
 }
 
 impl VOSize {
-    pub fn new(vo_dag_s: usize, trie_proof_s: usize, id_proof_s: usize, cur_id_s: usize, merkle_s: usize, total_s: usize) -> Self {
+    pub fn new(
+        vo_dag_s: usize,
+        trie_proof_s: usize,
+        id_proof_s: usize,
+        cur_id_s: usize,
+        merkle_s: usize,
+        total_s: usize,
+    ) -> Self {
         Self {
             vo_dag_s,
             trie_proof_s,

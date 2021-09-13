@@ -571,7 +571,7 @@ pub fn query<
     query_time_wins
         .par_iter()
         .map(|(time_win, s_win_size, e_win_size)| {
-             sub_query_process(
+            sub_query_process(
                 opt_level,
                 *time_win,
                 *s_win_size,
@@ -580,7 +580,8 @@ pub fn query<
                 &chain,
                 pk,
             )
-        }).collect_into_vec(&mut responses);
+        })
+        .collect_into_vec(&mut responses);
 
     for response in responses {
         let a = response?;
@@ -643,5 +644,4 @@ mod tests {
         ];
         assert_eq!(res, exp);
     }
-
 }
