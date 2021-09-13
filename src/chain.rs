@@ -13,7 +13,7 @@ pub mod verify;
 
 pub const MAX_ININE_ID_FANOUT: usize = 4;
 pub const MAX_INLINE_BTREE_FANOUT: usize = 4;
-pub const COST_COEFFICIENT: usize = 50;
+pub const COST_COEFFICIENT: usize = 200;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Parameter {
