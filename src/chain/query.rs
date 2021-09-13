@@ -488,28 +488,45 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     Ok((obj_map, vo))
 }
 
-#[allow(clippy::type_complexity)]
 fn select_win_size(
     win_sizes: &[u64],
     query_time_win: TimeWin,
 ) -> Result<Vec<(TimeWin, Option<u64>, u64)>> {
     let mut res = Vec::<(TimeWin, Option<u64>, u64)>::new();
     let mut cur_win = query_time_win;
-    let min = win_sizes.first().context("Empty time win size")?;
-    for win_size in win_sizes.iter().rev() {
-        while cur_win.get_end() + 1 >= win_size + cur_win.get_start() {
-            let new_time_win =
-                TimeWin::new(cur_win.get_start(), cur_win.get_start() + win_size - 1);
-            res.push((new_time_win, None, *win_size));
-            if cur_win.get_start() + *win_size == cur_win.get_end() + 1 {
-                return Ok(res);
-            } else {
-                cur_win = TimeWin::new(cur_win.get_start() + *win_size, cur_win.get_end());
-            }
+    let max = win_sizes.last().context("empty time win")?;
+    while cur_win.get_end() + 1 >= max + cur_win.get_start() {
+        let new_time_win = TimeWin::new(cur_win.get_start(), cur_win.get_start() + max - 1);
+        res.push((new_time_win, None, *max));
+        if cur_win.get_start() + *max == cur_win.get_end() + 1 {
+            return Ok(res);
+        } else {
+            cur_win = TimeWin::new(cur_win.get_start() + *max, cur_win.get_end());
         }
     }
 
-    res.push((cur_win, Some(*min), *min));
+    let cur_size = cur_win.get_end() - cur_win.get_start() + 1;
+    let mut end_idx = 0;
+    for (i, win_size) in win_sizes.iter().enumerate() {
+        if cur_size <= *win_size {
+            end_idx = i;
+            break;
+        }
+    }
+    let higher = win_sizes.get(end_idx).context("cannot find size")?;
+    if cur_size == *higher {
+        res.push((cur_win, None, *higher));
+    } else {
+        let mut start_idx = 0;
+        let mut lower = *win_sizes.get(start_idx).context("not time window")?;
+        while cur_win.get_start() > lower
+            && cur_win.get_start() + higher > cur_win.get_end() + lower
+        {
+            start_idx += 1;
+            lower = *win_sizes.get(start_idx).context("no time win")?;
+        }
+        res.push((cur_win, Some(lower), *higher));
+    }
     Ok(res)
 }
 
@@ -631,16 +648,14 @@ mod tests {
         let res = select_win_size(&vec![2, 4, 8], query_time_win).unwrap();
         let exp = vec![
             (TimeWin::new(1, 8), None, 8),
-            (TimeWin::new(9, 12), None, 4),
-            (TimeWin::new(13, 13), Some(2), 2),
+            (TimeWin::new(9, 13), Some(4), 8),
         ];
         assert_eq!(res, exp);
         let query_time_win = TimeWin::new(1, 14);
         let res = select_win_size(&vec![2, 4, 8], query_time_win).unwrap();
         let exp = vec![
             (TimeWin::new(1, 8), None, 8),
-            (TimeWin::new(9, 12), None, 4),
-            (TimeWin::new(13, 14), None, 2),
+            (TimeWin::new(9, 14), Some(4), 8),
         ];
         assert_eq!(res, exp);
     }
