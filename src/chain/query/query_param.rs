@@ -466,29 +466,6 @@ pub fn param_to_query_trimmed2<K: Num, T: ReadInterface<K = K>>(
                     }
                 }
             }
-            // for (sub_cost, sub_rt_idx, sub_graph) in &mut sub_graphs {
-            //     let sub_res_size = sub_graph
-            //         .node_weight(*sub_rt_idx)
-            //         .context("")?
-            //         .get_set()?
-            //         .len();
-            //     let cost = *sub_cost + sub_res_size * end_blk_res_size;
-            //     if cur_cost > cost {
-            //         if lock {
-            //             sub_root_idx = combine_query_graphs_by_intersec(
-            //                 &mut query_dag,
-            //                 sub_root_idx,
-            //                 sub_graph,
-            //                 *sub_rt_idx,
-            //             )?;
-            //             continue;
-            //         }
-            //         sub_root_idx = combine_query_graphs(&mut query_dag, sub_graph, *sub_rt_idx)?;
-            //         lock = true;
-            //     } else {
-            //         break;
-            //     }
-            // }
         }
         sub_root_idxes.push(sub_root_idx);
     }
