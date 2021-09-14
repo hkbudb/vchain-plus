@@ -14,5 +14,5 @@ echo "building db with t_w: 16, id_fanout: ${ID_FANOUT}, bplus_fanout: 4"
 cargo run --release --bin build_chain -- -t 2 -t 4 -t 8 -t 16 --id-fanout ${ID_FANOUT} -m 4095 -b 4 -d 1 -k ./keys/254_4096 -i ./data/dataset/eth-small.dat -r ./data/result/${DB_DIR}/t4_id${ID_FANOUT}_b4_build_res.json -o ./data/db/${DB_DIR}/t4_id${ID_FANOUT}_b4
 
 echo "building db with t_w: 32, id_fanout: ${ID_FANOUT}, bplus_fanout: 4"
-cargo run --release --bin build_chain -- -t 2 -t 4 -t 8 -t 16 --id-fanout ${ID_FANOUT} -m 4095 -b 4 -d 1 -k ./keys/254_4096 -i ./data/dataset/eth-small.dat -r ./data/result/${DB_DIR}/t5_id${ID_FANOUT}_b4_build_res.json -o ./data/db/${DB_DIR}/t5_id${ID_FANOUT}_b4
+cargo run --release --bin build_chain -- -t 2 -t 4 -t 8 -t 16 -t 32 --id-fanout ${ID_FANOUT} -m 4095 -b 4 -d 1 -k ./keys/254_4096 -i ./data/dataset/eth-small.dat -r ./data/result/${DB_DIR}/t5_id${ID_FANOUT}_b4_build_res.json -o ./data/db/${DB_DIR}/t5_id${ID_FANOUT}_b4
 
