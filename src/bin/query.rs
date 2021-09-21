@@ -54,17 +54,18 @@ fn main() -> Result<()> {
         .build()?;
     for (i, q) in query_params.into_iter().enumerate() {
         info!("Processing query {}...", i);
-        let (results, time) = query(opts.opt_level, &chain, q, &pk)?;
+        let (results, res_dags, time) = query(opts.opt_level, &chain, q, &pk)?;
         info!("Query time elapsed: {:?}", time);
 
         info!("Verifying query {}...", i);
-        let verify_info = pool.install(|| verify(&chain, results, &pk))?;
+        let verify_info = pool.install(|| verify(&chain, &results, &res_dags, &pk))?;
         info!("Verification time elapsed: {:?}", verify_info.verify_time);
         let res = json!({
             "query_info": time,
             "verify_info": verify_info,
         });
         query_info.push(res);
+        info!("=================");
     }
     let s = serde_json::to_string_pretty(&query_info)?;
     fs::write(&res_path, &s)?;

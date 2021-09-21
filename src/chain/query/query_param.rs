@@ -1,27 +1,23 @@
 use crate::{
-    acc::{AccPublicKey, Set},
+    acc::AccPublicKey,
     chain::{
         block::Height,
-        query::query_obj::{
-            estimate_query_cost, BlkRtNode, DiffNode, IntersecNode, KeywordNode, Query, QueryNode,
-            RangeNode, UnionNode,
+        bplus_tree,
+        query::query_plan::{
+            QPBlkRtNode, QPDiff, QPIntersec, QPKeywordNode, QPNode, QPRangeNode, QPUnion,
         },
         range::Range,
         traits::{Num, ReadInterface},
-        trie_tree, COST_COEFFICIENT,
+        trie_tree,
     },
 };
 use anyhow::{bail, Context, Result};
-use petgraph::{
-    algo::toposort,
-    graph::NodeIndex,
-    EdgeDirection::{Incoming, Outgoing},
-    Graph,
-};
+use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use smol_str::SmolStr;
+use std::collections::{HashMap, HashSet};
 
-use super::{QueryContent, TimeWin};
+use super::{query_dag::DagNode, query_plan::QueryPlan, QueryContent, TimeWin};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -147,6 +143,7 @@ impl<K: Num> QueryParam<K> {
     }
 }
 
+/*
 #[allow(clippy::type_complexity)]
 pub fn param_to_query_basic<K: Num>(
     time_win: TimeWin,
@@ -237,692 +234,208 @@ pub fn param_to_query_basic<K: Num>(
     Ok(res_query)
 }
 
-pub fn param_to_query_trimmed<K: Num, T: ReadInterface<K = K>>(
-    time_win: TimeWin,
-    query_content: &QueryContent<K>,
+*/
+
+pub fn param_to_qp_parallel<K: Num, T: ReadInterface<K = K>>(
+    time_win: &TimeWin,
+    e_win_size: u64,
+    query_dag: &Graph<DagNode<K>, bool>,
     chain: &T,
     pk: &AccPublicKey,
-    start_win_size: Option<u64>,
-    end_win_size: u64,
-) -> Result<Query<K>> {
-    // query at start point, without any planning
-    let start_blk_height = Height(time_win.start_blk);
-    let end_blk_height = Height(time_win.end_blk);
-    let keyword_exp_opt = query_content.keyword_exp.as_ref();
-    let mut query_dag = Graph::<QueryNode<K>, bool>::new();
-    let mut heights = Vec::<(u64, Height)>::new();
-    if let Some(win_size) = start_win_size {
-        if start_blk_height.0 > 1 {
-            heights.push((win_size, Height(start_blk_height.0 - 1)));
-        }
-    }
-    heights.push((end_win_size, end_blk_height));
-    debug!("heights: {:?}", heights);
-
-    let has_keyword_query: bool;
-    let has_range_query: bool;
-
-    match keyword_exp_opt {
-        Some(_) => has_keyword_query = true,
-        None => has_keyword_query = false,
-    }
-
-    if query_content.range.is_empty() {
-        has_range_query = false;
-    } else {
-        has_range_query = true;
-    }
-
-    let mut sub_root_idxes = Vec::<NodeIndex>::new();
-    for (win_size, height) in heights {
-        let mut keyword_root_idx: NodeIndex = NodeIndex::default();
-        let mut range_root_idx: NodeIndex = NodeIndex::default();
-
-        if let Some(keyword_exp) = keyword_exp_opt.as_ref() {
-            keyword_root_idx = dag_add_keyword_exp(keyword_exp, &mut query_dag, height, win_size)?;
-        }
-
-        if has_range_query {
-            let mut range_nodes = Vec::<(usize, NodeIndex, Set)>::new();
-            for (i, r) in query_content.range.iter().enumerate() {
-                let mut range_node = RangeNode {
-                    range: *r,
-                    blk_height: height,
-                    time_win: win_size,
-                    dim: i,
-                    set: None,
-                };
-                range_node.estimate_size(chain, pk)?;
-                let set = range_node.set.as_ref().context("No set found")?.0.clone();
-                let range_size = set.len();
-                let range_idx = query_dag.add_node(QueryNode::Range(range_node));
-                range_nodes.push((range_size, range_idx, set));
-            }
-            let sorted_idxes = get_range_idxs_sorted(range_nodes);
-            let mut range_lock = false;
-            for idx in sorted_idxes {
-                if range_lock {
-                    let intersec_idx =
-                        query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                    query_dag.add_edge(intersec_idx, range_root_idx, true);
-                    query_dag.add_edge(intersec_idx, idx, false);
-                    range_root_idx = intersec_idx;
-                    continue;
-                }
-                range_root_idx = idx;
-                range_lock = true;
-            }
-        }
-        let sub_root_idx: NodeIndex;
-
-        if has_keyword_query && has_range_query {
-            debug!("has both keyword and range query");
-            sub_root_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-            query_dag.add_edge(sub_root_idx, range_root_idx, true);
-            query_dag.add_edge(sub_root_idx, keyword_root_idx, false);
-        } else if has_keyword_query {
-            debug!("has keyword query only");
-            sub_root_idx = keyword_root_idx;
-        } else if has_range_query {
-            debug!("has range query only");
-            sub_root_idx = range_root_idx;
-        } else {
-            debug!("invalid query");
-            bail!("query invalid");
-        }
-        sub_root_idxes.push(sub_root_idx);
-    }
-    if sub_root_idxes.len() > 1 {
-        let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-        query_dag.add_edge(diff_idx, *sub_root_idxes.get(0).context("")?, true);
-        query_dag.add_edge(diff_idx, *sub_root_idxes.get(1).context("")?, false);
-    }
-    let res_query = Query {
-        end_blk_height,
-        query_dag,
-        trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
-    };
-
-    Ok(res_query)
-}
-
-pub fn param_to_query_trimmed2<K: Num, T: ReadInterface<K = K>>(
-    time_win: TimeWin,
-    query_content: &QueryContent<K>,
-    chain: &T,
-    pk: &AccPublicKey,
-    start_win_size: Option<u64>,
-    end_win_size: u64,
-) -> Result<Query<K>> {
-    let start_blk_height = Height(time_win.start_blk);
-    let end_blk_height = Height(time_win.end_blk);
-    let keyword_exp_opt = query_content.keyword_exp.as_ref();
-    let mut query_dag = Graph::<QueryNode<K>, bool>::new();
-    let mut heights = vec![(end_win_size, end_blk_height)];
-    if let Some(win_size) = start_win_size {
-        if start_blk_height.0 > 1 {
-            heights.push((win_size, Height(start_blk_height.0 - 1)));
-        }
-    }
-    debug!("heights: {:?}", heights);
-
-    let has_range_query: bool;
-    if query_content.range.is_empty() {
-        has_range_query = false;
-    } else {
-        has_range_query = true;
-    }
-
-    let mut sub_root_idxes = Vec::<NodeIndex>::new();
-    let mut trie_proofs = HashMap::<Height, trie_tree::proof::Proof>::new();
-    let mut end_blk_res_size = 0;
-    for (win_size, height) in heights {
-        let mut sub_root_idx: NodeIndex = NodeIndex::default(); // attention, here should not be 0
-        let trie_root = chain
-            .read_block_content(height)?
-            .ads
-            .read_trie_root(win_size)?;
-        let mut trie_ctx = trie_tree::read::ReadContext::new(chain, trie_root.trie_root_id);
-
-        let mut sub_graphs = Vec::<(usize, NodeIndex, Graph<QueryNode<K>, bool>)>::new();
-        if let Some(keyword_exp) = keyword_exp_opt {
-            let k_exp_set = keyword_exp.to_cnf_set();
-            for k_exp in &k_exp_set {
-                let (cost, sub_rt_idx, sub_graph) =
-                    process_sub_node(k_exp, height, win_size, &mut trie_ctx, chain, pk)?;
-                sub_graphs.push((cost, sub_rt_idx, sub_graph));
-            }
-            trie_proofs.insert(height, trie_ctx.into_proof());
-        }
-
-        if has_range_query {
-            for (i, r) in query_content.range.iter().enumerate() {
-                let mut range_node = RangeNode {
-                    range: *r,
-                    blk_height: height,
-                    time_win: win_size,
-                    dim: i,
-                    set: None,
-                };
-                range_node.estimate_size(chain, pk)?;
-                let mut sub_graph = Graph::<QueryNode<K>, bool>::new();
-                let rt_idx = sub_graph.add_node(QueryNode::Range(range_node));
-                sub_graphs.push((0, rt_idx, sub_graph));
-            }
-        }
-
-        if height == end_blk_height {
-            let mut lock = false;
-            for (_, sub_rt_idx, sub_graph) in &mut sub_graphs {
-                if lock {
-                    sub_root_idx = combine_query_graphs_by_intersec(
-                        &mut query_dag,
-                        sub_root_idx,
-                        sub_graph,
-                        *sub_rt_idx,
-                    )?;
-                    continue;
-                }
-                sub_root_idx = combine_query_graphs(&mut query_dag, sub_graph, *sub_rt_idx)?;
-                lock = true;
-            }
-            end_blk_res_size = query_dag
-                .node_weight(sub_root_idx)
-                .context("Caonnt find root of end blk dag")?
-                .get_set()?
-                .len();
-        } else {
-            sub_graphs.sort_by(|a, b| a.0.cmp(&b.0));
-            let mut cur_cost = std::usize::MAX;
-            let mut lock = false;
-            let mut pre_set = Set::new();
-            let mut pre_set_len = 0;
-            let mut intersec;
-            for (sub_cost, sub_rt_idx, sub_graph) in &mut sub_graphs {
-                let cur_set = sub_graph.node_weight(*sub_rt_idx).context("")?.get_set()?;
-                if !lock {
-                    cur_cost = *sub_cost + cur_set.len() * end_blk_res_size;
-                    pre_set = cur_set.clone();
-                    pre_set_len = pre_set.len();
-                    sub_root_idx = combine_query_graphs(&mut query_dag, sub_graph, *sub_rt_idx)?;
-                    lock = true;
-                } else {
-                    let cur_set_len = cur_set.len();
-                    intersec = (&pre_set) & cur_set;
-                    let cost = pre_set_len * cur_set_len * COST_COEFFICIENT
-                        + intersec.len() * end_blk_res_size;
-                    if cost >= cur_cost {
-                        break;
-                    } else {
-                        cur_cost = cost;
-                        pre_set = intersec;
-                        pre_set_len = pre_set.len();
-                        sub_root_idx = combine_query_graphs_by_intersec(
-                            &mut query_dag,
-                            sub_root_idx,
-                            sub_graph,
-                            *sub_rt_idx,
-                        )?;
-                    }
-                }
-            }
-        }
-        sub_root_idxes.push(sub_root_idx);
-    }
-    if sub_root_idxes.len() > 1 {
-        let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-        query_dag.add_edge(diff_idx, *sub_root_idxes.get(1).context("")?, true);
-        query_dag.add_edge(diff_idx, *sub_root_idxes.get(0).context("")?, false);
-    }
-
-    let res_query = Query {
-        end_blk_height,
-        query_dag,
-        trie_proofs,
-    };
-
-    Ok(res_query)
-}
-
-fn dag_add_keyword_exp<K: Num>(
-    keyword_exp: &Node,
-    dag: &mut Graph<QueryNode<K>, bool>,
-    blk_height: Height,
-    win_size: u64,
-) -> Result<NodeIndex> {
-    let mut queue = VecDeque::<(&Node, NodeIndex)>::new();
-    let mut idx_map = HashMap::<String, NodeIndex>::new();
-    let keyword_root_idx: NodeIndex;
-    match keyword_exp {
-        Node::And(n) => {
-            let idx = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-            keyword_root_idx = idx;
-            let AndNode(c1, c2) = n.as_ref();
-            let idx1: NodeIndex;
-            let idx2: NodeIndex;
-            match c1 {
-                Node::And(_) => {
-                    idx1 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                }
-                Node::Or(_) => {
-                    idx1 = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                }
-                Node::Not(_) => {
-                    idx1 = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                }
-                Node::Input(s) => {
-                    idx1 = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                        keyword: s.to_string(),
-                        blk_height,
-                        time_win: win_size,
-                        set: None,
-                    })));
-                    idx_map.insert(s.to_string(), idx1);
-                }
-            }
-            dag.add_edge(idx, idx1, true);
-            match c2 {
-                Node::And(_) => {
-                    idx2 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                }
-                Node::Or(_) => {
-                    idx2 = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                }
-                Node::Not(_) => {
-                    idx2 = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                }
-                Node::Input(s) => {
-                    idx2 = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                        keyword: s.to_string(),
-                        blk_height,
-                        time_win: win_size,
-                        set: None,
-                    })));
-                    idx_map.insert(s.to_string(), idx2);
-                }
-            }
-            dag.add_edge(idx, idx2, false);
-            queue.push_back((c1, idx1));
-            queue.push_back((c2, idx2));
-        }
-        Node::Or(n) => {
-            let idx = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-            keyword_root_idx = idx;
-            let OrNode(c1, c2) = n.as_ref();
-            let idx1: NodeIndex;
-            let idx2: NodeIndex;
-            match c1 {
-                Node::And(_) => {
-                    idx1 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                }
-                Node::Or(_) => {
-                    idx1 = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                }
-                Node::Not(_) => {
-                    idx1 = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                }
-                Node::Input(s) => {
-                    idx1 = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                        keyword: s.to_string(),
-                        blk_height,
-                        time_win: win_size,
-                        set: None,
-                    })));
-                    idx_map.insert(s.to_string(), idx1);
-                }
-            }
-            dag.add_edge(idx, idx1, true);
-            match c2 {
-                Node::And(_) => {
-                    idx2 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                }
-                Node::Or(_) => {
-                    idx2 = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                }
-                Node::Not(_) => {
-                    idx2 = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                }
-                Node::Input(s) => {
-                    idx2 = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                        keyword: s.to_string(),
-                        blk_height,
-                        time_win: win_size,
-                        set: None,
-                    })));
-                    idx_map.insert(s.to_string(), idx2);
-                }
-            }
-            dag.add_edge(idx, idx2, false);
-            queue.push_back((c1, idx1));
-            queue.push_back((c2, idx2));
-        }
-        Node::Not(n) => {
-            let idx = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-            keyword_root_idx = idx;
-            let NotNode(c) = n.as_ref();
-            let c_idx: NodeIndex;
-            match c {
-                Node::And(_) => {
-                    c_idx = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                }
-                Node::Or(_) => {
-                    c_idx = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                }
-                Node::Not(_) => {
-                    c_idx = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                }
-                Node::Input(s) => {
-                    c_idx = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                        keyword: s.to_string(),
-                        blk_height,
-                        time_win: win_size,
-                        set: None,
-                    })));
-                    idx_map.insert(s.to_string(), c_idx);
-                }
-            }
-            dag.add_edge(idx, c_idx, true);
-            let blk_rt_idx = dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
-                blk_height,
-                time_win: win_size,
-                set: None,
-            })));
-            dag.add_edge(idx, blk_rt_idx, false);
-            queue.push_back((c, c_idx));
-        }
-        Node::Input(s) => {
-            let idx = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                keyword: s.to_string(),
-                blk_height,
-                time_win: win_size,
-                set: None,
-            })));
-            keyword_root_idx = idx;
-        }
-    }
-
-    while let Some((node, idx)) = queue.pop_front() {
-        match node {
-            Node::And(n) => {
-                let AndNode(c1, c2) = n.as_ref();
-                let idx1: NodeIndex;
-                let idx2: NodeIndex;
-                match c1 {
-                    Node::And(_) => {
-                        idx1 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                    }
-                    Node::Or(_) => {
-                        idx1 = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                    }
-                    Node::Not(_) => {
-                        idx1 = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                    }
-                    Node::Input(s) => {
-                        if let Some(c_idx) = idx_map.get(s) {
-                            idx1 = *c_idx;
-                        } else {
-                            idx1 = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                                keyword: s.to_string(),
-                                blk_height,
-                                time_win: win_size,
-                                set: None,
-                            })));
-                            idx_map.insert(s.to_string(), idx1);
-                        }
-                    }
-                }
-                dag.add_edge(idx, idx1, true);
-                match c2 {
-                    Node::And(_) => {
-                        idx2 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                    }
-                    Node::Or(_) => {
-                        idx2 = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                    }
-                    Node::Not(_) => {
-                        idx2 = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                    }
-                    Node::Input(s) => {
-                        if let Some(c_idx) = idx_map.get(s) {
-                            idx2 = *c_idx;
-                        } else {
-                            idx2 = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                                keyword: s.to_string(),
-                                blk_height,
-                                time_win: win_size,
-                                set: None,
-                            })));
-                            idx_map.insert(s.to_string(), idx2);
-                        }
-                    }
-                }
-                dag.add_edge(idx, idx2, false);
-                queue.push_back((c1, idx1));
-                queue.push_back((c2, idx2));
-            }
-            Node::Or(n) => {
-                let OrNode(c1, c2) = n.as_ref();
-                let idx1: NodeIndex;
-                let idx2: NodeIndex;
-                match c1 {
-                    Node::And(_) => {
-                        idx1 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                    }
-                    Node::Or(_) => {
-                        idx1 = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                    }
-                    Node::Not(_) => {
-                        idx1 = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                    }
-                    Node::Input(s) => {
-                        if let Some(c_idx) = idx_map.get(s) {
-                            idx1 = *c_idx;
-                        } else {
-                            idx1 = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                                keyword: s.to_string(),
-                                blk_height,
-                                time_win: win_size,
-                                set: None,
-                            })));
-                            idx_map.insert(s.to_string(), idx1);
-                        }
-                    }
-                }
-                dag.add_edge(idx, idx1, true);
-                match c2 {
-                    Node::And(_) => {
-                        idx2 = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                    }
-                    Node::Or(_) => {
-                        idx2 = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                    }
-                    Node::Not(_) => {
-                        idx2 = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                    }
-                    Node::Input(s) => {
-                        if let Some(c_idx) = idx_map.get(s) {
-                            idx2 = *c_idx;
-                        } else {
-                            idx2 = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                                keyword: s.to_string(),
-                                blk_height,
-                                time_win: win_size,
-                                set: None,
-                            })));
-                            idx_map.insert(s.to_string(), idx2);
-                        }
-                    }
-                }
-                dag.add_edge(idx, idx2, false);
-                queue.push_back((c1, idx1));
-                queue.push_back((c2, idx2));
-            }
-            Node::Not(n) => {
-                let NotNode(c) = n.as_ref();
-                let c_idx: NodeIndex;
-                let blk_rt_idx = dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
-                    blk_height,
-                    time_win: win_size,
-                    set: None,
-                })));
-                match c {
-                    Node::And(_) => {
-                        c_idx = dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                    }
-                    Node::Or(_) => {
-                        c_idx = dag.add_node(QueryNode::Union(UnionNode { set: None }));
-                    }
-                    Node::Not(_) => {
-                        c_idx = dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-                    }
-                    Node::Input(s) => {
-                        if let Some(ch_idx) = idx_map.get(s) {
-                            c_idx = *ch_idx;
-                        } else {
-                            c_idx = dag.add_node(QueryNode::Keyword(Box::new(KeywordNode {
-                                keyword: s.to_string(),
-                                blk_height,
-                                time_win: win_size,
-                                set: None,
-                            })));
-                            idx_map.insert(s.to_string(), c_idx);
-                        }
-                    }
-                }
-                dag.add_edge(idx, c_idx, true);
-                dag.add_edge(idx, blk_rt_idx, false);
-                queue.push_back((c, c_idx));
-            }
-            Node::Input(_) => {}
-        }
-    }
-    Ok(keyword_root_idx)
-}
-
-fn process_sub_node<K: Num, T: ReadInterface<K = K>>(
-    sub_exp: &Node,
-    blk_height: Height,
-    win_size: u64,
-    trie_ctx: &mut trie_tree::read::ReadContext<T>,
-    chain: &T,
-    pk: &AccPublicKey,
-) -> Result<(usize, NodeIndex, Graph<QueryNode<K>, bool>)> {
-    let mut sub_dag = Graph::<QueryNode<K>, bool>::new();
-    let sub_root_idx = dag_add_keyword_exp(sub_exp, &mut sub_dag, blk_height, win_size)?;
-    let mut inputs = match toposort(&sub_dag, None) {
+) -> Result<QueryPlan<K>> {
+    let end_blk_height = Height(time_win.get_end());
+    let mut dag_content = HashMap::<NodeIndex, QPNode<K>>::new();
+    let mut q_inputs = match toposort(&query_dag, None) {
         Ok(v) => v,
         Err(_) => {
-            bail!("Input query plan graph not valid")
+            bail!("Input query graph not valid")
         }
     };
-    inputs.reverse();
+    q_inputs.reverse();
+    let mut trie_ctxes = HashMap::<Height, trie_tree::read::ReadContext<T>>::new();
 
-    let cost = estimate_query_cost(&inputs, &mut sub_dag, trie_ctx, chain, pk)?;
-
-    Ok((cost, sub_root_idx, sub_dag))
-}
-
-fn combine_query_graphs_by_intersec<K: Num>(
-    graph1: &mut Graph<QueryNode<K>, bool>,
-    graph1_root_idx: NodeIndex,
-    graph2: &mut Graph<QueryNode<K>, bool>,
-    graph2_root_idx: NodeIndex,
-) -> Result<NodeIndex> {
-    let new_graph2_sub_root_idx = combine_query_graphs(graph1, graph2, graph2_root_idx)?;
-    let s1 = graph1
-        .node_weight(graph1_root_idx)
-        .context("Cannot find subroot1")?
-        .get_set()?;
-    let s2 = graph1
-        .node_weight(new_graph2_sub_root_idx)
-        .context("Cannot find subroot1")?
-        .get_set()?;
-    let s_new = s1 & s2;
-    let new_root_idx = graph1.add_node(QueryNode::Intersec(IntersecNode { set: Some(s_new) }));
-    graph1.add_edge(new_root_idx, graph1_root_idx, true);
-    graph1.add_edge(new_root_idx, new_graph2_sub_root_idx, false);
-    Ok(new_root_idx)
-}
-
-fn combine_query_graphs<K: Num>(
-    graph1: &mut Graph<QueryNode<K>, bool>,
-    graph2: &mut Graph<QueryNode<K>, bool>,
-    graph2_root_idx: NodeIndex,
-) -> Result<NodeIndex> {
-    let mut old_new_idx = HashMap::<NodeIndex, NodeIndex>::new();
-    let mut old_s_e_idx = Vec::<(NodeIndex, NodeIndex, bool)>::new();
-
-    let graph2_idxes = graph2.node_indices();
-    for idx in graph2_idxes.rev() {
-        for c_idx in graph2.neighbors_directed(idx, Outgoing) {
-            let edge_idx = graph2.find_edge(idx, c_idx).context("Cannot find edge")?;
-            let weight = graph2.edge_weight(edge_idx).context("Cannot find edge")?;
-            old_s_e_idx.push((idx, c_idx, *weight));
+    for idx in &q_inputs {
+        if let Some(node) = query_dag.node_weight(*idx) {
+            match node {
+                DagNode::Range(n) => {
+                    let bplus_root = chain
+                        .read_block_content(end_blk_height)?
+                        .ads
+                        .read_bplus_root(e_win_size, n.dim)?;
+                    let (s, a, p) = bplus_tree::read::range_query(
+                        chain,
+                        bplus_root.bplus_tree_root_id,
+                        n.range,
+                        pk,
+                    )?;
+                    let qp_range_node: QPRangeNode<K> = QPRangeNode {
+                        blk_height: end_blk_height,
+                        set: Some((s, a, p)),
+                    };
+                    dag_content.insert(*idx, QPNode::Range(qp_range_node));
+                }
+                DagNode::Keyword(n) => {
+                    let set;
+                    let acc;
+                    if let Some(ctx) = trie_ctxes.get_mut(&end_blk_height) {
+                        let (s, a) = ctx.query(&SmolStr::from(&n.keyword), pk)?;
+                        set = s;
+                        acc = a;
+                    } else {
+                        let trie_root = chain
+                            .read_block_content(end_blk_height)?
+                            .ads
+                            .read_trie_root(e_win_size)?;
+                        let mut trie_ctx =
+                            trie_tree::read::ReadContext::new(chain, trie_root.trie_root_id);
+                        let (s, a) = trie_ctx.query(&SmolStr::from(&n.keyword), pk)?;
+                        set = s;
+                        acc = a;
+                        trie_ctxes.insert(end_blk_height, trie_ctx);
+                    }
+                    let qp_keyword_node = QPKeywordNode {
+                        blk_height: end_blk_height,
+                        set: Some((set, acc)),
+                    };
+                    dag_content.insert(*idx, QPNode::Keyword(Box::new(qp_keyword_node)));
+                }
+                DagNode::BlkRt(_) => {
+                    let set;
+                    let acc;
+                    let blk_content = chain.read_block_content(end_blk_height)?;
+                    let bplus_root = blk_content.ads.read_bplus_root(e_win_size, 0)?;
+                    let bplus_root_id =
+                        bplus_root.bplus_tree_root_id.context("Empty bplus root")?;
+                    let bplus_root_node =
+                        bplus_tree::BPlusTreeNodeLoader::load_node(chain, bplus_root_id)?;
+                    set = bplus_root_node.get_set().clone();
+                    acc = bplus_root_node.get_node_acc();
+                    let qp_blk_rt_node = QPBlkRtNode {
+                        blk_height: end_blk_height,
+                        set: Some((set, acc)),
+                    };
+                    dag_content.insert(*idx, QPNode::BlkRt(Box::new(qp_blk_rt_node)));
+                }
+                DagNode::Union(_) => {
+                    let mut child_idxs = Vec::<NodeIndex>::new();
+                    for c_idx in query_dag.neighbors_directed(*idx, Outgoing) {
+                        child_idxs.push(c_idx);
+                    }
+                    let qp_c_idx1 = child_idxs
+                        .get(0)
+                        .context("Cannot find the first qp child idx of union")?;
+                    let qp_c1 = dag_content
+                        .get(qp_c_idx1)
+                        .context("Cannot find the first child vo node in vo_dag_content")?;
+                    let c1_set = qp_c1.get_set()?;
+                    let qp_c_idx2 = child_idxs
+                        .get(1)
+                        .context("Cannot find the second qp child idx of union")?;
+                    let qp_c2 = dag_content
+                        .get(qp_c_idx2)
+                        .context("Cannot find the second child vo node in vo_dag_content")?;
+                    let c2_set = qp_c2.get_set()?;
+                    let c_union = c1_set | c2_set;
+                    let qp_union = QPUnion {
+                        set: Some((c_union, 0, 0)),
+                    };
+                    dag_content.insert(*idx, QPNode::Union(qp_union));
+                }
+                DagNode::Intersec(_) => {
+                    let mut child_idxs = Vec::<NodeIndex>::new();
+                    for c_idx in query_dag.neighbors_directed(*idx, Outgoing) {
+                        child_idxs.push(c_idx);
+                    }
+                    let qp_c_idx1 = child_idxs
+                        .get(0)
+                        .context("Cannot find the first qp child idx of union")?;
+                    let qp_c1 = dag_content
+                        .get(qp_c_idx1)
+                        .context("Cannot find the first child vo node in vo_dag_content")?;
+                    let c1_set = qp_c1.get_set()?;
+                    let qp_c_idx2 = child_idxs
+                        .get(1)
+                        .context("Cannot find the second qp child idx of union")?;
+                    let qp_c2 = dag_content
+                        .get(qp_c_idx2)
+                        .context("Cannot find the second child vo node in vo_dag_content")?;
+                    let c2_set = qp_c2.get_set()?;
+                    let c_intersec = c1_set & c2_set;
+                    let qp_intersec = QPIntersec {
+                        set: Some((c_intersec, 0, 0)),
+                    };
+                    dag_content.insert(*idx, QPNode::Intersec(qp_intersec));
+                }
+                DagNode::Diff(_) => {
+                    let mut child_idxs = Vec::<NodeIndex>::new();
+                    for c_idx in query_dag.neighbors_directed(*idx, Outgoing) {
+                        child_idxs.push(c_idx);
+                    }
+                    let mut qp_c_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first qp child idx of difference")?;
+                    let qp_c_idx2;
+                    let edge_idx = query_dag
+                        .find_edge(*idx, *qp_c_idx1)
+                        .context("Cannot find edge")?;
+                    let weight = query_dag
+                        .edge_weight(edge_idx)
+                        .context("Cannot find edge")?;
+                    if !*weight {
+                        qp_c_idx2 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first qp child idx of difference")?;
+                    } else {
+                        qp_c_idx1 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first qp child idx of difference")?;
+                        qp_c_idx2 = child_idxs
+                            .get(1)
+                            .context("Cannot find the first qp child idx of difference")?;
+                    }
+                    let qp_c1 = dag_content
+                        .get(qp_c_idx1)
+                        .context("Cannot find the first child vo node in vo_dag_content")?;
+                    let c1_set = qp_c1.get_set()?;
+                    let qp_c2 = dag_content
+                        .get(qp_c_idx2)
+                        .context("Cannot find the second child vo node in vo_dag_content")?;
+                    let c2_set = qp_c2.get_set()?;
+                    let c_diff = c1_set / c2_set;
+                    let qp_diff = QPDiff {
+                        set: Some((c_diff, 0, 0)),
+                    };
+                    dag_content.insert(*idx, QPNode::Diff(qp_diff));
+                }
+            }
         }
-        for p_idx in graph2.neighbors_directed(idx, Incoming) {
-            let edge_idx = graph2.find_edge(p_idx, idx).context("Cannot find edge")?;
-            let weight = graph2.edge_weight(edge_idx).context("Cannot find edge")?;
-            old_s_e_idx.push((p_idx, idx, *weight));
-        }
-        let node = graph2.remove_node(idx).context("Node does not exist")?;
-        let new_idx = graph1.add_node(node);
-        old_new_idx.insert(idx, new_idx);
     }
 
-    for (old_s, old_e, weight) in old_s_e_idx.iter().rev() {
-        let new_s = old_new_idx.get(old_s).context("Cannot find idx in map")?;
-        let new_e = old_new_idx.get(old_e).context("Cannot find idx in map")?;
-        graph1.add_edge(*new_s, *new_e, *weight);
-    }
+    let q_output_elm = q_inputs
+        .last()
+        .cloned()
+        .context("Input query graph is empty")?;
+    let mut qp_outputs = HashSet::new();
+    qp_outputs.insert(q_output_elm);
 
-    let sub_root = old_new_idx
-        .get(&graph2_root_idx)
-        .context("Cannot find graph2 root index")?;
-    Ok(*sub_root)
-}
-
-fn get_range_idxs_sorted(mut vec: Vec<(usize, NodeIndex, Set)>) -> Vec<NodeIndex> {
-    let (vec_unsorted, cost_unsorted) = get_intersec_cost(&vec);
-    vec.sort_by(|a, b| a.0.cmp(&b.0));
-    let (vec_sorted, cost_sorted) = get_intersec_cost(&vec);
-    if cost_unsorted < cost_sorted {
-        vec_unsorted
-    } else {
-        vec_sorted
+    let mut trie_proofs = HashMap::<Height, trie_tree::proof::Proof>::new();
+    for (height, trie_ctx) in trie_ctxes {
+        trie_proofs.insert(height, trie_ctx.into_proof());
     }
-}
-
-fn get_intersec_cost(vec: &[(usize, NodeIndex, Set)]) -> (Vec<NodeIndex>, usize) {
-    let mut res = Vec::<NodeIndex>::new();
-    let mut res_cost: usize = 0;
-    let mut range_lock = false;
-    let mut cur_set;
-    let mut cur_set_ref = &Set::new();
-    for (_size, idx, set) in vec {
-        res.push(*idx);
-        if range_lock {
-            res_cost += cur_set_ref.len() * set.len();
-            cur_set = (cur_set_ref) & (set);
-            cur_set_ref = &cur_set;
-            continue;
-        }
-        cur_set_ref = set;
-        range_lock = true;
-    }
-    (res, res_cost)
+    Ok(QueryPlan {
+        end_blk_height,
+        outputs: qp_outputs,
+        dag_content,
+        trie_proofs,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use crate::chain::{
-        query::{
-            query_param::{param_to_query_basic, AndNode, Node, NotNode, OrNode, QueryParam},
-            select_win_size,
-        },
+        query::query_param::{AndNode, Node, NotNode, OrNode, QueryParam},
         range::Range,
     };
-    use petgraph::dot::{Config, Dot};
-
     use serde_json::json;
 
     #[test]
@@ -987,90 +500,6 @@ mod tests {
             keyword_exp: None,
         };
         assert_eq!(query_param, expect);
-    }
-
-    #[test]
-    fn test_to_query() {
-        let data = json!({
-            "start_blk": 2,
-            "end_blk": 4,
-            "range": [(1, 5), (2, 8)],
-            "keyword_exp": {
-                "or": [
-                    {"input": "a"},
-                    {"and": [{"input": "b"}, {"input": "c"}]},
-                ]
-            },
-        });
-        let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
-        let query_time_win = query_param.gen_time_win();
-        let query_content = query_param.gen_query_content();
-        let time_wins: Vec<u64> = vec![4];
-        let query_params = select_win_size(&time_wins, query_time_win).unwrap();
-        for (time_win, s_win_size, e_win_size) in query_params {
-            let query =
-                param_to_query_basic(time_win, &query_content, s_win_size, e_win_size).unwrap();
-            let query_dag = query.query_dag;
-            println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
-        }
-        println!("======================");
-        let data = json!({
-            "start_blk": 2,
-            "end_blk": 8,
-            "range": [(1, 5)],
-            "keyword_exp": {"input": "a"},
-        });
-        let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
-        let query_time_win = query_param.gen_time_win();
-        let query_content = query_param.gen_query_content();
-        let time_wins: Vec<u64> = vec![4];
-        let query_params = select_win_size(&time_wins, query_time_win).unwrap();
-        for (time_win, s_win_size, e_win_size) in query_params {
-            let query =
-                param_to_query_basic(time_win, &query_content, s_win_size, e_win_size).unwrap();
-            let query_dag = query.query_dag;
-            println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
-        }
-        println!("======================");
-        let data = json!({
-            "start_blk": 1,
-            "end_blk": 3,
-            "range": [(10, 15)],
-            "keyword_exp": {"input": "a"},
-        });
-        let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
-        let query_time_win = query_param.gen_time_win();
-        let query_content = query_param.gen_query_content();
-        let time_wins: Vec<u64> = vec![4];
-        let query_params = select_win_size(&time_wins, query_time_win).unwrap();
-        for (time_win, s_win_size, e_win_size) in query_params {
-            let query =
-                param_to_query_basic(time_win, &query_content, s_win_size, e_win_size).unwrap();
-            let query_dag = query.query_dag;
-            println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
-        }
-        println!("======================");
-        let data = json!({
-            "start_blk": 2,
-            "end_blk": 4,
-            "range": [(10, 15)],
-            "keyword_exp": {
-                "not": {"input": "a"}
-            },
-        });
-        let query_param: QueryParam<u32> = serde_json::from_value(data).unwrap();
-        let query_time_win = query_param.gen_time_win();
-        let query_content = query_param.gen_query_content();
-        let time_wins: Vec<u64> = vec![4];
-        let query_params = select_win_size(&time_wins, query_time_win).unwrap();
-        for (time_win, s_win_size, e_win_size) in query_params {
-            let query =
-                param_to_query_basic(time_win, &query_content, s_win_size, e_win_size).unwrap();
-            let query_dag = query.query_dag;
-            println!("{:?}", Dot::with_config(&query_dag, &[Config::EdgeNoLabel]));
-        }
-
-        assert_eq!(1, 1);
     }
 
     #[test]

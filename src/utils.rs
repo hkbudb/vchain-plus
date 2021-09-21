@@ -175,7 +175,6 @@ pub fn init_tracing_subscriber(directives: &str) -> Result<()> {
 pub struct QueryTime {
     pub(crate) stage1: Time,
     pub(crate) stage2: Time,
-    pub(crate) stage3: Time,
     pub(crate) total: Time,
 }
 
@@ -305,27 +304,19 @@ mod tests {
     #[test]
     fn test_petgraph_serialize() {
         let k1 = QPKeywordNode {
-            keyword: "a".to_string(),
             blk_height: Height(0),
-            time_win: 2,
             set: None,
         };
         let k2 = QPKeywordNode {
-            keyword: "b".to_string(),
             blk_height: Height(0),
-            time_win: 2,
             set: None,
         };
         let k3 = QPKeywordNode {
-            keyword: "c".to_string(),
             blk_height: Height(0),
-            time_win: 2,
             set: None,
         };
         let k4 = QPKeywordNode {
-            keyword: "d".to_string(),
             blk_height: Height(0),
-            time_win: 2,
             set: None,
         };
         let union = QPUnion { set: None };
