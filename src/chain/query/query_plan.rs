@@ -84,7 +84,8 @@ impl<K: Num> QueryPlan<K> {
                 let cur_max_idx = dag.node_indices().last().context("No idx in output")?;
                 let child_idxs = dag.neighbors_directed(idx, Outgoing);
                 self.outputs.remove(&idx);
-                self.dag_content.remove(&idx);
+                let max_idx_content = self.dag_content.remove(&cur_max_idx).context("empty content")?;
+                self.dag_content.insert(idx, max_idx_content);
                 for child_idx in child_idxs {
                     if child_idx == cur_max_idx {
                         self.outputs.insert(idx);
