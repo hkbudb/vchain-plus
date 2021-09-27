@@ -24,7 +24,7 @@ use petgraph::{
 };
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 use super::{query_plan::QueryPlan, TimeWin};
 
@@ -457,12 +457,11 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num>(
         dag_content.insert(diff_idx, QPNode::Diff(QPDiff { set: None }));
         root_idx = diff_idx;
     }
-    let mut outputs = HashSet::new();
-    outputs.insert(root_idx);
 
+    let qp_root_idx = root_idx;
     let qp = QueryPlan {
         end_blk_height,
-        outputs,
+        root_idx: qp_root_idx,
         dag_content,
         trie_proofs: HashMap::new(),
     };
@@ -776,11 +775,10 @@ pub fn gen_last_query_dag_with_cont_trimmed<K: Num, T: ReadInterface<K = K>>(
     for (h, trie_ctx) in trie_ctxes {
         trie_proofs.insert(h, trie_ctx.into_proof());
     }
-    let mut outputs = HashSet::new();
-    outputs.insert(root_idx);
+    let qp_root_idx = root_idx;
     let qp = QueryPlan {
         end_blk_height,
-        outputs,
+        root_idx: qp_root_idx,
         dag_content,
         trie_proofs,
     };

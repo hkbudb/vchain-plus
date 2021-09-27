@@ -143,99 +143,6 @@ impl<K: Num> QueryParam<K> {
     }
 }
 
-/*
-#[allow(clippy::type_complexity)]
-pub fn param_to_query_basic<K: Num>(
-    time_win: TimeWin,
-    query_content: &QueryContent<K>,
-    start_win_size: Option<u64>,
-    end_win_size: u64,
-) -> Result<Query<K>> {
-    let end_blk_height = Height(time_win.end_blk);
-    let keyword_exp_opt = query_content.keyword_exp.as_ref();
-    let mut query_dag = Graph::<QueryNode<K>, bool>::new();
-
-    let mut keyword_root_idx: NodeIndex = NodeIndex::default();
-    let mut range_root_idx: NodeIndex = NodeIndex::default();
-    let has_keyword_query: bool;
-    let has_range_query: bool;
-
-    if let Some(keyword_exp) = keyword_exp_opt.as_ref() {
-        has_keyword_query = true;
-        keyword_root_idx =
-            dag_add_keyword_exp(keyword_exp, &mut query_dag, end_blk_height, end_win_size)?;
-    } else {
-        has_keyword_query = false;
-    }
-
-    if !query_content.range.is_empty() {
-        has_range_query = true;
-        let mut range_lock = false;
-        for (i, r) in query_content.range.iter().enumerate() {
-            // add range
-            let range_idx = query_dag.add_node(QueryNode::Range(RangeNode {
-                range: *r,
-                blk_height: end_blk_height,
-                time_win: end_win_size,
-                dim: i,
-                set: None,
-            }));
-            if range_lock {
-                // add intersec
-                let intersec_idx =
-                    query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-                query_dag.add_edge(intersec_idx, range_root_idx, true);
-                query_dag.add_edge(intersec_idx, range_idx, false);
-                range_root_idx = intersec_idx;
-                continue;
-            }
-            range_root_idx = range_idx;
-            range_lock = true;
-        }
-    } else {
-        has_range_query = false;
-    }
-
-    let end_blk_idx: NodeIndex;
-
-    if has_keyword_query && has_range_query {
-        debug!("has both keyword and range query");
-        end_blk_idx = query_dag.add_node(QueryNode::Intersec(IntersecNode { set: None }));
-        query_dag.add_edge(end_blk_idx, range_root_idx, true);
-        query_dag.add_edge(end_blk_idx, keyword_root_idx, false);
-    } else if has_keyword_query {
-        debug!("has keyword query only");
-        end_blk_idx = keyword_root_idx;
-    } else if has_range_query {
-        debug!("has range query only");
-        end_blk_idx = range_root_idx;
-    } else {
-        debug!("invalid query");
-        bail!("query invalid");
-    }
-
-    if let Some(size) = start_win_size {
-        if time_win.start_blk > 1 {
-            let blk_rt_idx = query_dag.add_node(QueryNode::BlkRt(Box::new(BlkRtNode {
-                blk_height: Height(time_win.start_blk - 1),
-                time_win: size,
-                set: None,
-            })));
-            let diff_idx = query_dag.add_node(QueryNode::Diff(DiffNode { set: None }));
-            query_dag.add_edge(diff_idx, blk_rt_idx, true);
-            query_dag.add_edge(diff_idx, end_blk_idx, false);
-        }
-    }
-    let res_query = Query {
-        end_blk_height,
-        query_dag,
-        trie_proofs: HashMap::<Height, trie_tree::proof::Proof>::new(),
-    };
-    Ok(res_query)
-}
-
-*/
-
 pub fn param_to_qp_parallel<K: Num, T: ReadInterface<K = K>>(
     time_win: &TimeWin,
     e_win_size: u64,
@@ -415,8 +322,7 @@ pub fn param_to_qp_parallel<K: Num, T: ReadInterface<K = K>>(
         .last()
         .cloned()
         .context("Input query graph is empty")?;
-    let mut qp_outputs = HashSet::new();
-    qp_outputs.insert(q_output_elm);
+    let qp_root_idx = q_output_elm;
 
     let mut trie_proofs = HashMap::<Height, trie_tree::proof::Proof>::new();
     for (height, trie_ctx) in trie_ctxes {
@@ -424,7 +330,7 @@ pub fn param_to_qp_parallel<K: Num, T: ReadInterface<K = K>>(
     }
     Ok(QueryPlan {
         end_blk_height,
-        outputs: qp_outputs,
+        root_idx: qp_root_idx,
         dag_content,
         trie_proofs,
     })

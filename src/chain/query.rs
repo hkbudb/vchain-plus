@@ -87,7 +87,8 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     query_dag: &Graph<query_dag::DagNode<K>, bool>,
 ) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
     let mut vo_dag_content = HashMap::<NodeIndex, VONode<K>>::new();
-    let qp_outputs = query_plan.outputs;
+    let qp_root_idx = query_plan.root_idx;
+    //let qp_outputs = query_plan.outputs;
     let qp_end_blk_height = query_plan.end_blk_height;
     let qp_dag_content = &mut query_plan.dag_content;
     let mut set_map = HashMap::<NodeIndex, Set>::new();
@@ -264,7 +265,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     let c2_set = set_map
                         .get(qp_c_idx2)
                         .context("Cannot find the set in set_map")?;
-                    if !qp_outputs.contains(&idx) {
+                    if qp_root_idx != idx {
                         let (res_set, res_acc, inter_proof) = compute_set_operation_intermediate(
                             Op::Union,
                             c1_set,
@@ -310,7 +311,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     let c2_set = set_map
                         .get(qp_c_idx2)
                         .context("Cannot find the set in set_map")?;
-                    if !qp_outputs.contains(&idx) {
+                    if qp_root_idx != idx {
                         let (res_set, res_acc, inter_proof) = compute_set_operation_intermediate(
                             Op::Intersection,
                             c1_set,
@@ -372,7 +373,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     let c2_set = set_map
                         .get(qp_c_idx2)
                         .context("Cannot find the set in set_map")?;
-                    if !qp_outputs.contains(&idx) {
+                    if qp_root_idx != idx {
                         let (res_set, res_acc, inter_proof) = compute_set_operation_intermediate(
                             Op::Difference,
                             c1_set,
@@ -427,26 +428,27 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     let id_tree_fanout = param.id_tree_fanout;
     let mut vo_ouput_sets = HashMap::<NodeIndex, Set>::new();
 
-    for idx in qp_outputs {
-        let set = set_map.remove(&idx).context("Cannot find set in set_map")?;
-        let mut delta_set = Set::new();
-        for i in set.iter() {
-            let obj_id = ObjId(*i);
-            let obj_hash_opt = id_tree_ctx.query(obj_id, max_id_num, id_tree_fanout)?;
-            let obj_hash;
-            match obj_hash_opt {
-                Some(d) => obj_hash = d,
-                None => {
-                    delta_set = &delta_set | &Set::from_single_element(*i);
-                    continue;
-                }
+    let set = set_map
+        .remove(&qp_root_idx)
+        .context("Cannot find set in set_map")?;
+    let mut delta_set = Set::new();
+    for i in set.iter() {
+        let obj_id = ObjId(*i);
+        let obj_hash_opt = id_tree_ctx.query(obj_id, max_id_num, id_tree_fanout)?;
+        let obj_hash;
+        match obj_hash_opt {
+            Some(d) => obj_hash = d,
+            None => {
+                delta_set = &delta_set | &Set::from_single_element(*i);
+                continue;
             }
-            let obj = chain.read_object(obj_hash)?;
-            obj_map.insert(obj_id, obj);
         }
-        let sub_res_set = &set / &delta_set;
-        vo_ouput_sets.insert(idx, sub_res_set);
+        let obj = chain.read_object(obj_hash)?;
+        obj_map.insert(obj_id, obj);
     }
+    let sub_res_set = &set / &delta_set;
+    vo_ouput_sets.insert(qp_root_idx, sub_res_set);
+
     let id_tree_proof = id_tree_ctx.into_proof();
     for (height, time_win) in time_win_map {
         let blk_content = chain.read_block_content(height)?;

@@ -3,11 +3,9 @@ use crate::{
     chain::{block::Height, bplus_tree, traits::Num, trie_tree},
 };
 use anyhow::{Context, Result};
-use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
+use petgraph::graph::NodeIndex;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
-
-use super::query_dag::DagNode;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum QPNode<K: Num> {
@@ -68,37 +66,9 @@ pub struct QPDiff {
 #[derive(Debug)]
 pub struct QueryPlan<K: Num> {
     pub(crate) end_blk_height: Height,
-    pub(crate) outputs: HashSet<NodeIndex>,
+    pub(crate) root_idx: NodeIndex,
     pub(crate) dag_content: HashMap<NodeIndex, QPNode<K>>,
     pub(crate) trie_proofs: HashMap<Height, trie_tree::proof::Proof>,
-}
-
-impl<K: Num> QueryPlan<K> {
-    pub fn remove_top_union(&mut self, dag: &mut Graph<DagNode<K>, bool>) -> Result<()> {
-        let mut queue = VecDeque::<NodeIndex>::new();
-        for idx in &self.outputs {
-            queue.push_back(*idx);
-        }
-        while let Some(idx) = queue.pop_front() {
-            if let Some(QPNode::Union(_)) = self.dag_content.get(&idx) {
-                let cur_max_idx = dag.node_indices().last().context("No idx in output")?;
-                let child_idxs = dag.neighbors_directed(idx, Outgoing);
-                self.outputs.remove(&idx);
-                let max_idx_content = self.dag_content.remove(&cur_max_idx).context("empty content")?;
-                self.dag_content.insert(idx, max_idx_content);
-                for child_idx in child_idxs {
-                    if child_idx == cur_max_idx {
-                        self.outputs.insert(idx);
-                    } else {
-                        self.outputs.insert(child_idx);
-                    }
-                    queue.push_back(child_idx);
-                }
-                dag.remove_node(idx);
-            }
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
