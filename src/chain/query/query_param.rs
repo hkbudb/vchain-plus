@@ -16,7 +16,6 @@ use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph}
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::collections::{HashMap, HashSet};
-
 use super::{query_dag::DagNode, query_plan::QueryPlan, QueryContent, TimeWin};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
