@@ -46,17 +46,14 @@ impl<K: Num> VONode<K> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VORangeNode<K: Num> {
-    //pub(crate) range: Range<K>,
     pub(crate) blk_height: Height,
     pub(crate) win_size: u64,
-    //pub(crate) dim: usize,
     pub(crate) acc: AccValue,
     pub(crate) proof: bplus_tree::proof::Proof<K>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOKeywordNode {
-    //pub(crate) keyword: String,
     pub(crate) blk_height: Height,
     pub(crate) win_size: u64,
     pub(crate) acc: AccValue,

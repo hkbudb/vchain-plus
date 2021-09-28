@@ -88,7 +88,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
 ) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
     let mut vo_dag_content = HashMap::<NodeIndex, VONode<K>>::new();
     let qp_root_idx = query_plan.root_idx;
-    //let qp_outputs = query_plan.outputs;
     let qp_end_blk_height = query_plan.end_blk_height;
     let qp_dag_content = &mut query_plan.dag_content;
     let mut set_map = HashMap::<NodeIndex, Set>::new();
