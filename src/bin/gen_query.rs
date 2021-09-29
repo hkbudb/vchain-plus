@@ -346,13 +346,12 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
     }
 
     let cnf_set = node.to_cnf_set();
-    let cnf_node = Node::set_to_cnf(&cnf_set);
 
     let query_param = QueryParam {
         start_blk: start_blk_height_num,
         end_blk: end_blk_height_num,
         range: Vec::<Range<u32>>::new(),
-        keyword_exp: Some(cnf_node),
+        keyword_exp: Some(node),
     };
     let vchain_plus_query_param = serde_json::to_string_pretty(&query_param)?;
 
@@ -602,12 +601,11 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     }
 
     let cnf_set = node.to_cnf_set();
-    let cnf_node = Node::set_to_cnf(&cnf_set);
     let query_param = QueryParam {
         start_blk: start_blk_height.0,
         end_blk: end_blk_height.0,
         range: vchain_plus_range,
-        keyword_exp: Some(cnf_node),
+        keyword_exp: Some(node),
     };
     let vchain_plus_query_param = serde_json::to_string_pretty(&query_param)?;
     let mut total_bool = vec![];

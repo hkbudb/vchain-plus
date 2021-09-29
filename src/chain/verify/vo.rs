@@ -4,7 +4,6 @@ use crate::{
         block::Height,
         bplus_tree,
         id_tree::{self, ObjId},
-        range::Range,
         traits::Num,
         trie_tree,
         verify::hash::merkle_proof_hash,
@@ -12,7 +11,7 @@ use crate::{
     digest::Digest,
 };
 use anyhow::{bail, Result};
-use petgraph::{graph::NodeIndex, Graph};
+use petgraph::graph::NodeIndex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
@@ -36,37 +35,34 @@ impl<K: Num> VONode<K> {
             VONode::Keyword(n) => Ok(&n.acc),
             VONode::BlkRt(n) => Ok(&n.acc),
             VONode::InterUnion(n) => Ok(&n.acc),
-            VONode::FinalUnion(_) => bail!("This is a final operation"),
+            VONode::FinalUnion(_) => bail!("This is a final union operation"),
             VONode::InterIntersec(n) => Ok(&n.acc),
-            VONode::FinalIntersec(_) => bail!("This is a final operation"),
+            VONode::FinalIntersec(_) => bail!("This is a final intersec operation"),
             VONode::InterDiff(n) => Ok(&n.acc),
-            VONode::FinalDiff(_) => bail!("This is a final operation"),
+            VONode::FinalDiff(_) => bail!("This is a final diff operation"),
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VORangeNode<K: Num> {
-    pub(crate) range: Range<K>,
     pub(crate) blk_height: Height,
-    pub(crate) time_win: u64,
-    pub(crate) dim: usize,
+    pub(crate) win_size: u64,
     pub(crate) acc: AccValue,
     pub(crate) proof: bplus_tree::proof::Proof<K>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOKeywordNode {
-    pub(crate) keyword: String,
     pub(crate) blk_height: Height,
-    pub(crate) time_win: u64,
+    pub(crate) win_size: u64,
     pub(crate) acc: AccValue,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOBlkRtNode {
     pub(crate) blk_height: Height,
-    pub(crate) time_win: u64,
+    pub(crate) win_size: u64,
     pub(crate) acc: AccValue,
 }
 
@@ -84,7 +80,7 @@ pub struct VOFinalUnion {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOInterIntersec {
     pub(crate) acc: AccValue,
-    pub(crate) proof: IntermediateProof,
+    pub(crate) proof: Option<IntermediateProof>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -95,7 +91,7 @@ pub struct VOFinalIntersec {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOInterDiff {
     pub(crate) acc: AccValue,
-    pub(crate) proof: IntermediateProof,
+    pub(crate) proof: Option<IntermediateProof>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -125,14 +121,15 @@ impl MerkleProof {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct VoDag<K: Num> {
+pub struct VoDagContent<K: Num> {
     pub(crate) output_sets: HashMap<NodeIndex, Set>,
-    pub(crate) dag: Graph<VONode<K>, bool>,
+    pub(crate) dag_content: HashMap<NodeIndex, VONode<K>>,
+    pub(crate) dag_idx: usize,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct VO<K: Num> {
-    pub(crate) vo_dag: VoDag<K>,
+    pub(crate) vo_dag_content: VoDagContent<K>,
     pub(crate) trie_proofs: HashMap<Height, trie_tree::proof::Proof>,
     pub(crate) id_tree_proof: id_tree::proof::Proof,
     pub(crate) cur_obj_id: ObjId,

@@ -305,27 +305,19 @@ mod tests {
     #[test]
     fn test_petgraph_serialize() {
         let k1 = QPKeywordNode {
-            keyword: "a".to_string(),
             blk_height: Height(0),
-            time_win: 2,
             set: None,
         };
         let k2 = QPKeywordNode {
-            keyword: "b".to_string(),
             blk_height: Height(0),
-            time_win: 2,
             set: None,
         };
         let k3 = QPKeywordNode {
-            keyword: "c".to_string(),
             blk_height: Height(0),
-            time_win: 2,
             set: None,
         };
         let k4 = QPKeywordNode {
-            keyword: "d".to_string(),
             blk_height: Height(0),
-            time_win: 2,
             set: None,
         };
         let union = QPUnion { set: None };

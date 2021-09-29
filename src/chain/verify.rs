@@ -2,7 +2,7 @@ pub mod hash;
 pub mod vo;
 
 use crate::{
-    acc::{AccPublicKey, Set},
+    acc::{AccPublicKey, AccValue, Set},
     chain::{
         traits::Num,
         {block::Height, id_tree::ObjId, object::Object, traits::ReadInterface},
@@ -10,16 +10,18 @@ use crate::{
     digest::{Digest, Digestible},
     utils::Time,
 };
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use hash::{ads_hash, bplus_roots_hash};
 use hash::{id_tree_root_hash, obj_hash};
-use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing};
+use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
     ops::AddAssign,
 };
 use vo::VO;
+
+use crate::chain::query::query_dag::DagNode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerifyInfo {
@@ -72,220 +74,303 @@ impl VOSize {
 
 fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     chain: &T,
-    res: &HashMap<ObjId, Object<K>>,
-    vo: &VO<K>,
+    res_content: &HashMap<ObjId, Object<K>>,
+    vo_content: &VO<K>,
+    graph: &Graph<DagNode<K>, bool>,
     pk: &AccPublicKey,
 ) -> Result<()> {
     // verify dag, including range query and set operation
-    let vo_dag_struct = &vo.vo_dag;
-    let vo_dag = &vo_dag_struct.dag;
-    let vo_output_sets = &vo_dag_struct.output_sets;
-    let vo_dag_idxs = vo_dag.node_indices();
-    let mut bplus_roots = HashMap::<Height, (u64, BTreeMap<usize, Digest>)>::new();
-    let trie_proofs = &vo.trie_proofs;
+    let empty_acc = AccValue::from_set(&Set::new(), pk);
+    let vo_dag_idxs = graph.node_indices();
+    let vo_dag_content = &vo_content.vo_dag_content.dag_content;
+    let vo_output_sets = &vo_content.vo_dag_content.output_sets;
     let mut time_win_map = HashMap::<Height, u64>::new();
+    let mut bplus_roots = HashMap::<Height, (u64, BTreeMap<usize, Digest>)>::new();
+    let trie_proofs = &vo_content.trie_proofs;
     for idx in vo_dag_idxs {
-        if let Some(node) = vo_dag.node_weight(idx) {
-            match node {
-                vo::VONode::Range(n) => {
-                    time_win_map.insert(n.blk_height, n.time_win);
-                    let res_digest = n.proof.verify(n.range, n.acc, pk)?;
-                    match bplus_roots.get_mut(&n.blk_height) {
-                        Some((_time_win, btree_map)) => {
-                            btree_map.insert(n.dim, res_digest);
+        if let Some(content) = vo_dag_content.get(&idx) {
+            if let Some(node) = graph.node_weight(idx) {
+                match node {
+                    DagNode::Range(n) => match content {
+                        vo::VONode::Range(r_n) => {
+                            let blk_height = r_n.blk_height;
+                            time_win_map.insert(blk_height, r_n.win_size);
+                            let res_digest = r_n.proof.verify(n.range, r_n.acc, pk)?;
+                            match bplus_roots.get_mut(&blk_height) {
+                                Some((_win_size, btree_map)) => {
+                                    btree_map.insert(n.dim, res_digest);
+                                }
+                                None => {
+                                    let mut btree_map = BTreeMap::<usize, Digest>::new();
+                                    btree_map.insert(n.dim, res_digest);
+                                    bplus_roots.insert(blk_height, (r_n.win_size, btree_map));
+                                }
+                            }
                         }
-                        None => {
-                            let mut btree_map = BTreeMap::<usize, Digest>::new();
-                            btree_map.insert(n.dim, res_digest);
-                            bplus_roots.insert(n.blk_height, (n.time_win, btree_map));
+                        _ => {
+                            bail!("mismatched type");
                         }
-                    }
-                }
-                vo::VONode::Keyword(n) => {
-                    time_win_map.insert(n.blk_height, n.time_win);
-                    let proof = trie_proofs
-                        .get(&n.blk_height)
-                        .context("Inside dag: cannot find trie proof in VO")?;
-                    proof.verify_acc(n.acc, &n.keyword, pk)?;
-                }
-                vo::VONode::BlkRt(n) => {
-                    time_win_map.insert(n.blk_height, n.time_win);
-                }
-                vo::VONode::InterUnion(n) => {
-                    let mut child_idxs = Vec::<NodeIndex>::new();
-                    for idx in vo_dag.neighbors_directed(idx, Outgoing) {
-                        child_idxs.push(idx);
-                    }
-                    let child_idx1 = child_idxs
-                        .get(1)
-                        .context("Cannot find the first child idx of intermediate union")?;
-                    let child1 = vo_dag
-                        .node_weight(*child_idx1)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    let child_idx2 = child_idxs
-                        .get(0)
-                        .context("Cannot find the second child idx of intermediate union")?;
-                    let child2 = vo_dag
-                        .node_weight(*child_idx2)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    n.proof
-                        .verify(child1.get_acc()?, child2.get_acc()?, &n.acc, pk)?;
-                }
-                vo::VONode::FinalUnion(n) => {
-                    let mut child_idxs = Vec::<NodeIndex>::new();
-                    for idx in vo_dag.neighbors_directed(idx, Outgoing) {
-                        child_idxs.push(idx);
-                    }
-                    let child_idx1 = child_idxs
-                        .get(1)
-                        .context("Cannot find the first child idx of final union")?;
-                    let child1 = vo_dag
-                        .node_weight(*child_idx1)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    let child_idx2 = child_idxs
-                        .get(0)
-                        .context("Cannot find the second child idx of final union")?;
-                    let child2 = vo_dag
-                        .node_weight(*child_idx2)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    let final_set = vo_output_sets
-                        .get(&idx)
-                        .context("Cannot find set in VO output sets")?;
-                    n.proof
-                        .verify(child1.get_acc()?, child2.get_acc()?, final_set, pk)?;
-                }
-                vo::VONode::InterIntersec(n) => {
-                    let mut child_idxs = Vec::<NodeIndex>::new();
-                    for idx in vo_dag.neighbors_directed(idx, Outgoing) {
-                        child_idxs.push(idx);
-                    }
-                    let child_idx1 = child_idxs
-                        .get(1)
-                        .context("Cannot find the first child idx of intermediate intersection")?;
-                    let child1 = vo_dag
-                        .node_weight(*child_idx1)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    let child_idx2 = child_idxs
-                        .get(0)
-                        .context("Cannot find the second child idx of intermediate intersection")?;
-                    let child2 = vo_dag
-                        .node_weight(*child_idx2)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    n.proof
-                        .verify(child1.get_acc()?, child2.get_acc()?, &n.acc, pk)?;
-                }
-                vo::VONode::FinalIntersec(n) => {
-                    let mut child_idxs = Vec::<NodeIndex>::new();
-                    for idx in vo_dag.neighbors_directed(idx, Outgoing) {
-                        child_idxs.push(idx);
-                    }
-                    let child_idx1 = child_idxs
-                        .get(1)
-                        .context("Cannot find the first child idx of final intersection")?;
-                    let child1 = vo_dag
-                        .node_weight(*child_idx1)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    let child_idx2 = child_idxs
-                        .get(0)
-                        .context("Cannot find the second child idx of final intersection")?;
-                    let child2 = vo_dag
-                        .node_weight(*child_idx2)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    let final_set = vo_output_sets
-                        .get(&idx)
-                        .context("Cannot find set in VO output sets")?;
-                    n.proof
-                        .verify(child1.get_acc()?, child2.get_acc()?, final_set, pk)?;
-                }
-                vo::VONode::InterDiff(n) => {
-                    let mut child_idxs = Vec::<NodeIndex>::new();
-                    for idx in vo_dag.neighbors_directed(idx, Outgoing) {
-                        child_idxs.push(idx);
-                    }
-                    let mut child_idx1 = child_idxs
-                        .get(1)
-                        .context("Cannot find the first child idx of intermediate difference")?;
-                    let child_idx2;
-                    let edge_idx = vo_dag
-                        .find_edge(idx, *child_idx1)
-                        .context("Cannot find edge")?;
-                    let weight = vo_dag.edge_weight(edge_idx).context("Cannot find edge")?;
-                    if !*weight {
-                        child_idx2 = child_idxs.get(0).context(
-                            "Cannot find the second child idx of intermediate difference",
-                        )?;
-                    } else {
-                        child_idx1 = child_idxs.get(0).context(
-                            "Cannot find the first child idx of intermediate difference",
-                        )?;
-                        child_idx2 = child_idxs.get(1).context(
-                            "Cannot find the second child idx of intermediate difference",
-                        )?;
-                    }
-                    let child1 = vo_dag
-                        .node_weight(*child_idx1)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    let child2 = vo_dag
-                        .node_weight(*child_idx2)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    n.proof
-                        .verify(child1.get_acc()?, child2.get_acc()?, &n.acc, pk)?;
-                }
-                vo::VONode::FinalDiff(n) => {
-                    let mut child_idxs = Vec::<NodeIndex>::new();
-                    for idx in vo_dag.neighbors_directed(idx, Outgoing) {
-                        child_idxs.push(idx);
-                    }
-                    let mut child_idx1 = child_idxs
-                        .get(1)
-                        .context("Cannot find the first child idx of intermediate difference")?;
-                    let child_idx2;
-                    let edge_idx = vo_dag
-                        .find_edge(idx, *child_idx1)
-                        .context("Cannot find edge")?;
-                    let weight = vo_dag.edge_weight(edge_idx).context("Cannot find edge")?;
-                    if !*weight {
-                        child_idx2 = child_idxs.get(0).context(
-                            "Cannot find the second child idx of intermediate difference",
-                        )?;
-                    } else {
-                        child_idx1 = child_idxs.get(0).context(
-                            "Cannot find the first child idx of intermediate difference",
-                        )?;
-                        child_idx2 = child_idxs.get(1).context(
-                            "Cannot find the second child idx of intermediate difference",
-                        )?;
-                    }
-                    let child1 = vo_dag
-                        .node_weight(*child_idx1)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    let child2 = vo_dag
-                        .node_weight(*child_idx2)
-                        .context("Cannot find the second child node in vo_dag")?;
-                    let final_set = vo_output_sets
-                        .get(&idx)
-                        .context("Cannot find set in VO output sets")?;
-                    n.proof
-                        .verify(child1.get_acc()?, child2.get_acc()?, final_set, pk)?;
+                    },
+                    DagNode::Keyword(n) => match content {
+                        vo::VONode::Keyword(k_n) => {
+                            let blk_height = k_n.blk_height;
+                            time_win_map.insert(blk_height, k_n.win_size);
+                            let proof = trie_proofs
+                                .get(&blk_height)
+                                .context("Inside dag: cannot find trie proof in VO")?;
+                            proof.verify_acc(k_n.acc, &n.keyword, pk)?;
+                        }
+                        _ => {
+                            bail!("mismatched type");
+                        }
+                    },
+                    DagNode::BlkRt(_) => match content {
+                        vo::VONode::BlkRt(br_n) => {
+                            let blk_height = br_n.blk_height;
+                            time_win_map.insert(blk_height, br_n.win_size);
+                        }
+                        _ => {
+                            bail!("mismatched type");
+                        }
+                    },
+                    DagNode::Union(_) => match content {
+                        vo::VONode::InterUnion(u_n) => {
+                            let mut child_idxs = Vec::<NodeIndex>::new();
+                            for idx in graph.neighbors_directed(idx, Outgoing) {
+                                child_idxs.push(idx);
+                            }
+                            let child_idx1 = child_idxs
+                                .get(0)
+                                .context("Cannot find the first child idx of intermediate union")?;
+                            let child1 = vo_dag_content.get(child_idx1).context(
+                                "Cannot find the first child node of intermediate union",
+                            )?;
+                            let child_idx2 = child_idxs.get(1).context(
+                                "Cannot find the second child idx of intermediate union",
+                            )?;
+                            let child2 = vo_dag_content.get(child_idx2).context(
+                                "Cannot find the first child node of intermediate union",
+                            )?;
+                            u_n.proof
+                                .verify(child1.get_acc()?, child2.get_acc()?, &u_n.acc, pk)?;
+                        }
+                        vo::VONode::FinalUnion(u_n) => {
+                            let mut child_idxs = Vec::<NodeIndex>::new();
+                            for idx in graph.neighbors_directed(idx, Outgoing) {
+                                child_idxs.push(idx);
+                            }
+                            let child_idx1 = child_idxs
+                                .get(0)
+                                .context("Cannot find the first child idx of final union")?;
+                            let child1 = vo_dag_content
+                                .get(child_idx1)
+                                .context("Cannot find the first child node of final union")?;
+                            let child_idx2 = child_idxs
+                                .get(1)
+                                .context("Cannot find the second child idx of final union")?;
+                            let child2 = vo_dag_content
+                                .get(child_idx2)
+                                .context("Cannot find the first child node of final union")?;
+                            let final_set = vo_output_sets
+                                .get(&idx)
+                                .context("Cannot find set in VO output sets")?;
+                            u_n.proof.verify(
+                                child1.get_acc()?,
+                                child2.get_acc()?,
+                                final_set,
+                                pk,
+                            )?;
+                        }
+                        _ => {
+                            bail!("mismatched type");
+                        }
+                    },
+                    DagNode::Intersec(_) => match content {
+                        vo::VONode::InterIntersec(i_n) => {
+                            let mut child_idxs = Vec::<NodeIndex>::new();
+                            for idx in graph.neighbors_directed(idx, Outgoing) {
+                                child_idxs.push(idx);
+                            }
+                            let child_idx1 = child_idxs.get(0).context(
+                                "Cannot find the first child idx of intermediate intersection",
+                            )?;
+                            let child_idx2 = child_idxs.get(1).context(
+                                "Cannot find the second child idx of intermediate intersection",
+                            )?;
+                            let acc1;
+                            let acc2;
+                            if let Some(child1) = vo_dag_content.get(child_idx1) {
+                                acc1 = child1.get_acc()?;
+                            } else {
+                                let child2 = vo_dag_content.get(child_idx2).context(
+                                "Cannot find the second child node of intermediate intersection",
+                            )?;
+                                ensure!(
+                                    *child2.get_acc()? == empty_acc,
+                                    "The child of intersec should be empty"
+                                );
+                                continue;
+                            }
+                            if let Some(child2) = vo_dag_content.get(child_idx2) {
+                                acc2 = child2.get_acc()?;
+                            } else {
+                                let child1 = vo_dag_content.get(child_idx1).context(
+                                    "Cannot find the first child node of intermediate intersection",
+                                )?;
+                                ensure!(
+                                    *child1.get_acc()? == empty_acc,
+                                    "The child of intersec should be empty"
+                                );
+                                continue;
+                            }
+                            i_n.proof
+                                .context("Intermediate intersection proof does not exist")?
+                                .verify(acc1, acc2, &i_n.acc, pk)?;
+                        }
+                        vo::VONode::FinalIntersec(i_n) => {
+                            let mut child_idxs = Vec::<NodeIndex>::new();
+                            for idx in graph.neighbors_directed(idx, Outgoing) {
+                                child_idxs.push(idx);
+                            }
+                            let child_idx1 = child_idxs
+                                .get(0)
+                                .context("Cannot find the first child idx of final intersection")?;
+                            let child1 = vo_dag_content.get(child_idx1).context(
+                                "Cannot find the first child node of final intersection",
+                            )?;
+                            let child_idx2 = child_idxs.get(1).context(
+                                "Cannot find the second child idx of final intersection",
+                            )?;
+                            let child2 = vo_dag_content.get(child_idx2).context(
+                                "Cannot find the first child node of final intersection",
+                            )?;
+                            let final_set = vo_output_sets
+                                .get(&idx)
+                                .context("Cannot find set in VO output sets")?;
+                            i_n.proof.verify(
+                                child1.get_acc()?,
+                                child2.get_acc()?,
+                                final_set,
+                                pk,
+                            )?;
+                        }
+                        _ => {
+                            bail!("mismatched type");
+                        }
+                    },
+                    DagNode::Diff(_) => match content {
+                        vo::VONode::InterDiff(d_n) => {
+                            let mut child_idxs = Vec::<NodeIndex>::new();
+                            for idx in graph.neighbors_directed(idx, Outgoing) {
+                                child_idxs.push(idx);
+                            }
+                            let mut child_idx1 = child_idxs.get(1).context(
+                                "Cannot find the first child idx of intermediate difference",
+                            )?;
+                            let child_idx2;
+                            let edge_idx = graph
+                                .find_edge(idx, *child_idx1)
+                                .context("Cannot find edge")?;
+                            let weight = graph.edge_weight(edge_idx).context("Cannot find edge")?;
+                            if !*weight {
+                                child_idx2 = child_idxs.get(0).context(
+                                    "Cannot find the second child idx of intermediate difference",
+                                )?;
+                            } else {
+                                child_idx1 = child_idxs.get(0).context(
+                                    "Cannot find the first child idx of intermediate difference",
+                                )?;
+                                child_idx2 = child_idxs.get(1).context(
+                                    "Cannot find the second child idx of intermediate difference",
+                                )?;
+                            }
+                            let acc1;
+                            let acc2;
+                            if let Some(child1) = vo_dag_content.get(child_idx1) {
+                                acc1 = child1.get_acc()?;
+                            } else {
+                                let child2 = vo_dag_content.get(child_idx2).context(
+                                "Cannot find the second child node of intermediate intersection",
+                            )?;
+                                ensure!(
+                                    *child2.get_acc()? == empty_acc,
+                                    "The child of diff should be empty"
+                                );
+                                continue;
+                            }
+                            let child2 = vo_dag_content.get(child_idx2).context(
+                                "Cannot find the second child node of intermediate difference",
+                            )?;
+                            acc2 = child2.get_acc()?;
+                            d_n.proof
+                                .context("Intermediate difference proof does not exist")?
+                                .verify(acc1, acc2, &d_n.acc, pk)?;
+                        }
+                        vo::VONode::FinalDiff(d_n) => {
+                            let mut child_idxs = Vec::<NodeIndex>::new();
+                            for idx in graph.neighbors_directed(idx, Outgoing) {
+                                child_idxs.push(idx);
+                            }
+                            let mut child_idx1 = child_idxs
+                                .get(1)
+                                .context("Cannot find the first child idx of final difference")?;
+                            let child_idx2;
+                            let edge_idx = graph
+                                .find_edge(idx, *child_idx1)
+                                .context("Cannot find edge")?;
+                            let weight = graph.edge_weight(edge_idx).context("Cannot find edge")?;
+                            if !*weight {
+                                child_idx2 = child_idxs.get(0).context(
+                                    "Cannot find the second child idx of final difference",
+                                )?;
+                            } else {
+                                child_idx1 = child_idxs.get(0).context(
+                                    "Cannot find the first child idx of final difference",
+                                )?;
+                                child_idx2 = child_idxs.get(1).context(
+                                    "Cannot find the second child idx of final difference",
+                                )?;
+                            }
+                            let child1 = vo_dag_content
+                                .get(child_idx1)
+                                .context("Cannot find the first child node of final difference")?;
+                            let child2 = vo_dag_content
+                                .get(child_idx2)
+                                .context("Cannot find the second child node of final difference")?;
+                            let final_set = vo_output_sets
+                                .get(&idx)
+                                .context("Cannot find set in VO output sets")?;
+                            d_n.proof.verify(
+                                child1.get_acc()?,
+                                child2.get_acc()?,
+                                final_set,
+                                pk,
+                            )?;
+                        }
+                        _ => {
+                            bail!("mismatched type");
+                        }
+                    },
                 }
             }
         }
     }
 
     // verify id tree
-    let id_tree_proof = &vo.id_tree_proof;
+    let id_tree_proof = &vo_content.id_tree_proof;
     let param = chain.get_parameter()?;
     let max_id_num = param.max_id_num;
     let id_tree_fanout = param.id_tree_fanout;
-    for (id, obj) in res {
+    for (id, obj) in res_content {
         let target_hash = obj_hash(obj, id);
         id_tree_proof.verify_value(target_hash, *id, max_id_num, id_tree_fanout)?;
     }
     let id_tree_root_node_hash = id_tree_proof.root_hash();
-    let id_tree_root_hash = id_tree_root_hash(vo.cur_obj_id.to_digest(), id_tree_root_node_hash);
+    let id_tree_root_hash =
+        id_tree_root_hash(vo_content.cur_obj_id.to_digest(), id_tree_root_node_hash);
 
     // verify merkle proof, including trie and block head hash
-    let merkle_proofs = &vo.merkle_proofs;
+    let merkle_proofs = &vo_content.merkle_proofs;
     for (height, time_win) in time_win_map {
         if let Some((_win_size, bplus_hashes)) = bplus_roots.get(&height) {
             let bplus_root_hash = bplus_roots_hash(bplus_hashes.iter());
@@ -313,7 +398,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
         vo_outputs = &vo_outputs | set;
     }
     let mut res_outputs: Set = Set::new();
-    for key in res.keys() {
+    for key in res_content.keys() {
         res_outputs.insert(key.0);
     }
     ensure!(
@@ -326,7 +411,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
 
 fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<VOSize> {
     Ok(VOSize {
-        vo_dag_s: bincode::serialize(&vo.vo_dag)?.len(),
+        vo_dag_s: bincode::serialize(&vo.vo_dag_content)?.len(),
         trie_proof_s: bincode::serialize(&vo.trie_proofs)?.len(),
         id_proof_s: bincode::serialize(&vo.id_tree_proof)?.len(),
         cur_id_s: bincode::serialize(&vo.cur_obj_id)?.len(),
@@ -338,20 +423,23 @@ fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<VOSize> {
 #[allow(clippy::type_complexity)]
 pub fn verify<K: Num + Serialize, T: ReadInterface<K = K>>(
     chain: T,
-    res: Vec<(HashMap<ObjId, Object<K>>, VO<K>)>,
+    res_contents: &[(HashMap<ObjId, Object<K>>, VO<K>)],
+    res_dags: &HashMap<usize, Graph<DagNode<K>, bool>>,
     pk: &AccPublicKey,
 ) -> Result<VerifyInfo> {
     let timer = howlong::ProcessCPUTimer::new();
     let mut obj_num = 0;
-    for (res, vo) in &res {
-        inner_verify(&chain, res, vo, pk)?;
-        obj_num += res.len();
+    for (res_content, vo_content) in res_contents {
+        let graph_idx = vo_content.vo_dag_content.dag_idx;
+        let graph = res_dags.get(&graph_idx).context("graph does not exists")?;
+        inner_verify(&chain, res_content, vo_content, graph, pk)?;
+        obj_num += res_content.len();
     }
     let time = Time::from(timer.elapsed());
     info!("Total number of result object returned: {}", obj_num);
 
     let mut total_vo_size = VOSize::new(0, 0, 0, 0, 0, 0);
-    for (_, vo) in &res {
+    for (_, vo) in res_contents {
         total_vo_size += cal_vo_size(vo)?;
     }
 
