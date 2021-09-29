@@ -42,7 +42,7 @@ use query_param::QueryParam;
 use query_plan::QueryPlan;
 use rayon::prelude::*;
 use smol_str::SmolStr;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TimeWin {
@@ -71,6 +71,7 @@ pub struct QueryContent<K: Num> {
 pub struct QueryResInfo<K: Num> {
     stage1: ProcessDuration,
     stage2: ProcessDuration,
+    stage3: ProcessDuration,
     res: (HashMap<ObjId, Object<K>>, VO<K>),
 }
 
@@ -80,6 +81,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     chain: &T,
     pk: &AccPublicKey,
     mut query_plan: QueryPlan<K>,
+    outputs: HashSet<NodeIndex>,
     time_win: &TimeWin,
     s_win_size: Option<u64>,
     e_win_size: u64,
@@ -87,7 +89,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     query_dag: &Graph<query_dag::DagNode<K>, bool>,
 ) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
     let mut vo_dag_content = HashMap::<NodeIndex, VONode<K>>::new();
-    let qp_root_idx = query_plan.root_idx;
     let qp_end_blk_height = query_plan.end_blk_height;
     let qp_dag_content = &mut query_plan.dag_content;
     let mut set_map = HashMap::<NodeIndex, Set>::new();
@@ -152,8 +153,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         };
                         vo_dag_content.insert(idx, VONode::Range(vo_range_node));
                         set_map.insert(idx, set);
-                    } else {
-                        bail!("QPNode with idx {:?} does not exist in query plan", idx);
                     }
                 }
                 query_dag::DagNode::Keyword(node) => {
@@ -198,8 +197,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         };
                         vo_dag_content.insert(idx, VONode::Keyword(vo_keyword_node));
                         set_map.insert(idx, set);
-                    } else {
-                        bail!("QPNode with idx {:?} does not exist in query plan", idx);
                     }
                 }
                 query_dag::DagNode::BlkRt(_) => {
@@ -237,162 +234,209 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         };
                         vo_dag_content.insert(idx, VONode::BlkRt(vo_blk_root));
                         set_map.insert(idx, set);
-                    } else {
-                        bail!("QPNode with idx {:?} does not exist in query plan", idx);
                     }
                 }
                 query_dag::DagNode::Union(_) => {
-                    let mut child_idxs = Vec::<NodeIndex>::new();
-                    for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
-                        child_idxs.push(c_idx);
-                    }
-                    let qp_c_idx1 = child_idxs
-                        .get(0)
-                        .context("Cannot find the first qp child idx of union")?;
-                    let vo_c1 = vo_dag_content
-                        .get(qp_c_idx1)
-                        .context("Cannot find the first child vo node in vo_dag_content")?;
-                    let c1_set = set_map
-                        .get(qp_c_idx1)
-                        .context("Cannot find the set in set_map")?;
-                    let qp_c_idx2 = child_idxs
-                        .get(1)
-                        .context("Cannot find the second qp child idx of union")?;
-                    let vo_c2 = vo_dag_content
-                        .get(qp_c_idx2)
-                        .context("Cannot find the second child vo node in vo_dag_content")?;
-                    let c2_set = set_map
-                        .get(qp_c_idx2)
-                        .context("Cannot find the set in set_map")?;
-                    if qp_root_idx != idx {
-                        let (res_set, res_acc, inter_proof) = compute_set_operation_intermediate(
-                            Op::Union,
-                            c1_set,
-                            vo_c1.get_acc()?,
-                            c2_set,
-                            vo_c2.get_acc()?,
-                            pk,
-                        );
-                        let vo_inter_union = VOInterUnion {
-                            acc: res_acc,
-                            proof: inter_proof,
-                        };
-                        vo_dag_content.insert(idx, VONode::InterUnion(vo_inter_union));
-                        set_map.insert(idx, res_set);
-                    } else {
-                        let (res_set, final_proof) =
-                            compute_set_operation_final(Op::Union, c1_set, c2_set, pk);
-                        let vo_final_union = VOFinalUnion { proof: final_proof };
-                        vo_dag_content.insert(idx, VONode::FinalUnion(vo_final_union));
-                        set_map.insert(idx, res_set);
+                    if let Some(QPNode::Union(_)) = qp_dag_content.remove(&idx) {
+                        let mut child_idxs = Vec::<NodeIndex>::new();
+                        for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
+                            child_idxs.push(c_idx);
+                        }
+                        let qp_c_idx1 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first qp child idx of union")?;
+                        let vo_c1 = vo_dag_content
+                            .get(qp_c_idx1)
+                            .context("Cannot find the first child vo node in vo_dag_content")?;
+                        let c1_set = set_map
+                            .get(qp_c_idx1)
+                            .context("Cannot find the set in set_map")?;
+                        let qp_c_idx2 = child_idxs
+                            .get(1)
+                            .context("Cannot find the second qp child idx of union")?;
+                        let vo_c2 = vo_dag_content
+                            .get(qp_c_idx2)
+                            .context("Cannot find the second child vo node in vo_dag_content")?;
+                        let c2_set = set_map
+                            .get(qp_c_idx2)
+                            .context("Cannot find the set in set_map")?;
+                        if !outputs.contains(&idx) {
+                            let (res_set, res_acc, inter_proof) =
+                                compute_set_operation_intermediate(
+                                    Op::Union,
+                                    c1_set,
+                                    vo_c1.get_acc()?,
+                                    c2_set,
+                                    vo_c2.get_acc()?,
+                                    pk,
+                                );
+                            let vo_inter_union = VOInterUnion {
+                                acc: res_acc,
+                                proof: inter_proof,
+                            };
+                            vo_dag_content.insert(idx, VONode::InterUnion(vo_inter_union));
+                            set_map.insert(idx, res_set);
+                        } else {
+                            // should not appear
+                            let (res_set, final_proof) =
+                                compute_set_operation_final(Op::Union, c1_set, c2_set, pk);
+                            let vo_final_union = VOFinalUnion { proof: final_proof };
+                            vo_dag_content.insert(idx, VONode::FinalUnion(vo_final_union));
+                            set_map.insert(idx, res_set);
+                        }
                     }
                 }
                 query_dag::DagNode::Intersec(_) => {
-                    let mut child_idxs = Vec::<NodeIndex>::new();
-                    for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
-                        child_idxs.push(c_idx);
-                    }
-                    let qp_c_idx1 = child_idxs
-                        .get(0)
-                        .context("Cannot find the first qp child idx of intersection")?;
-                    let vo_c1 = vo_dag_content
-                        .get(qp_c_idx1)
-                        .context("Cannot find the first child vo node in vo_dag_content")?;
-                    let c1_set = set_map
-                        .get(qp_c_idx1)
-                        .context("Cannot find the set in set_map")?;
-                    let qp_c_idx2 = child_idxs
-                        .get(1)
-                        .context("Cannot find the second qp child idx of union")?;
-                    let vo_c2 = vo_dag_content
-                        .get(qp_c_idx2)
-                        .context("Cannot find the second child vo node in vo_dag_content")?;
-                    let c2_set = set_map
-                        .get(qp_c_idx2)
-                        .context("Cannot find the set in set_map")?;
-                    if qp_root_idx != idx {
-                        let (res_set, res_acc, inter_proof) = compute_set_operation_intermediate(
-                            Op::Intersection,
-                            c1_set,
-                            vo_c1.get_acc()?,
-                            c2_set,
-                            vo_c2.get_acc()?,
-                            pk,
-                        );
-                        let vo_inter_intersec = VOInterIntersec {
-                            acc: res_acc,
-                            proof: inter_proof,
-                        };
-                        vo_dag_content.insert(idx, VONode::InterIntersec(vo_inter_intersec));
-                        set_map.insert(idx, res_set);
+                    if let Some(QPNode::Intersec(_)) = qp_dag_content.remove(&idx) {
+                        let mut child_idxs = Vec::<NodeIndex>::new();
+                        for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
+                            child_idxs.push(c_idx);
+                        }
+                        let qp_c_idx1 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first qp child idx of intersection")?;
+                        let qp_c_idx2 = child_idxs
+                            .get(1)
+                            .context("Cannot find the second qp child idx of union")?;
+                        if let Some(vo_c1) = vo_dag_content.get(qp_c_idx1) {
+                            // vo_c2 is not empty
+                            if let Some(vo_c2) = vo_dag_content.get(qp_c_idx2) {
+                                // vo_c1 is not empty
+                                let c1_set = set_map
+                                    .get(qp_c_idx1)
+                                    .context("Cannot find the set in set_map")?;
+                                let c2_set = set_map
+                                    .get(qp_c_idx2)
+                                    .context("Cannot find the set in set_map")?;
+                                if !outputs.contains(&idx) {
+                                    let (res_set, res_acc, inter_proof) =
+                                        compute_set_operation_intermediate(
+                                            Op::Intersection,
+                                            c1_set,
+                                            vo_c1.get_acc()?,
+                                            c2_set,
+                                            vo_c2.get_acc()?,
+                                            pk,
+                                        );
+                                    let vo_inter_intersec = VOInterIntersec {
+                                        acc: res_acc,
+                                        proof: Some(inter_proof),
+                                    };
+                                    vo_dag_content
+                                        .insert(idx, VONode::InterIntersec(vo_inter_intersec));
+                                    set_map.insert(idx, res_set);
+                                } else {
+                                    let (res_set, final_proof) = compute_set_operation_final(
+                                        Op::Intersection,
+                                        c1_set,
+                                        c2_set,
+                                        pk,
+                                    );
+                                    let vo_final_intersec = VOFinalIntersec { proof: final_proof };
+                                    vo_dag_content
+                                        .insert(idx, VONode::FinalIntersec(vo_final_intersec));
+                                    set_map.insert(idx, res_set);
+                                }
+                            } else {
+                                // vo_c1 is empty
+                                let vo_inter_intersec = VOInterIntersec {
+                                    acc: *vo_c1.get_acc()?,
+                                    proof: None,
+                                };
+                                vo_dag_content
+                                    .insert(idx, VONode::InterIntersec(vo_inter_intersec));
+                                set_map.insert(idx, Set::new());
+                            }
+                        } else {
+                            // vo_c2 is empty
+                            let qp_c_idx2 = child_idxs
+                                .get(1)
+                                .context("Cannot find the second qp child idx of union")?;
+                            let vo_c2 = vo_dag_content.get(qp_c_idx2).context(
+                                "Cannot find the second child vo node in vo_dag_content",
+                            )?;
+                            let vo_inter_intersec = VOInterIntersec {
+                                acc: *vo_c2.get_acc()?,
+                                proof: None,
+                            };
+                            vo_dag_content.insert(idx, VONode::InterIntersec(vo_inter_intersec));
+                            set_map.insert(idx, Set::new());
+                        }
                     } else {
-                        let (res_set, final_proof) =
-                            compute_set_operation_final(Op::Intersection, c1_set, c2_set, pk);
-                        let vo_final_intersec = VOFinalIntersec { proof: final_proof };
-                        vo_dag_content.insert(idx, VONode::FinalIntersec(vo_final_intersec));
-                        set_map.insert(idx, res_set);
+                        bail!("Intersection does not exist in qp dag content");
                     }
                 }
                 query_dag::DagNode::Diff(_) => {
-                    let mut child_idxs = Vec::<NodeIndex>::new();
-                    for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
-                        child_idxs.push(c_idx);
-                    }
-                    let mut qp_c_idx1 = child_idxs
-                        .get(1)
-                        .context("Cannot find the first qp child idx of difference")?;
-                    let qp_c_idx2;
-                    let edge_idx = query_dag
-                        .find_edge(idx, *qp_c_idx1)
-                        .context("Cannot find edge")?;
-                    let weight = query_dag
-                        .edge_weight(edge_idx)
-                        .context("Cannot find edge")?;
-                    if !*weight {
-                        qp_c_idx2 = child_idxs
-                            .get(0)
-                            .context("Cannot find the first qp child idx of difference")?;
-                    } else {
-                        qp_c_idx1 = child_idxs
-                            .get(0)
-                            .context("Cannot find the first qp child idx of difference")?;
-                        qp_c_idx2 = child_idxs
+                    if let Some(QPNode::Diff(_)) = qp_dag_content.remove(&idx) {
+                        let mut child_idxs = Vec::<NodeIndex>::new();
+                        for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
+                            child_idxs.push(c_idx);
+                        }
+                        let mut qp_c_idx1 = child_idxs
                             .get(1)
                             .context("Cannot find the first qp child idx of difference")?;
-                    }
-                    let vo_c1 = vo_dag_content
-                        .get(qp_c_idx1)
-                        .context("Cannot find the first child vo node in vo_dag_content")?;
-                    let c1_set = set_map
-                        .get(qp_c_idx1)
-                        .context("Cannot find the set in set_map")?;
-                    let vo_c2 = vo_dag_content
-                        .get(qp_c_idx2)
-                        .context("Cannot find the second child vo node in vo_dag_content")?;
-                    let c2_set = set_map
-                        .get(qp_c_idx2)
-                        .context("Cannot find the set in set_map")?;
-                    if qp_root_idx != idx {
-                        let (res_set, res_acc, inter_proof) = compute_set_operation_intermediate(
-                            Op::Difference,
-                            c1_set,
-                            vo_c1.get_acc()?,
-                            c2_set,
-                            vo_c2.get_acc()?,
-                            pk,
-                        );
-                        let vo_inter_diff = VOInterDiff {
-                            acc: res_acc,
-                            proof: inter_proof,
-                        };
-                        vo_dag_content.insert(idx, VONode::InterDiff(vo_inter_diff));
-                        set_map.insert(idx, res_set);
-                    } else {
-                        let (res_set, final_proof) =
-                            compute_set_operation_final(Op::Difference, c1_set, c2_set, pk);
-                        let vo_final_diff = VOFinalDiff { proof: final_proof };
-                        vo_dag_content.insert(idx, VONode::FinalDiff(vo_final_diff));
-                        set_map.insert(idx, res_set);
+                        let qp_c_idx2;
+                        let edge_idx = query_dag
+                            .find_edge(idx, *qp_c_idx1)
+                            .context("Cannot find edge")?;
+                        let weight = query_dag
+                            .edge_weight(edge_idx)
+                            .context("Cannot find edge")?;
+                        if !*weight {
+                            qp_c_idx2 = child_idxs
+                                .get(0)
+                                .context("Cannot find the first qp child idx of difference")?;
+                        } else {
+                            qp_c_idx1 = child_idxs
+                                .get(0)
+                                .context("Cannot find the first qp child idx of difference")?;
+                            qp_c_idx2 = child_idxs
+                                .get(1)
+                                .context("Cannot find the first qp child idx of difference")?;
+                        }
+                        let vo_c1 = vo_dag_content
+                            .get(qp_c_idx1)
+                            .context("Cannot find the first child vo node in vo_dag_content")?;
+                        if let Some(vo_c2) = vo_dag_content.get(qp_c_idx2) {
+                            // vo_c1 is not empty
+                            let c1_set = set_map
+                                .get(qp_c_idx1)
+                                .context("Cannot find the set in set_map")?;
+                            let c2_set = set_map
+                                .get(qp_c_idx2)
+                                .context("Cannot find the set in set_map")?;
+                            if !outputs.contains(&idx) {
+                                let (res_set, res_acc, inter_proof) =
+                                    compute_set_operation_intermediate(
+                                        Op::Difference,
+                                        c1_set,
+                                        vo_c1.get_acc()?,
+                                        c2_set,
+                                        vo_c2.get_acc()?,
+                                        pk,
+                                    );
+                                let vo_inter_diff = VOInterDiff {
+                                    acc: res_acc,
+                                    proof: Some(inter_proof),
+                                };
+                                vo_dag_content.insert(idx, VONode::InterDiff(vo_inter_diff));
+                                set_map.insert(idx, res_set);
+                            } else {
+                                let (res_set, final_proof) =
+                                    compute_set_operation_final(Op::Difference, c1_set, c2_set, pk);
+                                let vo_final_diff = VOFinalDiff { proof: final_proof };
+                                vo_dag_content.insert(idx, VONode::FinalDiff(vo_final_diff));
+                                set_map.insert(idx, res_set);
+                            }
+                        } else {
+                            // vo_c1 is empty
+                            let vo_inter_diff = VOInterDiff {
+                                acc: *vo_c1.get_acc()?,
+                                proof: None,
+                            };
+                            vo_dag_content.insert(idx, VONode::InterDiff(vo_inter_diff));
+                            set_map.insert(idx, Set::new());
+                        }
                     }
                 }
             }
@@ -419,6 +463,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
             trie_proofs.insert(*height, trie_proof);
         }
     }
+
     let id_root = chain.read_block_content(qp_end_blk_height)?.id_tree_root;
     let cur_obj_id = id_root.get_cur_obj_id();
     let mut id_tree_ctx = id_tree::read::ReadContext::new(chain, id_root.get_id_tree_root_id());
@@ -427,26 +472,26 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     let id_tree_fanout = param.id_tree_fanout;
     let mut vo_ouput_sets = HashMap::<NodeIndex, Set>::new();
 
-    let set = set_map
-        .remove(&qp_root_idx)
-        .context("Cannot find set in set_map")?;
-    let mut delta_set = Set::new();
-    for i in set.iter() {
-        let obj_id = ObjId(*i);
-        let obj_hash_opt = id_tree_ctx.query(obj_id, max_id_num, id_tree_fanout)?;
-        let obj_hash;
-        match obj_hash_opt {
-            Some(d) => obj_hash = d,
-            None => {
-                delta_set = &delta_set | &Set::from_single_element(*i);
-                continue;
+    for idx in outputs {
+        let set = set_map.remove(&idx).context("Cannot find set in set_map")?;
+        let mut delta_set = Set::new();
+        for i in set.iter() {
+            let obj_id = ObjId(*i);
+            let obj_hash_opt = id_tree_ctx.query(obj_id, max_id_num, id_tree_fanout)?;
+            let obj_hash;
+            match obj_hash_opt {
+                Some(d) => obj_hash = d,
+                None => {
+                    delta_set = &delta_set | &Set::from_single_element(*i);
+                    continue;
+                }
             }
+            let obj = chain.read_object(obj_hash)?;
+            obj_map.insert(obj_id, obj);
         }
-        let obj = chain.read_object(obj_hash)?;
-        obj_map.insert(obj_id, obj);
+        let sub_res_set = &set / &delta_set;
+        vo_ouput_sets.insert(idx, sub_res_set);
     }
-    let sub_res_set = &set / &delta_set;
-    vo_ouput_sets.insert(qp_root_idx, sub_res_set);
 
     let id_tree_proof = id_tree_ctx.into_proof();
     for (height, time_win) in time_win_map {
@@ -543,13 +588,25 @@ fn paral_sub_query_process<K: Num, T: ReadInterface<K = K>>(
     let query_plan = param_to_qp_parallel(time_win, e_win_size, query_dag, chain, pk)?;
     let time1 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
-    let res = query_final(
-        chain, pk, query_plan, time_win, None, e_win_size, 0, query_dag,
-    )?;
+    let (qp_processed, outputs) = process_empty_sets(query_dag, query_plan)?;
     let time2 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let res = query_final(
+        chain,
+        pk,
+        qp_processed,
+        outputs,
+        time_win,
+        None,
+        e_win_size,
+        0,
+        query_dag,
+    )?;
+    let time3 = sub_timer.elapsed();
     Ok(QueryResInfo {
         stage1: time1,
         stage2: time2,
+        stage3: time3,
         res,
     })
 }
@@ -584,15 +641,167 @@ fn last_sub_query_process<K: Num, T: ReadInterface<K = K>>(
 
     let time1 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
-    let res = query_final(chain, pk, qp2, time_win, s_win_size, e_win_size, 1, &dag2)?;
+    let (qp_processed, outputs) = process_empty_sets(&dag2, qp2)?;
     let time2 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let res = query_final(
+        chain,
+        pk,
+        qp_processed,
+        outputs,
+        time_win,
+        s_win_size,
+        e_win_size,
+        1,
+        &dag2,
+    )?;
+    let time3 = sub_timer.elapsed();
     graph_map.insert(1, dag2);
 
     Ok(QueryResInfo {
         stage1: time1,
         stage2: time2,
+        stage3: time3,
         res,
     })
+}
+
+fn process_empty_sets<K: Num>(
+    query_dag: &Graph<query_dag::DagNode<K>, bool>,
+    qp: QueryPlan<K>,
+) -> Result<(QueryPlan<K>, HashSet<NodeIndex>)> {
+    let qp_end_blk_height = qp.end_blk_height;
+    let qp_root_idx = qp.root_idx;
+    let mut qp_content = qp.dag_content;
+    let qp_trie_proofs = qp.trie_proofs;
+    let mut sub_root_idxs = HashSet::new();
+    sub_root_idxs.insert(qp_root_idx);
+    let mut new_qp_content = HashMap::new();
+    let mut queue = VecDeque::new();
+    queue.push_back(qp_root_idx);
+    while let Some(idx) = queue.pop_front() {
+        let query_node = query_dag
+            .node_weight(idx)
+            .context("node not exist in dag")?;
+        match query_node {
+            DagNode::Range(_) => {
+                new_qp_content.insert(idx, qp_content.remove(&idx).context("")?);
+            }
+            DagNode::Keyword(_) => {
+                new_qp_content.insert(idx, qp_content.remove(&idx).context("")?);
+            }
+            DagNode::BlkRt(_) => {
+                new_qp_content.insert(idx, qp_content.remove(&idx).context("")?);
+            }
+            DagNode::Union(_) => {
+                let mut child_idxs = Vec::new();
+                for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
+                    child_idxs.push(c_idx);
+                }
+                if sub_root_idxs.contains(&idx) {
+                    sub_root_idxs.remove(&idx);
+                    for idx in &child_idxs {
+                        sub_root_idxs.insert(*idx);
+                    }
+                } else {
+                    new_qp_content.insert(idx, qp_content.remove(&idx).context("")?);
+                }
+                let qp_c_idx1 = child_idxs
+                    .get(0)
+                    .context("Cannot find the first child idx")?;
+                let qp_c_idx2 = child_idxs
+                    .get(1)
+                    .context("Cannot find the second child idx")?;
+                queue.push_back(*qp_c_idx1);
+                queue.push_back(*qp_c_idx2);
+            }
+            DagNode::Intersec(_) => {
+                let mut child_idxs = Vec::new();
+                for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
+                    child_idxs.push(c_idx);
+                }
+                let qp_c_idx1 = child_idxs
+                    .get(0)
+                    .context("Cannot find the first child idx")?;
+                let qp_c_idx2 = child_idxs
+                    .get(1)
+                    .context("Cannot find the second child idx")?;
+                let qp_c1 = qp_content.get(qp_c_idx1).context("")?;
+                let qp_c2 = qp_content.get(qp_c_idx2).context("")?;
+                if qp_c1.get_set()?.is_empty() {
+                    queue.push_back(*qp_c_idx1);
+                    new_qp_content.insert(idx, qp_content.remove(&idx).context("")?);
+                    continue;
+                }
+                if qp_c2.get_set()?.is_empty() {
+                    queue.push_back(*qp_c_idx2);
+                    new_qp_content.insert(idx, qp_content.remove(&idx).context("")?);
+                    continue;
+                }
+                queue.push_back(*qp_c_idx1);
+                queue.push_back(*qp_c_idx2);
+                new_qp_content.insert(idx, qp_content.remove(&idx).context("")?);
+            }
+            DagNode::Diff(_) => {
+                let mut child_idxs = Vec::new();
+                for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
+                    child_idxs.push(c_idx);
+                }
+                let mut qp_c_idx1 = child_idxs
+                    .get(1)
+                    .context("Cannot find the first child idx")?;
+                let qp_c_idx2;
+                let edge_idx = query_dag
+                    .find_edge(idx, *qp_c_idx1)
+                    .context("Cannot find edge")?;
+                let weight = query_dag
+                    .edge_weight(edge_idx)
+                    .context("Cannot find edge")?;
+                if !*weight {
+                    qp_c_idx2 = child_idxs
+                        .get(0)
+                        .context("Cannot find the first qp child idx")?;
+                } else {
+                    qp_c_idx1 = child_idxs
+                        .get(0)
+                        .context("Cannot find the first qp child idx")?;
+                    qp_c_idx2 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first qp child idx")?;
+                }
+                let qp_c1 = qp_content.get(qp_c_idx1).context("")?;
+                let qp_c2 = qp_content.get(qp_c_idx2).context("")?;
+
+                if sub_root_idxs.contains(&idx) && qp_c2.get_set()?.is_empty() {
+                    sub_root_idxs.remove(&idx);
+                    for idx in &child_idxs {
+                        sub_root_idxs.insert(*idx);
+                    }
+                    queue.push_back(*qp_c_idx1);
+                    queue.push_back(*qp_c_idx2);
+                    continue;
+                }
+
+                if qp_c1.get_set()?.is_empty() {
+                    queue.push_back(*qp_c_idx1);
+                    new_qp_content.insert(idx, qp_content.remove(&idx).context("")?);
+                    continue;
+                }
+                queue.push_back(*qp_c_idx1);
+                queue.push_back(*qp_c_idx2);
+                new_qp_content.insert(idx, qp_content.remove(&idx).context("")?);
+            }
+        }
+    }
+
+    let new_qp = QueryPlan {
+        end_blk_height: qp_end_blk_height,
+        root_idx: qp_root_idx,
+        dag_content: new_qp_content,
+        trie_proofs: qp_trie_proofs,
+    };
+
+    Ok((new_qp, sub_root_idxs))
 }
 
 #[allow(clippy::type_complexity)]
@@ -644,11 +853,13 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
 
     let mut stage1_time = Vec::<ProcessDuration>::new();
     let mut stage2_time = Vec::<ProcessDuration>::new();
+    let mut stage3_time = Vec::<ProcessDuration>::new();
     let mut result = Vec::<(HashMap<ObjId, Object<K>>, VO<K>)>::new();
     for response in responses {
         let a = response?;
         stage1_time.push(a.stage1);
         stage2_time.push(a.stage2);
+        stage3_time.push(a.stage3);
         result.push(a.res);
     }
 
@@ -660,9 +871,14 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
     for t in stage2_time {
         stage2_total_time += t;
     }
+    let mut stage3_total_time: ProcessDuration = ProcessDuration::default();
+    for t in stage3_time {
+        stage3_total_time += t;
+    }
     let query_time = QueryTime {
         stage1: Time::from(stage1_total_time),
         stage2: Time::from(stage2_total_time),
+        stage3: Time::from(stage3_total_time),
         total: total_query_time,
     };
     Ok((result, graph_map, query_time))

@@ -1,3 +1,4 @@
+use super::{query_plan::QueryPlan, TimeWin};
 use crate::{
     acc::{AccPublicKey, Set},
     chain::{
@@ -25,7 +26,6 @@ use petgraph::{
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::collections::{HashMap, VecDeque};
-use super::{query_plan::QueryPlan, TimeWin};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum DagNode<K: Num> {
