@@ -35,11 +35,11 @@ impl<K: Num> VONode<K> {
             VONode::Keyword(n) => Ok(&n.acc),
             VONode::BlkRt(n) => Ok(&n.acc),
             VONode::InterUnion(n) => Ok(&n.acc),
-            VONode::FinalUnion(_) => bail!("This is a final operation"),
+            VONode::FinalUnion(_) => bail!("This is a final union operation"),
             VONode::InterIntersec(n) => Ok(&n.acc),
-            VONode::FinalIntersec(_) => bail!("This is a final operation"),
+            VONode::FinalIntersec(_) => bail!("This is a final intersec operation"),
             VONode::InterDiff(n) => Ok(&n.acc),
-            VONode::FinalDiff(_) => bail!("This is a final operation"),
+            VONode::FinalDiff(_) => bail!("This is a final diff operation"),
         }
     }
 }
@@ -80,7 +80,7 @@ pub struct VOFinalUnion {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOInterIntersec {
     pub(crate) acc: AccValue,
-    pub(crate) proof: IntermediateProof,
+    pub(crate) proof: Option<IntermediateProof>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -91,7 +91,7 @@ pub struct VOFinalIntersec {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOInterDiff {
     pub(crate) acc: AccValue,
-    pub(crate) proof: IntermediateProof,
+    pub(crate) proof: Option<IntermediateProof>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
