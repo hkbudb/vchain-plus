@@ -286,22 +286,23 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                             }
                             let acc1;
                             let acc2;
-                            if let Some(child1) = vo_dag_content.get(child_idx1) {
-                                acc1 = child1.get_acc()?;
+
+                            if let Some(child2) = vo_dag_content.get(child_idx2) {
+                                acc2 = child2.get_acc()?;
                             } else {
-                                let child2 = vo_dag_content.get(child_idx2).context(
-                                "Cannot find the second child node of intermediate intersection",
-                            )?;
+                                let child1 = vo_dag_content.get(child_idx1).context(
+                                    "Cannot find the second child node of intermediate difference",
+                                )?;
                                 ensure!(
-                                    *child2.get_acc()? == empty_acc,
+                                    *child1.get_acc()? == empty_acc,
                                     "The child of diff should be empty"
                                 );
                                 continue;
                             }
-                            let child2 = vo_dag_content.get(child_idx2).context(
+                            let child1 = vo_dag_content.get(child_idx1).context(
                                 "Cannot find the second child node of intermediate difference",
                             )?;
-                            acc2 = child2.get_acc()?;
+                            acc1 = child1.get_acc()?;
                             d_n.proof
                                 .context("Intermediate difference proof does not exist")?
                                 .verify(acc1, acc2, &d_n.acc, pk)?;
