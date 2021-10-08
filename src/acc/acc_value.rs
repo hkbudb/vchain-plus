@@ -40,16 +40,16 @@ where
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccValue<E: PairingEngine> {
     /// g^{\sum s^i}
-    #[serde(with = "super::serde_impl")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_s: E::G1Affine,
     /// g^{\sum r^i}
-    #[serde(with = "super::serde_impl")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) g_r: E::G1Affine,
     /// h^{\sum s^i \cdot r^{q - i}}
-    #[serde(with = "super::serde_impl")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_s_r: E::G2Affine,
     /// h^{\sum r^i \cdot s^{q - i}}
-    #[serde(with = "super::serde_impl")]
+    #[serde(with = "super::serde_impl::unchecked")]
     pub(crate) h_r_s: E::G2Affine,
     _marker: PhantomData<E>,
 }

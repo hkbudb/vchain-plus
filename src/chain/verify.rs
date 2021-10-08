@@ -291,7 +291,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                                 acc2 = child2.get_acc()?;
                             } else {
                                 let child1 = vo_dag_content.get(child_idx1).context(
-                                    "Cannot find the second child node of intermediate difference",
+                                    "Cannot find the first child node of intermediate difference",
                                 )?;
                                 ensure!(
                                     *child1.get_acc()? == empty_acc,
@@ -300,7 +300,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                                 continue;
                             }
                             let child1 = vo_dag_content.get(child_idx1).context(
-                                "Cannot find the second child node of intermediate difference",
+                                "Cannot find the first child node of intermediate difference",
                             )?;
                             acc1 = child1.get_acc()?;
                             d_n.proof

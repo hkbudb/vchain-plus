@@ -1,4 +1,4 @@
 # vim: set ft=toml:
 
 [build]
-rustflags = ["-C", "target-cpu=native"]
+rustflags = ["-C", "target-cpu=haswell"]
