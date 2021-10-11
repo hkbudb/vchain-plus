@@ -257,9 +257,8 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
     let keyword_domain =
         chain.get_keyword_info(Height(start_blk_height_num), Height(end_blk_height_num))?;
     let keyword_vec = Vec::from_iter(keyword_domain);
-    let keywords_selected: Vec<&String> = keyword_vec
-        .choose_multiple(&mut rand::thread_rng(), keyword_num)
-        .collect();
+    let keywords_selected: HashSet<&String> =
+        HashSet::from_iter(keyword_vec.choose_multiple(&mut rand::thread_rng(), keyword_num));
 
     let mut node: Node = Node::Input("init".to_string());
     if for_tx {
