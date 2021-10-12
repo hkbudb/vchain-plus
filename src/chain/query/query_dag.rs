@@ -382,14 +382,19 @@ pub fn gen_parallel_query_dag<K: Num>(
 }
 
 #[allow(clippy::type_complexity)]
-pub fn gen_last_query_dag_with_cont_basic<K: Num>(
+pub fn gen_last_query_dag_with_cont_basic<K: Num, T: ReadInterface<K = K>>(
     time_win: &TimeWin,
     s_win_size: Option<u64>,
+    e_win_size: u64,
     mut query_dag: Graph<DagNode<K>, bool>,
+    chain: &T,
+    pk: &AccPublicKey,
 ) -> Result<(Graph<DagNode<K>, bool>, QueryPlan<K>)> {
     let end_blk_height = Height(time_win.end_blk);
     let mut dag_content = HashMap::<NodeIndex, QPNode<K>>::new();
     let mut root_idx;
+    let mut trie_ctxes = HashMap::<Height, trie_tree::read::ReadContext<T>>::new();
+
     // process end sub_dag
     let mut end_q_inputs = match toposort(&query_dag, None) {
         Ok(v) => v,
@@ -404,37 +409,150 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num>(
     for idx in &end_q_inputs {
         if let Some(dag_node) = query_dag.node_weight(*idx) {
             match dag_node {
-                DagNode::Range(_) => {
+                DagNode::Range(node) => {
+                    let bplus_root = chain
+                        .read_block_content(end_blk_height)?
+                        .ads
+                        .read_bplus_root(e_win_size, node.dim)?;
+                    let (s, a, p) = bplus_tree::read::range_query(
+                        chain,
+                        bplus_root.bplus_tree_root_id,
+                        node.range,
+                        pk,
+                    )?;
                     let qp_range_node = QPRangeNode {
                         blk_height: end_blk_height,
-                        set: None,
+                        set: Some((s, a, p)),
                     };
                     dag_content.insert(*idx, QPNode::Range(qp_range_node));
                 }
-                DagNode::Keyword(_) => {
+                DagNode::Keyword(node) => {
+                    let set;
+                    let acc;
+                    if let Some(ctx) = trie_ctxes.get_mut(&end_blk_height) {
+                        let (s, a) = ctx.query(&SmolStr::from(&node.keyword), pk)?;
+                        set = s;
+                        acc = a;
+                    } else {
+                        let trie_root = chain
+                            .read_block_content(end_blk_height)?
+                            .ads
+                            .read_trie_root(e_win_size)?;
+                        let mut trie_ctx =
+                            trie_tree::read::ReadContext::new(chain, trie_root.trie_root_id);
+                        let (s, a) = trie_ctx.query(&SmolStr::from(&node.keyword), pk)?;
+                        set = s;
+                        acc = a;
+                        trie_ctxes.insert(end_blk_height, trie_ctx);
+                    }
                     let qp_keyword_node = QPKeywordNode {
                         blk_height: end_blk_height,
-                        set: None,
+                        set: Some((set, acc)),
                     };
                     dag_content.insert(*idx, QPNode::Keyword(Box::new(qp_keyword_node)));
                 }
                 DagNode::BlkRt(_) => {
+                    let set;
+                    let acc;
+                    let blk_content = chain.read_block_content(end_blk_height)?;
+                    let bplus_root = blk_content.ads.read_bplus_root(e_win_size, 0)?;
+                    let bplus_root_id =
+                        bplus_root.bplus_tree_root_id.context("Empty bplus root")?;
+                    let bplus_root_node =
+                        bplus_tree::BPlusTreeNodeLoader::load_node(chain, bplus_root_id)?;
+                    set = bplus_root_node.get_set().clone();
+                    acc = bplus_root_node.get_node_acc();
                     let qp_rt_node = QPBlkRtNode {
                         blk_height: end_blk_height,
-                        set: None,
+                        set: Some((set, acc)),
                     };
                     dag_content.insert(*idx, QPNode::BlkRt(Box::new(qp_rt_node)));
                 }
                 DagNode::Union(_) => {
-                    let qp_union_node = QPUnion { set: None };
+                    let mut child_idxs = Vec::<NodeIndex>::new();
+                    for c_idx in query_dag.neighbors_directed(*idx, Outgoing) {
+                        child_idxs.push(c_idx);
+                    }
+                    let qp_c_idx1 = child_idxs
+                        .get(0)
+                        .context("Cannot find the first qp child idx of union")?;
+                    let qp_c1 = dag_content
+                        .get(qp_c_idx1)
+                        .context("Cannot find the first child vo node in vo_dag_content")?;
+                    let c1_set = qp_c1.get_set()?;
+                    let qp_c_idx2 = child_idxs
+                        .get(1)
+                        .context("Cannot find the second qp child idx of union")?;
+                    let qp_c2 = dag_content
+                        .get(qp_c_idx2)
+                        .context("Cannot find the second child vo node in vo_dag_content")?;
+                    let c2_set = qp_c2.get_set()?;
+                    let c_union = c1_set | c2_set;
+                    let qp_union_node = QPUnion { set: Some(c_union) };
                     dag_content.insert(*idx, QPNode::Union(qp_union_node));
                 }
                 DagNode::Intersec(_) => {
-                    let qp_intersec_node = QPIntersec { set: None };
+                    let mut child_idxs = Vec::<NodeIndex>::new();
+                    for c_idx in query_dag.neighbors_directed(*idx, Outgoing) {
+                        child_idxs.push(c_idx);
+                    }
+                    let qp_c_idx1 = child_idxs
+                        .get(0)
+                        .context("Cannot find the first qp child idx of union")?;
+                    let qp_c1 = dag_content
+                        .get(qp_c_idx1)
+                        .context("Cannot find the first child vo node in vo_dag_content")?;
+                    let c1_set = qp_c1.get_set()?;
+                    let qp_c_idx2 = child_idxs
+                        .get(1)
+                        .context("Cannot find the second qp child idx of union")?;
+                    let qp_c2 = dag_content
+                        .get(qp_c_idx2)
+                        .context("Cannot find the second child vo node in vo_dag_content")?;
+                    let c2_set = qp_c2.get_set()?;
+                    let c_intersec = c1_set & c2_set;
+                    let qp_intersec_node = QPIntersec {
+                        set: Some(c_intersec),
+                    };
                     dag_content.insert(*idx, QPNode::Intersec(qp_intersec_node));
                 }
                 DagNode::Diff(_) => {
-                    let qp_diff_node = QPDiff { set: None };
+                    let mut child_idxs = Vec::<NodeIndex>::new();
+                    for c_idx in query_dag.neighbors_directed(*idx, Outgoing) {
+                        child_idxs.push(c_idx);
+                    }
+                    let mut qp_c_idx1 = child_idxs
+                        .get(1)
+                        .context("Cannot find the first qp child idx of difference")?;
+                    let qp_c_idx2;
+                    let edge_idx = query_dag
+                        .find_edge(*idx, *qp_c_idx1)
+                        .context("Cannot find edge")?;
+                    let weight = query_dag
+                        .edge_weight(edge_idx)
+                        .context("Cannot find edge")?;
+                    if !*weight {
+                        qp_c_idx2 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first qp child idx of difference")?;
+                    } else {
+                        qp_c_idx1 = child_idxs
+                            .get(0)
+                            .context("Cannot find the first qp child idx of difference")?;
+                        qp_c_idx2 = child_idxs
+                            .get(1)
+                            .context("Cannot find the first qp child idx of difference")?;
+                    }
+                    let qp_c1 = dag_content
+                        .get(qp_c_idx1)
+                        .context("Cannot find the first child vo node in vo_dag_content")?;
+                    let c1_set = qp_c1.get_set()?;
+                    let qp_c2 = dag_content
+                        .get(qp_c_idx2)
+                        .context("Cannot find the second child vo node in vo_dag_content")?;
+                    let c2_set = qp_c2.get_set()?;
+                    let c_diff = c1_set / c2_set;
+                    let qp_diff_node = QPDiff { set: Some(c_diff) };
                     dag_content.insert(*idx, QPNode::Diff(qp_diff_node));
                 }
             }
@@ -444,12 +562,21 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num>(
     // process start sub_dag
     if s_win_size.is_some() && time_win.start_blk > 1 {
         let start_blk_height = Height(time_win.start_blk - 1);
-        let start_sub_root_idx = query_dag.add_node(DagNode::BlkRt(Box::new(BlkRtNode {})));
+        let set;
+        let acc;
+        let blk_content = chain.read_block_content(start_blk_height)?;
+        let bplus_root = blk_content.ads.read_bplus_root(e_win_size, 0)?;
+        let bplus_root_id = bplus_root.bplus_tree_root_id.context("Empty bplus root")?;
+        let bplus_root_node = bplus_tree::BPlusTreeNodeLoader::load_node(chain, bplus_root_id)?;
+        set = bplus_root_node.get_set().clone();
+        acc = bplus_root_node.get_node_acc();
         let qp_rt_node = QPBlkRtNode {
             blk_height: start_blk_height,
-            set: None,
+            set: Some((set, acc)),
         };
+        let start_sub_root_idx = query_dag.add_node(DagNode::BlkRt(Box::new(BlkRtNode {})));
         dag_content.insert(start_sub_root_idx, QPNode::BlkRt(Box::new(qp_rt_node)));
+
         let diff_idx = query_dag.add_node(DagNode::Diff(DiffNode {}));
         query_dag.add_edge(diff_idx, start_sub_root_idx, true);
         query_dag.add_edge(diff_idx, *end_sub_root_idx, false);
@@ -457,12 +584,16 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num>(
         root_idx = diff_idx;
     }
 
+    let mut trie_proofs = HashMap::new();
+    for (h, trie_ctx) in trie_ctxes {
+        trie_proofs.insert(h, trie_ctx.into_proof());
+    }
     let qp_root_idx = root_idx;
     let qp = QueryPlan {
         end_blk_height,
         root_idx: qp_root_idx,
         dag_content,
-        trie_proofs: HashMap::new(),
+        trie_proofs,
     };
 
     Ok((query_dag, qp))
