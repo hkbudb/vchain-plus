@@ -575,9 +575,7 @@ pub fn gen_last_query_dag_with_cont_trimmed<K: Num, T: ReadInterface<K = K>>(
                         .context("Cannot find the second child vo node in vo_dag_content")?;
                     let c2_set = qp_c2.get_set()?;
                     let c_union = c1_set | c2_set;
-                    let qp_union_node = QPUnion {
-                        set: Some((c_union, 0, 0)),
-                    };
+                    let qp_union_node = QPUnion { set: Some(c_union) };
                     dag_content.insert(*idx, QPNode::Union(qp_union_node));
                 }
                 DagNode::Intersec(_) => {
@@ -601,7 +599,7 @@ pub fn gen_last_query_dag_with_cont_trimmed<K: Num, T: ReadInterface<K = K>>(
                     let c2_set = qp_c2.get_set()?;
                     let c_intersec = c1_set & c2_set;
                     let qp_intersec_node = QPIntersec {
-                        set: Some((c_intersec, 0, 0)),
+                        set: Some(c_intersec),
                     };
                     dag_content.insert(*idx, QPNode::Intersec(qp_intersec_node));
                 }
@@ -641,9 +639,7 @@ pub fn gen_last_query_dag_with_cont_trimmed<K: Num, T: ReadInterface<K = K>>(
                         .context("Cannot find the second child vo node in vo_dag_content")?;
                     let c2_set = qp_c2.get_set()?;
                     let c_diff = c1_set / c2_set;
-                    let qp_diff_node = QPDiff {
-                        set: Some((c_diff, 0, 0)),
-                    };
+                    let qp_diff_node = QPDiff { set: Some(c_diff) };
                     dag_content.insert(*idx, QPNode::Diff(qp_diff_node));
                 }
             }
@@ -901,9 +897,7 @@ fn estimate_keyword_sub_dag_cost<K: Num, T: ReadInterface<K = K>>(
                     let res_set = (s1) | (s2);
                     let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
                     cost += inter_cost;
-                    let qp_union_node = QPUnion {
-                        set: Some((res_set, 0, 0)),
-                    };
+                    let qp_union_node = QPUnion { set: Some(res_set) };
                     dag_content.insert(*idx, QPNode::Union(qp_union_node));
                 }
                 DagNode::Intersec(_) => {
@@ -928,9 +922,7 @@ fn estimate_keyword_sub_dag_cost<K: Num, T: ReadInterface<K = K>>(
                     let res_set = (s1) & (s2);
                     let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
                     cost += inter_cost;
-                    let qp_intersec_node = QPIntersec {
-                        set: Some((res_set, 0, 0)),
-                    };
+                    let qp_intersec_node = QPIntersec { set: Some(res_set) };
                     dag_content.insert(*idx, QPNode::Intersec(qp_intersec_node));
                 }
                 DagNode::Diff(_) => {
@@ -969,9 +961,7 @@ fn estimate_keyword_sub_dag_cost<K: Num, T: ReadInterface<K = K>>(
                     let c_diff = s1 / s2;
                     let inter_cost = COST_COEFFICIENT * s1.len() * s2.len();
                     cost += inter_cost;
-                    let qp_diff_node = QPDiff {
-                        set: Some((c_diff, 0, 0)),
-                    };
+                    let qp_diff_node = QPDiff { set: Some(c_diff) };
                     dag_content.insert(*idx, QPNode::Diff(qp_diff_node));
                 }
             }
@@ -1046,9 +1036,7 @@ fn combine_query_dags_by_intersec<K: Num>(
     let new_root_idx = graph1.add_node(DagNode::Intersec(IntersecNode {}));
     graph1.add_edge(new_root_idx, graph1_root_idx, true);
     graph1.add_edge(new_root_idx, new_graph2_sub_root_idx, false);
-    let qp_intersec_node = QPIntersec {
-        set: Some((s_new, 0, 0)),
-    };
+    let qp_intersec_node = QPIntersec { set: Some(s_new) };
     content1.insert(new_root_idx, QPNode::Intersec(qp_intersec_node));
 
     Ok(new_root_idx)

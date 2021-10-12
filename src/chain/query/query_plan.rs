@@ -23,9 +23,9 @@ impl<K: Num> QPNode<K> {
             QPNode::Range(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
             QPNode::Keyword(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
             QPNode::BlkRt(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
-            QPNode::Union(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
-            QPNode::Intersec(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
-            QPNode::Diff(n) => Ok(&n.set.as_ref().context("No set in the QPNode")?.0),
+            QPNode::Union(n) => Ok(n.set.as_ref().context("No set in the QPNode")?),
+            QPNode::Intersec(n) => Ok(n.set.as_ref().context("No set in the QPNode")?),
+            QPNode::Diff(n) => Ok(n.set.as_ref().context("No set in the QPNode")?),
         }
     }
 }
@@ -50,17 +50,17 @@ pub struct QPBlkRtNode {
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct QPUnion {
-    pub(crate) set: Option<(Set, usize, usize)>,
+    pub(crate) set: Option<Set>,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct QPIntersec {
-    pub(crate) set: Option<(Set, usize, usize)>,
+    pub(crate) set: Option<Set>,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct QPDiff {
-    pub(crate) set: Option<(Set, usize, usize)>,
+    pub(crate) set: Option<Set>,
 }
 
 #[derive(Debug)]
@@ -69,6 +69,21 @@ pub struct QueryPlan<K: Num> {
     pub(crate) root_idx: NodeIndex,
     pub(crate) dag_content: HashMap<NodeIndex, QPNode<K>>,
     pub(crate) trie_proofs: HashMap<Height, trie_tree::proof::Proof>,
+}
+
+impl<K: Num> QueryPlan<K> {
+    pub(crate) fn update_root_idx(&mut self, new_idx: NodeIndex) {
+        self.root_idx = new_idx;
+    }
+    pub(crate) fn get_dag_cont(&self) -> &HashMap<NodeIndex, QPNode<K>> {
+        &self.dag_content
+    }
+    pub(crate) fn get_dag_cont_mut(&mut self) -> &mut HashMap<NodeIndex, QPNode<K>> {
+        &mut self.dag_content
+    }
+    pub(crate) fn update_dag_cont(&mut self, dag_cont: HashMap<NodeIndex, QPNode<K>>) {
+        self.dag_content = dag_cont;
+    }
 }
 
 #[cfg(test)]
