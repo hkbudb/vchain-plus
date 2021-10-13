@@ -588,41 +588,25 @@ fn paral_sub_query_process<K: Num, T: ReadInterface<K = K>>(
     pk: &AccPublicKey,
 ) -> Result<QueryResInfo<K>> {
     let sub_timer = howlong::ProcessCPUTimer::new();
-    let query_plan = param_to_qp(time_win, e_win_size, query_dag, chain, pk)?;
+    let mut query_plan = param_to_qp(time_win, e_win_size, query_dag, chain, pk)?;
     let time1 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
     let time2 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
-    let time3;
-    let time4;
-    let res;
+    let mut outputs;
     if empty_set {
-        let (qp_processed, outputs) = process_empty_sets(query_dag, query_plan)?;
-        time3 = sub_timer.elapsed();
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        res = query_final(
-            chain,
-            pk,
-            qp_processed,
-            outputs,
-            time_win,
-            None,
-            e_win_size,
-            0,
-            query_dag,
-        )?;
-        time4 = sub_timer.elapsed();
+        outputs = process_empty_sets(query_dag, &mut query_plan)?;
     } else {
-        time3 = sub_timer.elapsed();
-        let mut outputs = HashSet::new();
+        outputs = HashSet::new();
         let rt = &query_plan.root_idx;
         outputs.insert(*rt);
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        res = query_final(
-            chain, pk, query_plan, outputs, time_win, None, e_win_size, 0, query_dag,
-        )?;
-        time4 = sub_timer.elapsed();
     }
+    let time3 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let res = query_final(
+        chain, pk, query_plan, outputs, time_win, None, e_win_size, 0, query_dag,
+    )?;
+    let time4 = sub_timer.elapsed();
 
     Ok(QueryResInfo {
         stage1: time1,
@@ -649,36 +633,21 @@ fn paral_first_sub_query_with_egg<K: Num, T: ReadInterface<K = K>>(
     let new_dag = egg_optimize(query_dag, &mut query_plan)?;
     let time2 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
-    let time3;
-    let time4;
-    let res;
+
+    let mut outputs;
     if empty_set {
-        let (qp_processed, outputs) = process_empty_sets(&new_dag, query_plan)?;
-        time3 = sub_timer.elapsed();
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        res = query_final(
-            chain,
-            pk,
-            qp_processed,
-            outputs,
-            time_win,
-            None,
-            e_win_size,
-            0,
-            &new_dag,
-        )?;
-        time4 = sub_timer.elapsed();
+        outputs = process_empty_sets(&new_dag, &mut query_plan)?;
     } else {
-        time3 = sub_timer.elapsed();
-        let mut outputs = HashSet::new();
+        outputs = HashSet::new();
         let rt = &query_plan.root_idx;
         outputs.insert(*rt);
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        res = query_final(
-            chain, pk, query_plan, outputs, time_win, None, e_win_size, 0, &new_dag,
-        )?;
-        time4 = sub_timer.elapsed();
     }
+    let time3 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let res = query_final(
+        chain, pk, query_plan, outputs, time_win, None, e_win_size, 0, &new_dag,
+    )?;
+    let time4 = sub_timer.elapsed();
 
     let query_res_info = QueryResInfo {
         stage1: time1,
@@ -730,64 +699,39 @@ fn last_sub_query_process<K: Num, T: ReadInterface<K = K>>(
         let new_dag2 = egg_optimize(&dag2, &mut qp2)?;
         time2 = sub_timer.elapsed();
         let sub_timer = howlong::ProcessCPUTimer::new();
+        let mut outputs;
         if empty_set {
-            let (qp_processed, outputs) = process_empty_sets(&new_dag2, qp2)?;
-            time3 = sub_timer.elapsed();
-            let sub_timer = howlong::ProcessCPUTimer::new();
-            res = query_final(
-                chain,
-                pk,
-                qp_processed,
-                outputs,
-                time_win,
-                s_win_size,
-                e_win_size,
-                1,
-                &new_dag2,
-            )?;
-            time4 = sub_timer.elapsed();
+            outputs = process_empty_sets(&new_dag2, &mut qp2)?;
         } else {
-            time3 = sub_timer.elapsed();
-            let mut outputs = HashSet::new();
+            outputs = HashSet::new();
             let rt = &qp2.root_idx;
             outputs.insert(*rt);
-            let sub_timer = howlong::ProcessCPUTimer::new();
-            res = query_final(
-                chain, pk, qp2, outputs, time_win, s_win_size, e_win_size, 1, &new_dag2,
-            )?;
-            time4 = sub_timer.elapsed();
         }
+        time3 = sub_timer.elapsed();
+        let sub_timer = howlong::ProcessCPUTimer::new();
+        res = query_final(
+            chain, pk, qp2, outputs, time_win, s_win_size, e_win_size, 1, &new_dag2,
+        )?;
+        time4 = sub_timer.elapsed();
+
         graph_map.insert(1, new_dag2);
     } else {
         time2 = sub_timer.elapsed();
         let sub_timer = howlong::ProcessCPUTimer::new();
+        let mut outputs;
         if empty_set {
-            let (qp_processed, outputs) = process_empty_sets(&dag2, qp2)?;
-            time3 = sub_timer.elapsed();
-            let sub_timer = howlong::ProcessCPUTimer::new();
-            res = query_final(
-                chain,
-                pk,
-                qp_processed,
-                outputs,
-                time_win,
-                s_win_size,
-                e_win_size,
-                1,
-                &dag2,
-            )?;
-            time4 = sub_timer.elapsed();
+            outputs = process_empty_sets(&dag2, &mut qp2)?;
         } else {
-            time3 = sub_timer.elapsed();
-            let mut outputs = HashSet::new();
+            outputs = HashSet::new();
             let rt = &qp2.root_idx;
             outputs.insert(*rt);
-            let sub_timer = howlong::ProcessCPUTimer::new();
-            res = query_final(
-                chain, pk, qp2, outputs, time_win, s_win_size, e_win_size, 1, &dag2,
-            )?;
-            time4 = sub_timer.elapsed();
         }
+        time3 = sub_timer.elapsed();
+        let sub_timer = howlong::ProcessCPUTimer::new();
+        res = query_final(
+            chain, pk, qp2, outputs, time_win, s_win_size, e_win_size, 1, &dag2,
+        )?;
+        time4 = sub_timer.elapsed();
         graph_map.insert(1, dag2);
     }
 
@@ -802,12 +746,12 @@ fn last_sub_query_process<K: Num, T: ReadInterface<K = K>>(
 
 fn process_empty_sets<K: Num>(
     query_dag: &Graph<query_dag::DagNode<K>, bool>,
-    qp: QueryPlan<K>,
-) -> Result<(QueryPlan<K>, HashSet<NodeIndex>)> {
-    let qp_end_blk_height = qp.end_blk_height;
+    qp: &mut QueryPlan<K>,
+) -> Result<HashSet<NodeIndex>> {
+    //let qp_end_blk_height = qp.end_blk_height;
     let qp_root_idx = qp.root_idx;
-    let mut qp_content = qp.dag_content;
-    let qp_trie_proofs = qp.trie_proofs;
+    let qp_content = qp.get_dag_cont_mut();
+    //let qp_trie_proofs = qp.trie_proofs;
     let mut sub_root_idxs = HashSet::new();
     sub_root_idxs.insert(qp_root_idx);
     let mut new_qp_content = HashMap::new();
@@ -928,14 +872,15 @@ fn process_empty_sets<K: Num>(
         }
     }
 
-    let new_qp = QueryPlan {
-        end_blk_height: qp_end_blk_height,
-        root_idx: qp_root_idx,
-        dag_content: new_qp_content,
-        trie_proofs: qp_trie_proofs,
-    };
+    // let new_qp = QueryPlan {
+    //     end_blk_height: qp_end_blk_height,
+    //     root_idx: qp_root_idx,
+    //     dag_content: new_qp_content,
+    //     trie_proofs: qp_trie_proofs,
+    // };
+    qp.update_dag_cont(new_qp_content);
 
-    Ok((new_qp, sub_root_idxs))
+    Ok(sub_root_idxs)
 }
 
 fn parallel_process<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send>(
