@@ -1,10 +1,15 @@
 pub mod hash;
 pub mod vo;
 
-use crate::{acc::{AccPublicKey, AccValue, Set}, chain::{
+use crate::{
+    acc::{AccPublicKey, AccValue, Set},
+    chain::{
         traits::Num,
         {block::Height, id_tree::ObjId, object::Object, traits::ReadInterface},
-    }, digest::{Digest, Digestible}, utils::{Time, binary_encode}};
+    },
+    digest::{Digest, Digestible},
+    utils::{binary_encode, Time},
+};
 use anyhow::{bail, ensure, Context, Result};
 use hash::{ads_hash, bplus_roots_hash};
 use hash::{id_tree_root_hash, obj_hash};

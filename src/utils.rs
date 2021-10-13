@@ -212,14 +212,17 @@ pub fn binary_decode<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T> {
 #[cfg(test)]
 mod tests {
     use super::{load_query_param_from_file, KeyPair};
-    use crate::{chain::{
+    use crate::{
+        chain::{
             block::Height,
             object::Object,
             query::{
                 query_param::QueryParam,
                 query_plan::{QPKeywordNode, QPNode, QPUnion},
             },
-        }, utils::{binary_decode, binary_encode, load_raw_obj_from_str}};
+        },
+        utils::{binary_decode, binary_encode, load_raw_obj_from_str},
+    };
     use petgraph::Graph;
     use serde_json::json;
     use std::{collections::BTreeMap, path::Path};
