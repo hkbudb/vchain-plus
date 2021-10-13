@@ -411,13 +411,14 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
 }
 
 fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<VOSize> {
+    let set_s = bincode::serialize(&vo.vo_dag_content.output_sets)?.len();
     Ok(VOSize {
-        vo_dag_s: bincode::serialize(&vo.vo_dag_content)?.len(),
+        vo_dag_s: bincode::serialize(&vo.vo_dag_content)?.len() - set_s,
         trie_proof_s: bincode::serialize(&vo.trie_proofs)?.len(),
         id_proof_s: bincode::serialize(&vo.id_tree_proof)?.len(),
         cur_id_s: bincode::serialize(&vo.cur_obj_id)?.len(),
         merkle_s: bincode::serialize(&vo.merkle_proofs)?.len(),
-        total_s: bincode::serialize(&vo)?.len(),
+        total_s: bincode::serialize(&vo)?.len() - set_s,
     })
 }
 

@@ -142,7 +142,7 @@ impl<K: Num> QueryParam<K> {
     }
 }
 
-pub fn param_to_qp_parallel<K: Num, T: ReadInterface<K = K>>(
+pub fn param_to_qp<K: Num, T: ReadInterface<K = K>>(
     time_win: &TimeWin,
     e_win_size: u64,
     query_dag: &Graph<DagNode<K>, bool>,

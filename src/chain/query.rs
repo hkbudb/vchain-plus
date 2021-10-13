@@ -5,7 +5,7 @@ pub mod query_plan;
 
 use self::{
     query_dag::DagNode,
-    query_param::{param_to_qp_parallel, Node},
+    query_param::{param_to_qp, Node},
 };
 use crate::{
     acc::{
@@ -17,6 +17,7 @@ use crate::{
         id_tree::{self, ObjId},
         object::Object,
         query::{
+            egg_qp::egg_optimize,
             query_dag::{
                 gen_last_query_dag_with_cont_basic, gen_last_query_dag_with_cont_trimmed,
                 gen_parallel_query_dag,
@@ -72,6 +73,7 @@ pub struct QueryResInfo<K: Num> {
     stage1: ProcessDuration,
     stage2: ProcessDuration,
     stage3: ProcessDuration,
+    stage4: ProcessDuration,
     res: (HashMap<ObjId, Object<K>>, VO<K>),
 }
 
@@ -585,11 +587,13 @@ fn paral_sub_query_process<K: Num, T: ReadInterface<K = K>>(
     pk: &AccPublicKey,
 ) -> Result<QueryResInfo<K>> {
     let sub_timer = howlong::ProcessCPUTimer::new();
-    let query_plan = param_to_qp_parallel(time_win, e_win_size, query_dag, chain, pk)?;
+    let query_plan = param_to_qp(time_win, e_win_size, query_dag, chain, pk)?;
     let time1 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
-    let (qp_processed, outputs) = process_empty_sets(query_dag, query_plan)?;
     let time2 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let (qp_processed, outputs) = process_empty_sets(query_dag, query_plan)?;
+    let time3 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
     let res = query_final(
         chain,
@@ -602,13 +606,54 @@ fn paral_sub_query_process<K: Num, T: ReadInterface<K = K>>(
         0,
         query_dag,
     )?;
-    let time3 = sub_timer.elapsed();
+    let time4 = sub_timer.elapsed();
     Ok(QueryResInfo {
         stage1: time1,
         stage2: time2,
         stage3: time3,
+        stage4: time4,
         res,
     })
+}
+
+fn paral_first_sub_query_with_egg<K: Num, T: ReadInterface<K = K>>(
+    time_win: &TimeWin,
+    e_win_size: u64,
+    query_dag: &Graph<query_dag::DagNode<K>, bool>,
+    chain: &T,
+    pk: &AccPublicKey,
+) -> Result<(Result<QueryResInfo<K>>, Graph<query_dag::DagNode<K>, bool>)> {
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let mut query_plan = param_to_qp(time_win, e_win_size, query_dag, chain, pk)?;
+    let time1 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let new_dag = egg_optimize(query_dag, &mut query_plan)?;
+    let time2 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let (qp_processed, outputs) = process_empty_sets(&new_dag, query_plan)?;
+    let time3 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let res = query_final(
+        chain,
+        pk,
+        qp_processed,
+        outputs,
+        time_win,
+        None,
+        e_win_size,
+        0,
+        &new_dag,
+    )?;
+    let time4 = sub_timer.elapsed();
+    let query_res_info = QueryResInfo {
+        stage1: time1,
+        stage2: time2,
+        stage3: time3,
+        stage4: time4,
+        res,
+    };
+
+    Ok((Ok(query_res_info), new_dag))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -624,9 +669,10 @@ fn last_sub_query_process<K: Num, T: ReadInterface<K = K>>(
     graph_map: &mut HashMap<usize, Graph<DagNode<K>, bool>>,
 ) -> Result<QueryResInfo<K>> {
     let sub_timer = howlong::ProcessCPUTimer::new();
-
-    let (dag2, qp2) = match opt_level {
-        0 => gen_last_query_dag_with_cont_basic(time_win, s_win_size, query_dag)?,
+    let (dag2, mut qp2) = match opt_level {
+        0 => gen_last_query_dag_with_cont_basic(
+            time_win, s_win_size, e_win_size, query_dag, chain, pk,
+        )?,
         1 => gen_last_query_dag_with_cont_trimmed(
             time_win,
             s_win_size,
@@ -641,8 +687,14 @@ fn last_sub_query_process<K: Num, T: ReadInterface<K = K>>(
 
     let time1 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
-    let (qp_processed, outputs) = process_empty_sets(&dag2, qp2)?;
+    let new_dag2 = egg_optimize(&dag2, &mut qp2)?;
     let time2 = sub_timer.elapsed();
+    let sub_timer = howlong::ProcessCPUTimer::new();
+    let (qp_processed, outputs) = process_empty_sets(&new_dag2, qp2)?;
+    // let mut outputs = HashSet::new();
+    // let rt = &qp2.root_idx;
+    // outputs.insert(*rt);
+    let time3 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
     let res = query_final(
         chain,
@@ -653,15 +705,27 @@ fn last_sub_query_process<K: Num, T: ReadInterface<K = K>>(
         s_win_size,
         e_win_size,
         1,
-        &dag2,
+        &new_dag2,
     )?;
-    let time3 = sub_timer.elapsed();
-    graph_map.insert(1, dag2);
+    // let res = query_final(
+    //     chain,
+    //     pk,
+    //     qp2,
+    //     outputs,
+    //     time_win,
+    //     s_win_size,
+    //     e_win_size,
+    //     1,
+    //     &new_dag2,
+    // )?;
+    let time4 = sub_timer.elapsed();
+    graph_map.insert(1, new_dag2);
 
     Ok(QueryResInfo {
         stage1: time1,
         stage2: time2,
         stage3: time3,
+        stage4: time4,
         res,
     })
 }
@@ -804,6 +868,50 @@ fn process_empty_sets<K: Num>(
     Ok((new_qp, sub_root_idxs))
 }
 
+fn parallel_process<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send>(
+    complete_wins: &Vec<(TimeWin, u64)>,
+    dag1: &Graph<DagNode<K>, bool>,
+    responses: &mut Vec<Result<QueryResInfo<K>>>,
+    graph_map: &mut HashMap<usize, Graph<DagNode<K>, bool>>,
+    chain: &T,
+    pk: &AccPublicKey,
+) {
+    complete_wins
+        .par_iter()
+        .map(|(time_win, e_win_size)| {
+            paral_sub_query_process(time_win, *e_win_size, &dag1, chain, pk)
+        })
+        .collect_into_vec(responses);
+    graph_map.insert(0, dag1.clone());
+}
+
+fn parallel_process_with_egg<
+    K: Num,
+    T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send,
+>(
+    complete_wins: &mut Vec<(TimeWin, u64)>,
+    dag1: &Graph<DagNode<K>, bool>,
+    responses: &mut Vec<Result<QueryResInfo<K>>>,
+    graph_map: &mut HashMap<usize, Graph<DagNode<K>, bool>>,
+    chain: &T,
+    pk: &AccPublicKey,
+) -> Result<()> {
+    if let Some((selected_win, win_size)) = complete_wins.pop() {
+        let (q_res_info, new_dag) =
+            paral_first_sub_query_with_egg(&selected_win, win_size, dag1, chain, pk)?;
+
+        complete_wins
+            .par_iter()
+            .map(|(time_win, e_win_size)| {
+                paral_sub_query_process(time_win, *e_win_size, &new_dag, chain, pk)
+            })
+            .collect_into_vec(responses);
+        responses.push(q_res_info);
+        graph_map.insert(0, new_dag);
+    }
+    Ok(())
+}
+
 #[allow(clippy::type_complexity)]
 pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send>(
     opt_level: u8,
@@ -821,18 +929,28 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
     let mut graph_map = HashMap::<usize, Graph<DagNode<K>, bool>>::new();
     let query_time_win = query_param.gen_time_win();
     let query_content = query_param.gen_query_content();
-    let (complete_wins, final_win) = select_win_size(chain_win_sizes, query_time_win)?;
+    let (mut complete_wins, final_win) = select_win_size(chain_win_sizes, query_time_win)?;
+    let mut responses = Vec::with_capacity(complete_wins.len());
+    let dag1 = gen_parallel_query_dag(&query_content)?;
 
     // process dag1 parallel
-    let dag1 = gen_parallel_query_dag(&query_content)?;
-    let mut responses = Vec::with_capacity(complete_wins.len());
-    complete_wins
-        .par_iter()
-        .map(|(time_win, e_win_size)| {
-            paral_sub_query_process(time_win, *e_win_size, &dag1, &chain, pk)
-        })
-        .collect_into_vec(&mut responses);
-    graph_map.insert(0, dag1.clone());
+    // parallel_process(
+    //     &complete_wins,
+    //     &dag1,
+    //     &mut responses,
+    //     &mut graph_map,
+    //     &chain,
+    //     pk,
+    // );
+
+    parallel_process_with_egg(
+        &mut complete_wins,
+        &dag1,
+        &mut responses,
+        &mut graph_map,
+        &chain,
+        pk,
+    )?;
 
     // process dag2 if exists
     if let Some((time_win, s_win_size, e_win_size)) = final_win {
@@ -854,12 +972,14 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
     let mut stage1_time = Vec::<ProcessDuration>::new();
     let mut stage2_time = Vec::<ProcessDuration>::new();
     let mut stage3_time = Vec::<ProcessDuration>::new();
+    let mut stage4_time = Vec::<ProcessDuration>::new();
     let mut result = Vec::<(HashMap<ObjId, Object<K>>, VO<K>)>::new();
     for response in responses {
         let a = response?;
         stage1_time.push(a.stage1);
         stage2_time.push(a.stage2);
         stage3_time.push(a.stage3);
+        stage4_time.push(a.stage4);
         result.push(a.res);
     }
 
@@ -875,10 +995,15 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
     for t in stage3_time {
         stage3_total_time += t;
     }
+    let mut stage4_total_time: ProcessDuration = ProcessDuration::default();
+    for t in stage4_time {
+        stage4_total_time += t;
+    }
     let query_time = QueryTime {
         stage1: Time::from(stage1_total_time),
         stage2: Time::from(stage2_total_time),
         stage3: Time::from(stage3_total_time),
+        stage4: Time::from(stage4_total_time),
         total: total_query_time,
     };
     Ok((result, graph_map, query_time))

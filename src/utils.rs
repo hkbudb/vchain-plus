@@ -176,6 +176,7 @@ pub struct QueryTime {
     pub(crate) stage1: Time,
     pub(crate) stage2: Time,
     pub(crate) stage3: Time,
+    pub(crate) stage4: Time,
     pub(crate) total: Time,
 }
 
