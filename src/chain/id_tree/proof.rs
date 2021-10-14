@@ -13,7 +13,6 @@ pub(crate) mod sub_tree;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Proof {
-    // pub(crate) cur_obj_id: ObjId
     pub(crate) root: Option<SubProof>,
 }
 
