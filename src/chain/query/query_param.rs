@@ -142,7 +142,7 @@ impl<K: Num> QueryParam<K> {
     }
 }
 
-pub fn param_to_qp_parallel<K: Num, T: ReadInterface<K = K>>(
+pub fn param_to_qp<K: Num, T: ReadInterface<K = K>>(
     time_win: &TimeWin,
     e_win_size: u64,
     query_dag: &Graph<DagNode<K>, bool>,
@@ -242,9 +242,7 @@ pub fn param_to_qp_parallel<K: Num, T: ReadInterface<K = K>>(
                         .context("Cannot find the second child vo node in vo_dag_content")?;
                     let c2_set = qp_c2.get_set()?;
                     let c_union = c1_set | c2_set;
-                    let qp_union = QPUnion {
-                        set: Some((c_union, 0, 0)),
-                    };
+                    let qp_union = QPUnion { set: Some(c_union) };
                     dag_content.insert(*idx, QPNode::Union(qp_union));
                 }
                 DagNode::Intersec(_) => {
@@ -268,7 +266,7 @@ pub fn param_to_qp_parallel<K: Num, T: ReadInterface<K = K>>(
                     let c2_set = qp_c2.get_set()?;
                     let c_intersec = c1_set & c2_set;
                     let qp_intersec = QPIntersec {
-                        set: Some((c_intersec, 0, 0)),
+                        set: Some(c_intersec),
                     };
                     dag_content.insert(*idx, QPNode::Intersec(qp_intersec));
                 }
@@ -308,9 +306,7 @@ pub fn param_to_qp_parallel<K: Num, T: ReadInterface<K = K>>(
                         .context("Cannot find the second child vo node in vo_dag_content")?;
                     let c2_set = qp_c2.get_set()?;
                     let c_diff = c1_set / c2_set;
-                    let qp_diff = QPDiff {
-                        set: Some((c_diff, 0, 0)),
-                    };
+                    let qp_diff = QPDiff { set: Some(c_diff) };
                     dag_content.insert(*idx, QPNode::Diff(qp_diff));
                 }
             }

@@ -7,6 +7,7 @@ use howlong::ProcessDuration;
 use memmap2::Mmap;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use snap::{read::FrameDecoder, write::FrameEncoder};
 use std::{
     collections::{BTreeMap, HashSet},
     error::Error as StdError,
@@ -176,6 +177,7 @@ pub struct QueryTime {
     pub(crate) stage1: Time,
     pub(crate) stage2: Time,
     pub(crate) stage3: Time,
+    pub(crate) stage4: Time,
     pub(crate) total: Time,
 }
 
@@ -196,6 +198,17 @@ impl From<ProcessDuration> for Time {
     }
 }
 
+pub fn binary_encode<T: Serialize>(value: &T) -> Result<Vec<u8>> {
+    let mut encoder = FrameEncoder::new(Vec::new());
+    bincode::serialize_into(&mut encoder, value).map_err(Error::msg)?;
+    Ok(encoder.into_inner()?)
+}
+
+pub fn binary_decode<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T> {
+    let decoder = FrameDecoder::new(bytes);
+    bincode::deserialize_from(decoder).map_err(Error::msg)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{load_query_param_from_file, KeyPair};
@@ -208,7 +221,7 @@ mod tests {
                 query_plan::{QPKeywordNode, QPNode, QPUnion},
             },
         },
-        utils::load_raw_obj_from_str,
+        utils::{binary_decode, binary_encode, load_raw_obj_from_str},
     };
     use petgraph::Graph;
     use serde_json::json;
@@ -347,5 +360,12 @@ mod tests {
         println!("before: {}", size_original);
         println!("after: {}", size_update);
         assert_eq!(1, 1);
+    }
+
+    #[test]
+    fn test_compress() {
+        let value = String::from("hello world");
+        let bin = binary_encode(&value).unwrap();
+        assert_eq!(binary_decode::<String>(bin.as_ref()).unwrap(), value);
     }
 }

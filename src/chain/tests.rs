@@ -506,7 +506,8 @@ fn test_fake_chain_read_basic() -> Result<()> {
         },
     });
     let query1_param: QueryParam<u32> = serde_json::from_value(query1_param_data).unwrap();
-    let (results, dag_map, _time) = query(0, &test_chain, query1_param, &PUB_KEY).unwrap();
+    let (results, dag_map, _time) =
+        query(false, false, false, &test_chain, query1_param, &PUB_KEY).unwrap();
     println!("results for query 1: ");
     for (res, _vo) in &results {
         println!("{:#?}", res);
@@ -525,7 +526,8 @@ fn test_fake_chain_read_basic() -> Result<()> {
         },
     });
     let query2_param: QueryParam<u32> = serde_json::from_value(query2_param_data).unwrap();
-    let (results, dag_map, _time) = query(0, &test_chain, query2_param, &PUB_KEY).unwrap();
+    let (results, dag_map, _time) =
+        query(false, false, false, &test_chain, query2_param, &PUB_KEY).unwrap();
     println!("results for query 2: ");
     for (res, _vo) in &results {
         println!("{:#?}", res);

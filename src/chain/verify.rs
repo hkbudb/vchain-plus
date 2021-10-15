@@ -8,7 +8,7 @@ use crate::{
         {block::Height, id_tree::ObjId, object::Object, traits::ReadInterface},
     },
     digest::{Digest, Digestible},
-    utils::Time,
+    utils::{binary_encode, Time},
 };
 use anyhow::{bail, ensure, Context, Result};
 use hash::{ads_hash, bplus_roots_hash};
@@ -411,13 +411,14 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
 }
 
 fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<VOSize> {
+    let set_s = bincode::serialize(&binary_encode(&vo.vo_dag_content.output_sets)?)?.len();
     Ok(VOSize {
-        vo_dag_s: bincode::serialize(&vo.vo_dag_content)?.len(),
-        trie_proof_s: bincode::serialize(&vo.trie_proofs)?.len(),
-        id_proof_s: bincode::serialize(&vo.id_tree_proof)?.len(),
-        cur_id_s: bincode::serialize(&vo.cur_obj_id)?.len(),
-        merkle_s: bincode::serialize(&vo.merkle_proofs)?.len(),
-        total_s: bincode::serialize(&vo)?.len(),
+        vo_dag_s: bincode::serialize(&binary_encode(&vo.vo_dag_content)?)?.len() - set_s,
+        trie_proof_s: bincode::serialize(&binary_encode(&vo.trie_proofs)?)?.len(),
+        id_proof_s: bincode::serialize(&binary_encode(&vo.id_tree_proof)?)?.len(),
+        cur_id_s: bincode::serialize(&binary_encode(&vo.cur_obj_id)?)?.len(),
+        merkle_s: bincode::serialize(&binary_encode(&vo.merkle_proofs)?)?.len(),
+        total_s: bincode::serialize(&binary_encode(&vo)?)?.len() - set_s,
     })
 }
 
