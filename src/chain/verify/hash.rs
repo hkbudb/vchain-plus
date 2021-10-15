@@ -7,7 +7,7 @@ use crate::{
 pub(crate) fn merkle_proof_hash<'a>(
     id_set_root_hash: &Digest,
     id_tree_root_hash: &Digest,
-    block_ads_hashes: impl Iterator<Item = (&'a u64, &'a Digest)>,
+    block_ads_hashes: impl Iterator<Item = (&'a u16, &'a Digest)>,
 ) -> Digest {
     let mut state = blake2().to_state();
     for (window_siz, blk_ads_hash) in block_ads_hashes {

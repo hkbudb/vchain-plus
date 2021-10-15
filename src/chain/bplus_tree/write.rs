@@ -74,13 +74,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
         })
     }
 
-    pub fn insert(
-        &mut self,
-        key: K,
-        obj_id: ObjId,
-        fanout: usize,
-        pk: &AccPublicKey,
-    ) -> Result<()> {
+    pub fn insert(&mut self, key: K, obj_id: ObjId, fanout: u8, pk: &AccPublicKey) -> Result<()> {
         debug!("inserting key: {:?}", key);
         let set = Set::from_single_element(obj_id.0);
         let new_acc = AccValue::from_set(&set, pk);
@@ -359,7 +353,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                     }
                     child_ids.clear();
                     child_hashes.clear();
-                    if node.child_ids.len() <= fanout {
+                    if node.child_ids.len() <= fanout as usize {
                         let (id, hash) = self.write_non_leaf(node);
                         child_ids.push(id);
                         child_hashes.push(hash);
@@ -457,13 +451,7 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
         Ok(())
     }
 
-    pub fn delete(
-        &mut self,
-        key: K,
-        obj_id: ObjId,
-        fanout: usize,
-        pk: &AccPublicKey,
-    ) -> Result<()> {
+    pub fn delete(&mut self, key: K, obj_id: ObjId, fanout: u8, pk: &AccPublicKey) -> Result<()> {
         debug!("delete key: {:?}", key);
         let set = Set::from_single_element(obj_id.0);
         let delta_acc = AccValue::from_set(&set, pk);

@@ -262,10 +262,12 @@ impl ScanQueryInterface for &FakeChain {
         Ok(res)
     }
 
-    fn root_query(&self, height: Height, win_size: u64) -> Result<HashSet<Digest>> {
+    fn root_query(&self, height: Height, win_size: u16) -> Result<HashSet<Digest>> {
         let mut res = HashSet::<Digest>::new();
         for (hash, o) in &self.objects {
-            if o.blk_height <= height && Height(o.blk_height.0 + win_size) >= Height(height.0 + 1) {
+            if o.blk_height <= height
+                && Height(o.blk_height.0 + win_size as u32) >= Height(height.0 + 1)
+            {
                 res.insert(*hash);
             }
         }
@@ -343,7 +345,7 @@ impl ScanQueryInterface for &FakeChain {
         Ok(res)
     }
 
-    fn get_chain_info(&self) -> Result<(u64, u64)> {
+    fn get_chain_info(&self) -> Result<(u32, u32)> {
         let mut cur_height_num = 0;
         let mut total_num = 0;
         for (_, o) in &self.objects {

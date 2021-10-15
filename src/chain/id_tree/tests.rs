@@ -17,7 +17,7 @@ use anyhow::{bail, Result};
 use smallvec::SmallVec;
 use std::{
     collections::{HashMap, HashSet},
-    num::NonZeroU64,
+    num::NonZeroU16,
 };
 
 fn create_id_tree_leaf(
@@ -146,9 +146,9 @@ fn get_dataset1() -> Vec<Object<i32>> {
     res
 }
 
-pub const N: usize = 3;
-pub const K: usize = 3;
-pub const FANOUT: usize = 3;
+pub const N: u16 = 3;
+pub const K: u16 = 3;
+pub const FANOUT: u8 = 3;
 
 fn build_test_id_tree0() -> TestIdTree {
     let mut dataset = get_dataset0();
@@ -395,7 +395,7 @@ fn test_read1() {
     unsafe {
         p.verify_value(
             Digest::zero(),
-            ObjId(NonZeroU64::new_unchecked(12)),
+            ObjId(NonZeroU16::new_unchecked(12)),
             N * K,
             FANOUT,
         )
@@ -443,7 +443,7 @@ fn test_read1() {
     state.update(o1_digest.as_bytes());
     let n_digest = Digest::from(state.finalize());
     unsafe {
-        p.verify_value(n_digest, ObjId(NonZeroU64::new_unchecked(1)), N * K, FANOUT)
+        p.verify_value(n_digest, ObjId(NonZeroU16::new_unchecked(1)), N * K, FANOUT)
             .unwrap();
     }
 
@@ -481,7 +481,7 @@ fn test_read1() {
     state.update(o2_digest.as_bytes());
     let n_digest = Digest::from(state.finalize());
     unsafe {
-        p.verify_value(n_digest, ObjId(NonZeroU64::new_unchecked(2)), N * K, FANOUT)
+        p.verify_value(n_digest, ObjId(NonZeroU16::new_unchecked(2)), N * K, FANOUT)
             .unwrap();
     }
 
@@ -519,7 +519,7 @@ fn test_read1() {
     state.update(o3_digest.as_bytes());
     let n_digest = Digest::from(state.finalize());
     unsafe {
-        p.verify_value(n_digest, ObjId(NonZeroU64::new_unchecked(3)), N * K, FANOUT)
+        p.verify_value(n_digest, ObjId(NonZeroU16::new_unchecked(3)), N * K, FANOUT)
             .unwrap();
     }
 }
@@ -567,43 +567,43 @@ fn test_read_ctx1() {
     let o9_digest = o9.to_digest();
     unsafe {
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(11)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(11)), N * K, FANOUT)
             .unwrap();
         assert_eq!(None, v);
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(1)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(1)), N * K, FANOUT)
             .unwrap();
         assert_eq!(Some(o1_digest), v);
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(2)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(2)), N * K, FANOUT)
             .unwrap();
         assert_eq!(Some(o2_digest), v);
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(3)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(3)), N * K, FANOUT)
             .unwrap();
         assert_eq!(Some(o3_digest), v);
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(4)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(4)), N * K, FANOUT)
             .unwrap();
         assert_eq!(Some(o4_digest), v);
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(5)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(5)), N * K, FANOUT)
             .unwrap();
         assert_eq!(Some(o5_digest), v);
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(6)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(6)), N * K, FANOUT)
             .unwrap();
         assert_eq!(Some(o6_digest), v);
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(7)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(7)), N * K, FANOUT)
             .unwrap();
         assert_eq!(Some(o7_digest), v);
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(8)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(8)), N * K, FANOUT)
             .unwrap();
         assert_eq!(Some(o8_digest), v);
         let v = ctx1
-            .query(ObjId(NonZeroU64::new_unchecked(9)), N * K, FANOUT)
+            .query(ObjId(NonZeroU16::new_unchecked(9)), N * K, FANOUT)
             .unwrap();
         assert_eq!(Some(o9_digest), v);
     }
@@ -619,7 +619,7 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             Digest::zero(),
-            ObjId(NonZeroU64::new_unchecked(12)),
+            ObjId(NonZeroU16::new_unchecked(12)),
             N * K,
             FANOUT,
         )
@@ -633,7 +633,7 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             n1_digest,
-            ObjId(NonZeroU64::new_unchecked(1)),
+            ObjId(NonZeroU16::new_unchecked(1)),
             N * K,
             FANOUT,
         )
@@ -646,7 +646,7 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             n2_digest,
-            ObjId(NonZeroU64::new_unchecked(2)),
+            ObjId(NonZeroU16::new_unchecked(2)),
             N * K,
             FANOUT,
         )
@@ -659,7 +659,7 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             n3_digest,
-            ObjId(NonZeroU64::new_unchecked(3)),
+            ObjId(NonZeroU16::new_unchecked(3)),
             N * K,
             FANOUT,
         )
@@ -672,7 +672,7 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             n4_digest,
-            ObjId(NonZeroU64::new_unchecked(4)),
+            ObjId(NonZeroU16::new_unchecked(4)),
             N * K,
             FANOUT,
         )
@@ -685,7 +685,7 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             n5_digest,
-            ObjId(NonZeroU64::new_unchecked(5)),
+            ObjId(NonZeroU16::new_unchecked(5)),
             N * K,
             FANOUT,
         )
@@ -698,7 +698,7 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             n6_digest,
-            ObjId(NonZeroU64::new_unchecked(6)),
+            ObjId(NonZeroU16::new_unchecked(6)),
             N * K,
             FANOUT,
         )
@@ -711,7 +711,7 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             n7_digest,
-            ObjId(NonZeroU64::new_unchecked(7)),
+            ObjId(NonZeroU16::new_unchecked(7)),
             N * K,
             FANOUT,
         )
@@ -724,7 +724,7 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             n8_digest,
-            ObjId(NonZeroU64::new_unchecked(8)),
+            ObjId(NonZeroU16::new_unchecked(8)),
             N * K,
             FANOUT,
         )
@@ -737,10 +737,33 @@ fn test_read_ctx1() {
     unsafe {
         p.verify_value(
             n9_digest,
-            ObjId(NonZeroU64::new_unchecked(9)),
+            ObjId(NonZeroU16::new_unchecked(9)),
             N * K,
             FANOUT,
         )
         .unwrap();
     }
+}
+
+use serde::{Deserialize, Serialize};
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+struct TestLeaf {
+    node_id: Option<IdTreeNodeId>,
+    node_hash: Digest,
+}
+
+#[test]
+fn test_proof_size() {
+    let leaf1 = TestLeaf {
+        node_id: Some(IdTreeNodeId(1)),
+        node_hash: Digest::zero(),
+    };
+    let leaf2 = TestLeaf {
+        node_id: None,
+        node_hash: Digest::zero(),
+    };
+    let leaf1_size = bincode::serialize(&leaf1).unwrap().len();
+    let leaf2_size = bincode::serialize(&leaf2).unwrap().len();
+
+    assert_eq!(4, leaf1_size - leaf2_size);
 }

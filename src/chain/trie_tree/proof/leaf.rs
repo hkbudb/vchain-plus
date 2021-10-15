@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct TrieLeaf {
-    pub(crate) node_id: TrieNodeId,
+    pub(crate) node_id: Option<TrieNodeId>,
     pub(crate) rest: String,
     pub(crate) acc_val: AccValue,
 }
@@ -19,7 +19,7 @@ impl Digestible for TrieLeaf {
 }
 
 impl TrieLeaf {
-    pub(crate) fn new(node_id: TrieNodeId, rest: &str, acc_val: AccValue) -> Self {
+    pub(crate) fn new(node_id: Option<TrieNodeId>, rest: &str, acc_val: AccValue) -> Self {
         Self {
             node_id,
             rest: rest.to_string(),

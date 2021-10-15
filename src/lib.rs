@@ -331,12 +331,12 @@ impl ScanQueryInterface for &SimChain {
         Ok(res)
     }
 
-    fn root_query(&self, height: Height, win_size: u64) -> Result<HashSet<Digest>> {
+    fn root_query(&self, height: Height, win_size: u16) -> Result<HashSet<Digest>> {
         let mut res = HashSet::<Digest>::new();
         let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
         for (_key, val) in db_iter {
             let o = bincode::deserialize::<Object<u32>>(&val[..])?;
-            if o.blk_height <= height && o.blk_height.0 + win_size >= height.0 + 1 {
+            if o.blk_height <= height && o.blk_height.0 + win_size as u32 >= height.0 + 1 {
                 res.insert(o.to_digest());
             }
         }
@@ -416,7 +416,7 @@ impl ScanQueryInterface for &SimChain {
         }
         Ok(res)
     }
-    fn get_chain_info(&self) -> Result<(u64, u64)> {
+    fn get_chain_info(&self) -> Result<(u32, u32)> {
         let db_iter = self.obj_db.iterator(rocksdb::IteratorMode::Start);
         let mut cur_height_num = 0;
         let mut total_num = 0;

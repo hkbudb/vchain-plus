@@ -384,8 +384,8 @@ pub fn gen_parallel_query_dag<K: Num>(
 #[allow(clippy::type_complexity)]
 pub fn gen_last_query_dag_with_cont_basic<K: Num, T: ReadInterface<K = K>>(
     time_win: &TimeWin,
-    s_win_size: Option<u64>,
-    e_win_size: u64,
+    s_win_size: Option<u16>,
+    e_win_size: u16,
     mut query_dag: Graph<DagNode<K>, bool>,
     chain: &T,
     pk: &AccPublicKey,
@@ -602,8 +602,8 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num, T: ReadInterface<K = K>>(
 #[allow(clippy::type_complexity)]
 pub fn gen_last_query_dag_with_cont_trimmed<K: Num, T: ReadInterface<K = K>>(
     time_win: &TimeWin,
-    s_win_size: Option<u64>,
-    e_win_size: u64,
+    s_win_size: Option<u16>,
+    e_win_size: u16,
     mut query_dag: Graph<DagNode<K>, bool>,
     query_content: &QueryContent<K>,
     chain: &T,
@@ -916,7 +916,7 @@ pub fn gen_last_query_dag_with_cont_trimmed<K: Num, T: ReadInterface<K = K>>(
 fn process_keyword_sub_node<K: Num, T: ReadInterface<K = K>>(
     sub_exp: &Node,
     blk_height: Height,
-    win_size: u64,
+    win_size: u16,
     trie_ctx: &mut trie_tree::read::ReadContext<T>,
     chain: &T,
     pk: &AccPublicKey,
@@ -958,7 +958,7 @@ fn estimate_keyword_sub_dag_cost<K: Num, T: ReadInterface<K = K>>(
     dag_content: &mut HashMap<NodeIndex, QPNode<K>>,
     trie_ctx: &mut trie_tree::read::ReadContext<T>,
     blk_height: Height,
-    win_size: u64,
+    win_size: u16,
     chain: &T,
     pk: &AccPublicKey,
 ) -> Result<usize> {

@@ -1,14 +1,13 @@
 use core::{
     iter::FromIterator,
-    num::NonZeroU64,
     ops::{BitAnd, BitOr, Deref, DerefMut, Div},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::{collections::HashSet, num::NonZeroU16};
 
 /// A set of elements.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Set(HashSet<NonZeroU64>);
+pub struct Set(HashSet<NonZeroU16>);
 
 impl Set {
     pub fn new() -> Self {
@@ -19,7 +18,7 @@ impl Set {
         Self(HashSet::with_capacity(cap))
     }
 
-    pub fn from_single_element(elm: NonZeroU64) -> Self {
+    pub fn from_single_element(elm: NonZeroU16) -> Self {
         let mut set = Set::with_capacity(1);
         set.insert(elm);
         set
@@ -91,7 +90,7 @@ pub fn in_place_set_difference(mut lhs: Set, rhs: &Set) -> Set {
 }
 
 impl Deref for Set {
-    type Target = HashSet<NonZeroU64>;
+    type Target = HashSet<NonZeroU16>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -104,22 +103,22 @@ impl DerefMut for Set {
     }
 }
 
-impl From<HashSet<NonZeroU64>> for Set {
-    fn from(input: HashSet<NonZeroU64>) -> Self {
+impl From<HashSet<NonZeroU16>> for Set {
+    fn from(input: HashSet<NonZeroU16>) -> Self {
         Self(input)
     }
 }
 
-impl FromIterator<NonZeroU64> for Set {
-    fn from_iter<T: IntoIterator<Item = NonZeroU64>>(iter: T) -> Self {
+impl FromIterator<NonZeroU16> for Set {
+    fn from_iter<T: IntoIterator<Item = NonZeroU16>>(iter: T) -> Self {
         Self(HashSet::from_iter(iter))
     }
 }
 
-impl FromIterator<u64> for Set {
-    fn from_iter<T: IntoIterator<Item = u64>>(iter: T) -> Self {
+impl FromIterator<u16> for Set {
+    fn from_iter<T: IntoIterator<Item = u16>>(iter: T) -> Self {
         iter.into_iter()
-            .map(|v| NonZeroU64::new(v).expect("set element cannot be zero."))
+            .map(|v| NonZeroU16::new(v).expect("set element cannot be zero."))
             .collect()
     }
 }
@@ -183,7 +182,7 @@ macro_rules! set {
             let _cap = set!(@count $($key,)*);
             let mut _set = $crate::acc::set::Set::with_capacity(_cap);
             $(
-                let _k = core::num::NonZeroU64::new($key).expect("set element cannot be zero.");
+                let _k = core::num::NonZeroU16::new($key).expect("set element cannot be zero.");
                 _set.insert(_k);
             )*
             _set
@@ -250,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_from_iter() {
-        let mut v = Vec::<u64>::new();
+        let mut v = Vec::<u16>::new();
         v.push(1);
         v.push(2);
         v.push(3);

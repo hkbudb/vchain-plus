@@ -112,18 +112,18 @@ pub struct NotNode(pub Node);
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct QueryParam<K: Num> {
-    pub start_blk: u64,
-    pub end_blk: u64,
+    pub start_blk: u32,
+    pub end_blk: u32,
     pub range: Vec<Range<K>>,
     pub keyword_exp: Option<Node>,
 }
 
 impl<K: Num> QueryParam<K> {
-    pub fn get_start(&self) -> u64 {
+    pub fn get_start(&self) -> u32 {
         self.start_blk
     }
 
-    pub fn get_end(&self) -> u64 {
+    pub fn get_end(&self) -> u32 {
         self.end_blk
     }
 
@@ -144,7 +144,7 @@ impl<K: Num> QueryParam<K> {
 
 pub fn param_to_qp<K: Num, T: ReadInterface<K = K>>(
     time_win: &TimeWin,
-    e_win_size: u64,
+    e_win_size: u16,
     query_dag: &Graph<DagNode<K>, bool>,
     chain: &T,
     pk: &AccPublicKey,

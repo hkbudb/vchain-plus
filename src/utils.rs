@@ -20,7 +20,7 @@ use std::{
 use tracing_subscriber::EnvFilter;
 
 #[macro_export]
-macro_rules! create_id_type {
+macro_rules! create_id_type_by_u32 {
     ($name: ident) => {
         #[derive(
             Debug,
@@ -40,12 +40,45 @@ macro_rules! create_id_type {
             derive_more::From,
             derive_more::Into,
         )]
-        pub struct $name(pub u64);
+        pub struct $name(pub u32);
 
         impl $name {
             pub fn next_id() -> Self {
-                use core::sync::atomic::{AtomicU64, Ordering};
-                static ID_CNT: AtomicU64 = AtomicU64::new(0);
+                use core::sync::atomic::{AtomicU32, Ordering};
+                static ID_CNT: AtomicU32 = AtomicU32::new(0);
+                Self(ID_CNT.fetch_add(1, Ordering::SeqCst))
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! create_id_type_by_u16 {
+    ($name: ident) => {
+        #[derive(
+            Debug,
+            Default,
+            Copy,
+            Clone,
+            Eq,
+            PartialEq,
+            Ord,
+            PartialOrd,
+            Hash,
+            serde::Serialize,
+            serde::Deserialize,
+            derive_more::Deref,
+            derive_more::DerefMut,
+            derive_more::Display,
+            derive_more::From,
+            derive_more::Into,
+        )]
+        pub struct $name(pub u16);
+
+        impl $name {
+            pub fn next_id() -> Self {
+                use core::sync::atomic::{AtomicU16, Ordering};
+                static ID_CNT: AtomicU16 = AtomicU16::new(0);
                 Self(ID_CNT.fetch_add(1, Ordering::SeqCst))
             }
         }
@@ -213,6 +246,7 @@ pub fn binary_decode<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T> {
 mod tests {
     use super::{load_query_param_from_file, KeyPair};
     use crate::{
+        acc::AccValue,
         chain::{
             block::Height,
             object::Object,
@@ -221,6 +255,8 @@ mod tests {
                 query_plan::{QPKeywordNode, QPNode, QPUnion},
             },
         },
+        digest::Digestible,
+        set,
         utils::{binary_decode, binary_encode, load_raw_obj_from_str},
     };
     use petgraph::Graph;
@@ -229,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_create_id() {
-        create_id_type!(TestId);
+        create_id_type_by_u32!(TestId);
         assert_eq!(TestId::next_id(), TestId(0));
         assert_eq!(TestId::next_id(), TestId(1));
         assert_eq!(TestId::next_id(), TestId(2));
@@ -367,5 +403,50 @@ mod tests {
         let value = String::from("hello world");
         let bin = binary_encode(&value).unwrap();
         assert_eq!(binary_decode::<String>(bin.as_ref()).unwrap(), value);
+    }
+
+    #[test]
+    fn test_acc_size() {
+        let key_path = Path::new("./keys/254_300");
+        let pk = KeyPair::load(key_path).unwrap().pk;
+        let set = set! {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40};
+        let acc = AccValue::from_set(&set, &pk);
+        let acc_size = bincode::serialize(&acc).unwrap().len();
+        let dig = acc.to_digest();
+        let dig_size = bincode::serialize(&dig).unwrap().len();
+        assert_eq!(dig_size, 32);
+        assert_eq!(acc_size, 416);
+    }
+
+    use serde::{Deserialize, Serialize};
+    #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+    struct TestId(u8);
+    #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+    struct TestId2(u64);
+
+    #[test]
+    fn test_int_size() {
+        let a: u8 = 1;
+        let b: u32 = 1;
+        let c: u64 = 1;
+        let a_size = bincode::serialize(&a).unwrap().len();
+        let b_size = bincode::serialize(&b).unwrap().len();
+        let c_size = bincode::serialize(&c).unwrap().len();
+        assert_eq!(a_size, 1);
+        assert_eq!(b_size, 4);
+        assert_eq!(c_size, 8);
+        let a = TestId(1);
+        let b = TestId2(1);
+        let a_size = bincode::serialize(&a).unwrap().len();
+        let b_size = bincode::serialize(&b).unwrap().len();
+        assert_eq!(a_size, 1);
+        assert_eq!(b_size, 8);
+
+        let c = Some(b);
+        let d: Option<TestId2> = None;
+        let c_size = bincode::serialize(&c).unwrap().len();
+        let d_size = bincode::serialize(&d).unwrap().len();
+        assert_eq!(c_size, 9);
+        assert_eq!(d_size, 1);
     }
 }

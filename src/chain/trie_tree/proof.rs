@@ -26,7 +26,7 @@ impl Proof {
         Self { root: Some(root) }
     }
 
-    pub fn from_root_hash(root_id: TrieNodeId, nibble: &str, root_hash: Digest) -> Self {
+    pub fn from_root_hash(root_id: Option<TrieNodeId>, nibble: &str, root_hash: Digest) -> Self {
         if root_hash == Digest::zero() {
             Self::default()
         } else {
@@ -58,5 +58,11 @@ impl Proof {
             "Trie verification: acc value not matched!"
         );
         Ok(())
+    }
+
+    pub(crate) fn remove_node_id(&mut self) {
+        if let Some(sub_proof) = &mut self.root {
+            sub_proof.remove_node_id();
+        }
     }
 }

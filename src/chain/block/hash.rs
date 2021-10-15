@@ -1,4 +1,4 @@
-use std::num::NonZeroU64;
+use std::num::NonZeroU16;
 
 use crate::{
     chain::{
@@ -42,7 +42,7 @@ pub(crate) fn block_ads_hash<'a>(
 
 #[inline]
 pub(crate) fn block_multi_ads_hash<'a>(
-    block_adses: impl Iterator<Item = (&'a u64, &'a BlockADS)>,
+    block_adses: impl Iterator<Item = (&'a u16, &'a BlockADS)>,
 ) -> Digest {
     let mut state = blake2().to_state();
     for (window_siz, blk_ads) in block_adses {
@@ -53,7 +53,7 @@ pub(crate) fn block_multi_ads_hash<'a>(
 }
 
 #[inline]
-pub(crate) fn obj_id_nums_hash<'a>(obj_id_nums: impl Iterator<Item = &'a NonZeroU64>) -> Digest {
+pub(crate) fn obj_id_nums_hash<'a>(obj_id_nums: impl Iterator<Item = &'a NonZeroU16>) -> Digest {
     let mut state = blake2().to_state();
     for obj_id_num in obj_id_nums {
         state.update(obj_id_num.get().to_digest().as_bytes());

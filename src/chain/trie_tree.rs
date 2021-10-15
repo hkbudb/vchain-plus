@@ -1,6 +1,6 @@
 use crate::{
     acc::{set::Set, AccValue},
-    create_id_type,
+    create_id_type_by_u32,
     digest::{Digest, Digestible},
 };
 use anyhow::Result;
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::collections::BTreeMap;
 
-create_id_type!(TrieNodeId);
+create_id_type_by_u32!(TrieNodeId);
 
 pub mod hash;
 pub mod proof;

@@ -18,7 +18,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use howlong::ProcessDuration;
 use smol_str::SmolStr;
-use std::{collections::HashMap, num::NonZeroU64};
+use std::{collections::HashMap, num::NonZeroU16};
 
 pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     blk_height: Height,
@@ -53,13 +53,13 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     let id_tree_root = pre_blk_content.id_tree_root;
     let mut id_tree_ctx = id_tree::write::WriteContext::new(&chain, id_tree_root);
     // trie ctxes
-    let mut trie_ctxes = Vec::<(u64, trie_tree::write::WriteContext<T>)>::new();
+    let mut trie_ctxes = Vec::<(u16, trie_tree::write::WriteContext<T>)>::new();
     // bplus tree
-    let mut bplus_ctxes = Vec::<(u64, Vec<bplus_tree::write::WriteContext<K, T>>)>::new();
+    let mut bplus_ctxes = Vec::<(u16, Vec<bplus_tree::write::WriteContext<K, T>>)>::new();
 
     for &k in time_wins {
-        let pre_k_blk_content = if blk_height.0 > k {
-            chain.read_block_content(Height(blk_height.0 - k))?
+        let pre_k_blk_content = if blk_height.0 > k.into() {
+            chain.read_block_content(Height(blk_height.0 - k as u32))?
         } else {
             BlockContent::default()
         };
@@ -93,7 +93,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
                 dim
             );
             let bplus_tree_root = if let Some(block_ads) = multi_ads.get(&k) {
-                if let Some(bplus_root) = block_ads.bplus_tree_roots.get(dim) {
+                if let Some(bplus_root) = block_ads.bplus_tree_roots.get(dim as usize) {
                     *bplus_root
                 } else {
                     bail!(
@@ -111,7 +111,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
                 let obj_id_num = pre_k_blk_obj_id_nums
                     .get(idx)
                     .context("Cannot find object id number!")?;
-                if let Some(num_data) = raw_obj.num_data.get(dim) {
+                if let Some(num_data) = raw_obj.num_data.get(dim as usize) {
                     bplus_ctx.delete(*num_data, ObjId(*obj_id_num), param.bplus_tree_fanout, pk)?;
                 }
             }
@@ -122,14 +122,14 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     }
 
     let mut obj_hashes = Vec::<Digest>::new();
-    let mut obj_id_nums = Vec::<NonZeroU64>::new();
+    let mut obj_id_nums = Vec::<NonZeroU16>::new();
 
     debug!("start inserting");
     for obj in &raw_objs {
         debug!("inserting for obj {:?}", obj);
         // build id tree
         let obj_hash = obj.to_digest();
-        let obj_id = id_tree_ctx.insert(obj_hash, max_id_num as usize, param.id_tree_fanout)?;
+        let obj_id = id_tree_ctx.insert(obj_hash, max_id_num, param.id_tree_fanout)?;
         debug!("inserting for id tree finished");
         // build trie
         for (_k, trie_ctx) in &mut trie_ctxes {
@@ -159,7 +159,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
 
     // handle trie changes
     let mut new_trie_nodes = Vec::<HashMap<TrieNodeId, TrieNode>>::new();
-    let mut new_trie_roots = Vec::<(u64, TrieRoot)>::new();
+    let mut new_trie_roots = Vec::<(u16, TrieRoot)>::new();
     for (k, trie_ctx) in trie_ctxes {
         let trie_changes = trie_ctx.changes();
         new_trie_roots.push((k, trie_changes.root));
@@ -169,7 +169,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     debug!("finish trie ctx change update");
 
     // handle bplus tree changes
-    let mut new_bplus_roots = Vec::<(u64, Vec<BPlusTreeRoot>)>::new();
+    let mut new_bplus_roots = Vec::<(u16, Vec<BPlusTreeRoot>)>::new();
     let mut new_bplus_nodes = Vec::<HashMap<BPlusTreeNodeId, BPlusTreeNode<K>>>::new();
     for (k, bplus_ctx_vec) in bplus_ctxes {
         let mut new_bplus_roots_dim = Vec::<BPlusTreeRoot>::new();

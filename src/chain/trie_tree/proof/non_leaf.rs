@@ -56,12 +56,20 @@ impl TrieNonLeaf {
     pub(crate) fn search_prefix(
         &mut self,
         cur_key: &str,
-    ) -> Option<(*mut SubProof, TrieNodeId, SmolStr)> {
+    ) -> Option<(*mut SubProof, Option<TrieNodeId>, SmolStr)> {
         let (_common_key, cur_idx, rest_cur_key, _node_idx, _rest_node_key) =
             split_at_common_prefix2(cur_key, &self.nibble);
         match self.children.get_mut(&cur_idx) {
             Some(child) => child.search_prefix(&rest_cur_key),
             None => None,
+        }
+    }
+
+    pub(crate) fn remove_node_id(&mut self) {
+        let children = &mut self.children;
+        for c in children.values_mut() {
+            let sub_proof = c.as_mut();
+            sub_proof.remove_node_id();
         }
     }
 }

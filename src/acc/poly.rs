@@ -287,7 +287,7 @@ impl<F: Field> Poly<F> {
     #[inline(always)]
     pub(crate) fn remove_intersected_term(&mut self, y: Variable, q: u64, set: &Set) {
         for i in set.iter() {
-            let i = i.get();
+            let i = i.get() as u64;
             let term = match y {
                 Variable::S => Term::new(q, i),
                 Variable::R => Term::new(i, q),
@@ -362,7 +362,7 @@ pub(crate) fn poly_a<F: Field>(set: &Set, x: Variable) -> Poly<F> {
     let one = F::one();
     let mut coeffs = BTreeMap::new();
     for i in set.iter() {
-        let i = i.get();
+        let i = i.get() as u64;
         let term = match x {
             Variable::S => Term::new(i, 0),
             Variable::R => Term::new(0, i),
@@ -379,7 +379,7 @@ pub(crate) fn poly_b<F: Field>(set: &Set, x: Variable, y: Variable, q: u64) -> P
     let one = F::one();
     let mut coeffs = BTreeMap::new();
     for i in set.iter() {
-        let i = i.get();
+        let i = i.get() as u64;
         let term = match x {
             Variable::S => Term::new(i, q - i),
             Variable::R => Term::new(q - i, i),

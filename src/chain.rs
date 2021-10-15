@@ -17,11 +17,11 @@ pub const COST_COEFFICIENT: usize = 200;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Parameter {
-    pub time_win_sizes: Vec<u64>,
-    pub id_tree_fanout: usize,
-    pub max_id_num: usize,
-    pub bplus_tree_fanout: usize,
-    pub num_dim: usize,
+    pub time_win_sizes: Vec<u16>,
+    pub id_tree_fanout: u8,
+    pub max_id_num: u16,
+    pub bplus_tree_fanout: u8,
+    pub num_dim: u8,
 }
 
 #[cfg(test)]

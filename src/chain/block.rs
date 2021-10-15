@@ -9,7 +9,7 @@ use crate::{
 use block_ads::BlockMultiADS;
 use hash::block_head_hash;
 use serde::{Deserialize, Serialize};
-use std::num::NonZeroU64;
+use std::num::NonZeroU16;
 
 #[derive(
     Debug,
@@ -29,7 +29,7 @@ use std::num::NonZeroU64;
     derive_more::From,
     derive_more::Into,
 )]
-pub struct Height(pub u64);
+pub struct Height(pub u32);
 
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct BlockContent {
@@ -38,7 +38,7 @@ pub struct BlockContent {
     pub id_tree_root: IdTreeRoot,
     pub ads: BlockMultiADS,
     pub obj_hashes: Vec<Digest>,
-    pub obj_id_nums: Vec<NonZeroU64>,
+    pub obj_id_nums: Vec<NonZeroU16>,
 }
 
 impl BlockContent {
@@ -49,7 +49,7 @@ impl BlockContent {
             id_tree_root: IdTreeRoot::default(),
             ads: BlockMultiADS::default(),
             obj_hashes: Vec::<Digest>::new(),
-            obj_id_nums: Vec::<NonZeroU64>::new(),
+            obj_id_nums: Vec::<NonZeroU16>::new(),
         }
     }
 
@@ -65,11 +65,11 @@ impl BlockContent {
         self.obj_hashes = new_hashes;
     }
 
-    pub fn set_obj_id_nums(&mut self, new_id_nums: Vec<NonZeroU64>) {
+    pub fn set_obj_id_nums(&mut self, new_id_nums: Vec<NonZeroU16>) {
         self.obj_id_nums = new_id_nums;
     }
 
-    pub fn read_obj_id_nums(&self) -> Vec<NonZeroU64> {
+    pub fn read_obj_id_nums(&self) -> Vec<NonZeroU16> {
         self.obj_id_nums.clone()
     }
 }

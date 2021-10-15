@@ -112,7 +112,7 @@ pub trait ScanQueryInterface {
         start_blk_height: Height,
         end_blk_height: Height,
     ) -> Result<HashSet<Digest>>;
-    fn root_query(&self, height: Height, win_size: u64) -> Result<HashSet<Digest>>;
+    fn root_query(&self, height: Height, win_size: u16) -> Result<HashSet<Digest>>;
     #[allow(clippy::type_complexity)]
     fn get_range_info(
         &self,
@@ -125,5 +125,5 @@ pub trait ScanQueryInterface {
         start_blk_height: Height,
         end_blk_height: Height,
     ) -> Result<HashSet<String>>;
-    fn get_chain_info(&self) -> Result<(u64, u64)>;
+    fn get_chain_info(&self) -> Result<(u32, u32)>;
 }
