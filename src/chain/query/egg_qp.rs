@@ -17,7 +17,7 @@ use std::{
     collections::HashMap,
     fmt,
     hash::{Hash, Hasher},
-    num::NonZeroU64,
+    num::NonZeroU16,
     str::FromStr,
 };
 
@@ -64,7 +64,7 @@ impl Hash for SimpleSet {
     where
         H: Hasher,
     {
-        let mut a: Vec<&NonZeroU64> = self.0.iter().collect();
+        let mut a: Vec<&NonZeroU16> = self.0.iter().collect();
         a.sort_unstable();
         for s in a.iter() {
             s.hash(state)
@@ -160,7 +160,7 @@ fn create_rec_exp<K: Num>(
                 DagNode::Range(_) | DagNode::Keyword(_) | DagNode::BlkRt(_) => {
                     let set = dag_cont
                         .get(&idx)
-                        .context("Cannot find node in dag_cont")?
+                        .context("Cannot find node in dag_cont when creating expr")?
                         .get_set()?
                         .clone();
                     let leaf = SimpleLeaf {
@@ -339,8 +339,9 @@ fn create_qp<K: Num>(
             ELang::Leaf(n) => {
                 let idx = n.get_idx();
                 let qp_node = dag_cont
-                    .remove(&idx)
-                    .context("Cannot find node in dag_cont")?;
+                    .get(&idx)
+                    .context("Cannot find node in dag_cont when create qp")?
+                    .clone();
 
                 let dag_n = old_dag
                     .node_weight(idx)

@@ -13,7 +13,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use smol_str::SmolStr;
-use std::{collections::HashMap, num::NonZeroU64};
+use std::{collections::HashMap, num::NonZeroU16};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct TestTrie {
@@ -57,19 +57,19 @@ pub fn set_root_id(trie_root: &mut TrieRoot, id: Option<TrieNodeId>) {
     trie_root.trie_root_id = id;
 }
 
-fn get_dataset() -> Vec<(String, NonZeroU64)> {
+fn get_dataset() -> Vec<(String, NonZeroU16)> {
     unsafe {
-        let data: Vec<(String, NonZeroU64)> = vec![
-            ("abcd".to_string(), NonZeroU64::new_unchecked(1)),
-            ("abcde".to_string(), NonZeroU64::new_unchecked(2)),
-            ("abca".to_string(), NonZeroU64::new_unchecked(3)),
-            ("abcd".to_string(), NonZeroU64::new_unchecked(4)),
-            ("abc".to_string(), NonZeroU64::new_unchecked(5)),
-            ("abcb".to_string(), NonZeroU64::new_unchecked(6)),
-            ("abdef".to_string(), NonZeroU64::new_unchecked(7)),
-            ("a".to_string(), NonZeroU64::new_unchecked(8)),
-            ("bcd".to_string(), NonZeroU64::new_unchecked(9)),
-            ("bce".to_string(), NonZeroU64::new_unchecked(10)),
+        let data: Vec<(String, NonZeroU16)> = vec![
+            ("abcd".to_string(), NonZeroU16::new_unchecked(1)),
+            ("abcde".to_string(), NonZeroU16::new_unchecked(2)),
+            ("abca".to_string(), NonZeroU16::new_unchecked(3)),
+            ("abcd".to_string(), NonZeroU16::new_unchecked(4)),
+            ("abc".to_string(), NonZeroU16::new_unchecked(5)),
+            ("abcb".to_string(), NonZeroU16::new_unchecked(6)),
+            ("abdef".to_string(), NonZeroU16::new_unchecked(7)),
+            ("a".to_string(), NonZeroU16::new_unchecked(8)),
+            ("bcd".to_string(), NonZeroU16::new_unchecked(9)),
+            ("bce".to_string(), NonZeroU16::new_unchecked(10)),
         ];
         data
     }
@@ -90,55 +90,55 @@ fn test_write() {
     unsafe {
         ctx.delete(
             SmolStr::from("abcd"),
-            ObjId(NonZeroU64::new_unchecked(4)),
+            ObjId(NonZeroU16::new_unchecked(4)),
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             SmolStr::from("abcd"),
-            ObjId(NonZeroU64::new_unchecked(1)),
+            ObjId(NonZeroU16::new_unchecked(1)),
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             SmolStr::from("bce"),
-            ObjId(NonZeroU64::new_unchecked(10)),
+            ObjId(NonZeroU16::new_unchecked(10)),
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             SmolStr::from("abcb"),
-            ObjId(NonZeroU64::new_unchecked(6)),
+            ObjId(NonZeroU16::new_unchecked(6)),
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             SmolStr::from("abc"),
-            ObjId(NonZeroU64::new_unchecked(5)),
+            ObjId(NonZeroU16::new_unchecked(5)),
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             SmolStr::from("a"),
-            ObjId(NonZeroU64::new_unchecked(8)),
+            ObjId(NonZeroU16::new_unchecked(8)),
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             SmolStr::from("bcd"),
-            ObjId(NonZeroU64::new_unchecked(9)),
+            ObjId(NonZeroU16::new_unchecked(9)),
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             SmolStr::from("abdef"),
-            ObjId(NonZeroU64::new_unchecked(7)),
+            ObjId(NonZeroU16::new_unchecked(7)),
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             SmolStr::from("abca"),
-            ObjId(NonZeroU64::new_unchecked(3)),
+            ObjId(NonZeroU16::new_unchecked(3)),
             &PUB_KEY,
         )
         .unwrap();

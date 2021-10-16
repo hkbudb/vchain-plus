@@ -1,7 +1,7 @@
 use crate::{
     acc::{set::Set, AccValue},
     chain::{range::Range, traits::Num, MAX_INLINE_BTREE_FANOUT},
-    create_id_type,
+    create_id_type_by_u32,
     digest::{Digest, Digestible},
 };
 use anyhow::Result;
@@ -9,7 +9,7 @@ use hash::{bplus_tree_leaf_hash, bplus_tree_non_leaf_hash};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
-create_id_type!(BPlusTreeNodeId);
+create_id_type_by_u32!(BPlusTreeNodeId);
 
 pub mod hash;
 pub mod proof;

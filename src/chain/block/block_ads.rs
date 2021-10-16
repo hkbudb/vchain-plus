@@ -34,7 +34,7 @@ impl BlockADS {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
-pub struct BlockMultiADS(BTreeMap<u64, BlockADS>);
+pub struct BlockMultiADS(BTreeMap<u16, BlockADS>);
 
 impl Digestible for BlockMultiADS {
     fn to_digest(&self) -> Digest {
@@ -43,11 +43,11 @@ impl Digestible for BlockMultiADS {
 }
 
 impl BlockMultiADS {
-    pub(crate) fn read_adses(&self) -> &BTreeMap<u64, BlockADS> {
+    pub(crate) fn read_adses(&self) -> &BTreeMap<u16, BlockADS> {
         &self.0
     }
 
-    pub(crate) fn read_bplus_root(&self, time_win: u64, dim: usize) -> Result<BPlusTreeRoot> {
+    pub(crate) fn read_bplus_root(&self, time_win: u16, dim: usize) -> Result<BPlusTreeRoot> {
         let blk_ads = self.0.get(&time_win);
         let ads =
             blk_ads.with_context(|| format!("Cannot find the ADS in time window {}", time_win))?;
@@ -57,7 +57,7 @@ impl BlockMultiADS {
             .with_context(|| format!("Cannot find the bplus tree root at dimension {}", dim))?)
     }
 
-    pub(crate) fn read_trie_root(&self, time_win: u64) -> Result<TrieRoot> {
+    pub(crate) fn read_trie_root(&self, time_win: u16) -> Result<TrieRoot> {
         let blk_ads = self.0.get(&time_win);
         Ok(blk_ads
             .with_context(|| format!("Cannot find trie root in time window {}", time_win))?
@@ -66,7 +66,7 @@ impl BlockMultiADS {
 
     pub(crate) fn set_multi_trie_roots<'a>(
         &mut self,
-        trie_roots: impl Iterator<Item = &'a (u64, TrieRoot)>,
+        trie_roots: impl Iterator<Item = &'a (u16, TrieRoot)>,
     ) {
         for (k, trie_root) in trie_roots {
             if let Some(blk_ads) = self.0.get_mut(k) {
@@ -81,7 +81,7 @@ impl BlockMultiADS {
 
     pub(crate) fn set_multi_bplus_roots<'a>(
         &mut self,
-        bplus_roots: impl Iterator<Item = &'a (u64, Vec<BPlusTreeRoot>)>,
+        bplus_roots: impl Iterator<Item = &'a (u16, Vec<BPlusTreeRoot>)>,
     ) {
         for (k, vec) in bplus_roots {
             if let Some(blk_ads) = self.0.get_mut(k) {

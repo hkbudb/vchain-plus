@@ -64,14 +64,14 @@ impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
         })
     }
 
-    pub fn insert(&mut self, obj_hash: Digest, max_id_num: usize, fanout: usize) -> Result<ObjId> {
+    pub fn insert(&mut self, obj_hash: Digest, max_id_num: u16, fanout: u8) -> Result<ObjId> {
         let cur_id = self.apply.root.cur_obj_id;
         let internal_id = cur_id.to_internal_id();
-        let next_internal_id = IdTreeInternalId((internal_id.0 + 1) % max_id_num as u64);
+        let next_internal_id = IdTreeInternalId((internal_id.0 + 1) % max_id_num);
         self.apply.root.cur_obj_id = ObjId::from_internal_id(next_internal_id);
         let mut cur_id_opt = self.apply.root.id_tree_root_id;
         let depth = (max_id_num as f64).log(fanout as f64).floor() as usize;
-        let mut cur_path_rev = fanout_nary_rev(internal_id.0, fanout as u64, depth);
+        let mut cur_path_rev = fanout_nary_rev(internal_id.0, fanout, depth);
 
         #[allow(clippy::large_enum_variant)]
         enum TempNode {
@@ -171,13 +171,13 @@ impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
     }
 }
 
-pub fn fanout_nary_rev(obj_id: u64, fanout: u64, depth: usize) -> Vec<usize> {
+pub fn fanout_nary_rev(obj_id: u16, fanout: u8, depth: usize) -> Vec<usize> {
     let mut path: Vec<usize> = vec![0; depth];
     let mut num = obj_id;
     let mut idx_size = 0;
     while idx_size < depth {
-        path[idx_size] = (num % fanout) as usize;
-        num /= fanout;
+        path[idx_size] = (num % fanout as u16) as usize;
+        num /= fanout as u16;
         idx_size += 1;
     }
     path
@@ -189,8 +189,8 @@ mod tests {
     fn test_fanout_nary() {
         use super::fanout_nary_rev;
 
-        let expect_ten: Vec<usize> = vec![1, 3, 0, 7, 9, 1];
-        let v_ten: Vec<usize> = fanout_nary_rev(197031, 10, 6);
+        let expect_ten: Vec<usize> = vec![3, 0, 7, 9, 1];
+        let v_ten: Vec<usize> = fanout_nary_rev(19703, 10, 5);
         assert_eq!(v_ten, expect_ten);
 
         let expect_two: Vec<usize> = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];

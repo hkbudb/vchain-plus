@@ -25,23 +25,23 @@ use vchain_plus::{
 struct Opt {
     /// time windows
     #[structopt(short, long)]
-    time_win_sizes: Vec<u64>,
+    time_win_sizes: Vec<u16>,
 
     /// id tree fanout
     #[structopt(long)]
-    id_fanout: usize,
+    id_fanout: u8,
 
     /// max id num
     #[structopt(short, long)]
-    max_id: usize,
+    max_id: u16,
 
     /// bplus tree fanout
     #[structopt(short, long)]
-    bplus_fanout: usize,
+    bplus_fanout: u8,
 
     /// dimension
     #[structopt(short, long)]
-    dim: usize,
+    dim: u8,
 
     /// key path
     #[structopt(short, long, parse(from_os_str))]

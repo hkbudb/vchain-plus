@@ -32,13 +32,13 @@ const FIX_OPT: u32 = 1;
 
 #[allow(clippy::too_many_arguments)]
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
-    time_win: u64,
+    time_win: u32,
     selectivity: f64,
     err_rate: f64,
     dim_num: usize,
     chain: T,
-    obj_num: u64,
-    blk_num: u64,
+    obj_num: u32,
+    blk_num: u32,
     gap: u32,
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
@@ -236,11 +236,11 @@ fn gen_node_with_not(not_prob: f64, keyword: String) -> Node {
 }
 
 fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
-    time_win: u64,
+    time_win: u32,
     with_not: bool,
     not_prob: f64,
     keyword_num: usize,
-    blk_num: u64,
+    blk_num: u32,
     chain: T,
     for_tx: bool,
 ) -> Result<(String, String)> {
@@ -373,13 +373,13 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
 
 #[allow(clippy::too_many_arguments)]
 fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
-    time_win: u64,
+    time_win: u32,
     selectivity: f64,
     err_rate: f64,
     dim_num: usize,
     chain: T,
-    obj_num: u64,
-    blk_num: u64,
+    obj_num: u32,
+    blk_num: u32,
     with_not: bool,
     not_prob: f64,
     keyword_num: usize,
@@ -650,7 +650,7 @@ struct Opt {
 
     /// query time window size
     #[structopt(short, long)]
-    time_win: u64,
+    time_win: u32,
 
     /// dim number
     #[structopt(short, long, default_value = "1")]

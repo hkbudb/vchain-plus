@@ -4,3 +4,4 @@ Cargo.lock
 !/data/dataset
 /data/dataset/*dbg*.dat
 /keys
+/scripts

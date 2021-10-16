@@ -95,7 +95,6 @@ fn inner_range_query<K: Num>(
 
                     for child_id in &n.child_ids {
                         let child_node = node_loader.load_node(*child_id)?;
-                        //.ok_or_else(|| anyhow!("Cannot find node"))?;
                         let mut sub_proof = match &child_node {
                             BPlusTreeNode::Leaf(n) => Box::new(SubProof::from_hash(
                                 Range::new(n.num, n.num),

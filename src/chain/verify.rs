@@ -84,8 +84,8 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     let vo_dag_idxs = graph.node_indices();
     let vo_dag_content = &vo_content.vo_dag_content.dag_content;
     let vo_output_sets = &vo_content.vo_dag_content.output_sets;
-    let mut time_win_map = HashMap::<Height, u64>::new();
-    let mut bplus_roots = HashMap::<Height, (u64, BTreeMap<usize, Digest>)>::new();
+    let mut time_win_map = HashMap::<Height, u16>::new();
+    let mut bplus_roots = HashMap::<Height, (u16, BTreeMap<usize, Digest>)>::new();
     let trie_proofs = &vo_content.trie_proofs;
     for idx in vo_dag_idxs {
         if let Some(content) = vo_dag_content.get(&idx) {
@@ -426,7 +426,7 @@ fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<VOSize> {
 pub fn verify<K: Num + Serialize, T: ReadInterface<K = K>>(
     chain: T,
     res_contents: &[(HashMap<ObjId, Object<K>>, VO<K>)],
-    res_dags: &HashMap<usize, Graph<DagNode<K>, bool>>,
+    res_dags: &HashMap<u8, Graph<DagNode<K>, bool>>,
     pk: &AccPublicKey,
 ) -> Result<VerifyInfo> {
     let timer = howlong::ProcessCPUTimer::new();

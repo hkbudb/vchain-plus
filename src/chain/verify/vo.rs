@@ -47,7 +47,7 @@ impl<K: Num> VONode<K> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VORangeNode<K: Num> {
     pub(crate) blk_height: Height,
-    pub(crate) win_size: u64,
+    pub(crate) win_size: u16,
     pub(crate) acc: AccValue,
     pub(crate) proof: bplus_tree::proof::Proof<K>,
 }
@@ -55,14 +55,14 @@ pub struct VORangeNode<K: Num> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOKeywordNode {
     pub(crate) blk_height: Height,
-    pub(crate) win_size: u64,
+    pub(crate) win_size: u16,
     pub(crate) acc: AccValue,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VOBlkRtNode {
     pub(crate) blk_height: Height,
-    pub(crate) win_size: u64,
+    pub(crate) win_size: u16,
     pub(crate) acc: AccValue,
 }
 
@@ -103,14 +103,14 @@ pub struct VOFinalDiff {
 pub struct MerkleProof {
     pub(crate) id_tree_root_hash: Option<Digest>,
     pub(crate) id_set_root_hash: Digest,
-    pub(crate) ads_hashes: BTreeMap<u64, Digest>,
+    pub(crate) ads_hashes: BTreeMap<u16, Digest>,
 }
 
 impl MerkleProof {
     pub(crate) fn ads_root_hash(
         &self,
         id_tree_root_hash: &Digest,
-        rest_ads_hashes: impl Iterator<Item = (u64, Digest)>,
+        rest_ads_hashes: impl Iterator<Item = (u16, Digest)>,
     ) -> Digest {
         let mut ads_hashes = self.ads_hashes.clone();
         for (time_win, hash) in rest_ads_hashes {
@@ -124,7 +124,7 @@ impl MerkleProof {
 pub struct VoDagContent<K: Num> {
     pub(crate) output_sets: HashMap<NodeIndex, Set>,
     pub(crate) dag_content: HashMap<NodeIndex, VONode<K>>,
-    pub(crate) dag_idx: usize,
+    pub(crate) dag_idx: u8,
 }
 
 #[derive(Serialize, Deserialize)]

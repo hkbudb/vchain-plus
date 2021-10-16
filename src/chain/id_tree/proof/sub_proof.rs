@@ -16,10 +16,7 @@ pub(crate) enum SubProof {
 
 impl Default for SubProof {
     fn default() -> Self {
-        Self::Hash(Box::new(IdTreeSubTree::new(
-            IdTreeNodeId(0),
-            Digest::zero(),
-        )))
+        Self::Hash(Box::new(IdTreeSubTree::new(None, Digest::zero())))
     }
 }
 
@@ -34,7 +31,7 @@ impl Digestible for SubProof {
 }
 
 impl SubProof {
-    pub(crate) fn from_hash(node_id: IdTreeNodeId, h: Digest) -> Self {
+    pub(crate) fn from_hash(node_id: Option<IdTreeNodeId>, h: Digest) -> Self {
         Self::Hash(Box::new(IdTreeSubTree::new(node_id, h)))
     }
 
@@ -62,7 +59,7 @@ impl SubProof {
         &mut self,
         obj_id: IdTreeInternalId,
         cur_path_rev: &'a mut Vec<usize>,
-    ) -> Option<(*mut SubProof, IdTreeNodeId, &'a mut Vec<usize>)> {
+    ) -> Option<(*mut SubProof, Option<IdTreeNodeId>, &'a mut Vec<usize>)> {
         match self {
             Self::Hash(sub_tree) => {
                 let node_id = sub_tree.node_id;
@@ -76,6 +73,23 @@ impl SubProof {
                 } else {
                     None
                 }
+            }
+        }
+    }
+
+    pub(crate) fn remove_node_id(&mut self) {
+        match self {
+            Self::Hash(n) => {
+                let sub_tree = n.as_mut();
+                sub_tree.node_id = None;
+            }
+            Self::NonLeaf(n) => {
+                let node = n.as_mut();
+                node.remove_node_id();
+            }
+            Self::Leaf(n) => {
+                let node = n.as_mut();
+                node.node_id = None;
             }
         }
     }

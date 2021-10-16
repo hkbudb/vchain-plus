@@ -47,18 +47,18 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TimeWin {
-    pub start_blk: u64,
-    pub end_blk: u64,
+    pub start_blk: u32,
+    pub end_blk: u32,
 }
 
 impl TimeWin {
-    pub fn new(start_blk: u64, end_blk: u64) -> Self {
+    pub fn new(start_blk: u32, end_blk: u32) -> Self {
         Self { start_blk, end_blk }
     }
-    pub fn get_start(&self) -> u64 {
+    pub fn get_start(&self) -> u32 {
         self.start_blk
     }
-    pub fn get_end(&self) -> u64 {
+    pub fn get_end(&self) -> u32 {
         self.end_blk
     }
 }
@@ -85,9 +85,9 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     mut query_plan: QueryPlan<K>,
     outputs: HashSet<NodeIndex>,
     time_win: &TimeWin,
-    s_win_size: Option<u64>,
-    e_win_size: u64,
-    graph_idx: usize,
+    s_win_size: Option<u16>,
+    e_win_size: u16,
+    graph_idx: u8,
     query_dag: &Graph<query_dag::DagNode<K>, bool>,
 ) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
     let mut vo_dag_content = HashMap::<NodeIndex, VONode<K>>::new();
@@ -99,7 +99,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     let qp_trie_proofs = query_plan.trie_proofs;
     let mut obj_map = HashMap::<ObjId, Object<K>>::new();
     let mut merkle_proofs = HashMap::<Height, MerkleProof>::new();
-    let mut time_win_map = HashMap::<Height, u64>::new();
+    let mut time_win_map = HashMap::<Height, u16>::new();
 
     let mut qp_inputs = match toposort(query_dag, None) {
         Ok(v) => v,
@@ -500,7 +500,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
         let blk_content = chain.read_block_content(height)?;
         let obj_id_nums = blk_content.read_obj_id_nums();
         let id_set_root_hash = obj_id_nums_hash(obj_id_nums.iter());
-        let mut ads_hashes = BTreeMap::<u64, Digest>::new();
+        let mut ads_hashes = BTreeMap::<u16, Digest>::new();
         let multi_ads = blk_content.ads;
         for (t_w, ads) in multi_ads.read_adses() {
             if *t_w != time_win {
@@ -537,44 +537,44 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
 
 #[allow(clippy::type_complexity)]
 fn select_win_size(
-    win_sizes: &[u64],
+    win_sizes: &[u16],
     query_time_win: TimeWin,
-) -> Result<(Vec<(TimeWin, u64)>, Option<(TimeWin, Option<u64>, u64)>)> {
-    let mut vec_res = Vec::<(TimeWin, u64)>::new();
+) -> Result<(Vec<(TimeWin, u16)>, Option<(TimeWin, Option<u16>, u16)>)> {
+    let mut vec_res = Vec::<(TimeWin, u16)>::new();
     let mut cur_win = query_time_win;
-    let max = win_sizes.last().context("empty time win")?;
+    let max = *win_sizes.last().context("empty time win")? as u32;
     while cur_win.get_end() + 1 >= max + cur_win.get_start() {
         let new_time_win = TimeWin::new(cur_win.get_start(), cur_win.get_start() + max - 1);
-        vec_res.push((new_time_win, *max));
-        if cur_win.get_start() + *max == cur_win.get_end() + 1 {
+        vec_res.push((new_time_win, max as u16));
+        if cur_win.get_start() + max == cur_win.get_end() + 1 {
             return Ok((vec_res, None));
         } else {
-            cur_win = TimeWin::new(cur_win.get_start() + *max, cur_win.get_end());
+            cur_win = TimeWin::new(cur_win.get_start() + max, cur_win.get_end());
         }
     }
 
     let cur_size = cur_win.get_end() - cur_win.get_start() + 1;
     let mut end_idx = 0;
     for (i, win_size) in win_sizes.iter().enumerate() {
-        if cur_size <= *win_size {
+        if cur_size <= *win_size as u32 {
             end_idx = i;
             break;
         }
     }
-    let higher = win_sizes.get(end_idx).context("cannot find size")?;
+    let higher = *win_sizes.get(end_idx).context("cannot find size")?;
     let last_win;
-    if cur_size == *higher {
-        last_win = (cur_win, None, *higher);
+    if cur_size == higher as u32 {
+        last_win = (cur_win, None, higher);
     } else {
         let mut start_idx = 0;
         let mut lower = *win_sizes.get(start_idx).context("not time window")?;
-        while cur_win.get_start() > lower
-            && cur_win.get_start() + higher > cur_win.get_end() + lower
+        while cur_win.get_start() > lower as u32
+            && cur_win.get_start() + higher as u32 > cur_win.get_end() + lower as u32
         {
             start_idx += 1;
             lower = *win_sizes.get(start_idx).context("no time win")?;
         }
-        last_win = (cur_win, Some(lower), *higher);
+        last_win = (cur_win, Some(lower), higher);
     }
     Ok((vec_res, Some(last_win)))
 }
@@ -582,7 +582,7 @@ fn select_win_size(
 fn paral_sub_query_process<K: Num, T: ReadInterface<K = K>>(
     empty_set: bool,
     time_win: &TimeWin,
-    e_win_size: u64,
+    e_win_size: u16,
     query_dag: &Graph<query_dag::DagNode<K>, bool>,
     chain: &T,
     pk: &AccPublicKey,
@@ -621,7 +621,7 @@ fn paral_sub_query_process<K: Num, T: ReadInterface<K = K>>(
 fn paral_first_sub_query_with_egg<K: Num, T: ReadInterface<K = K>>(
     empty_set: bool,
     time_win: &TimeWin,
-    e_win_size: u64,
+    e_win_size: u16,
     query_dag: &Graph<query_dag::DagNode<K>, bool>,
     chain: &T,
     pk: &AccPublicKey,
@@ -666,13 +666,13 @@ fn last_sub_query_process<K: Num, T: ReadInterface<K = K>>(
     empty_set: bool,
     egg_opt: bool,
     time_win: &TimeWin,
-    s_win_size: Option<u64>,
-    e_win_size: u64,
+    s_win_size: Option<u16>,
+    e_win_size: u16,
     query_dag: Graph<query_dag::DagNode<K>, bool>,
     query_content: &QueryContent<K>,
     chain: &T,
     pk: &AccPublicKey,
-    graph_map: &mut HashMap<usize, Graph<DagNode<K>, bool>>,
+    graph_map: &mut HashMap<u8, Graph<DagNode<K>, bool>>,
 ) -> Result<QueryResInfo<K>> {
     let sub_timer = howlong::ProcessCPUTimer::new();
     let (dag2, mut qp2) = if trim {
@@ -748,10 +748,8 @@ fn process_empty_sets<K: Num>(
     query_dag: &Graph<query_dag::DagNode<K>, bool>,
     qp: &mut QueryPlan<K>,
 ) -> Result<HashSet<NodeIndex>> {
-    //let qp_end_blk_height = qp.end_blk_height;
     let qp_root_idx = qp.root_idx;
     let qp_content = qp.get_dag_cont_mut();
-    //let qp_trie_proofs = qp.trie_proofs;
     let mut sub_root_idxs = HashSet::new();
     sub_root_idxs.insert(qp_root_idx);
     let mut new_qp_content = HashMap::new();
@@ -872,12 +870,6 @@ fn process_empty_sets<K: Num>(
         }
     }
 
-    // let new_qp = QueryPlan {
-    //     end_blk_height: qp_end_blk_height,
-    //     root_idx: qp_root_idx,
-    //     dag_content: new_qp_content,
-    //     trie_proofs: qp_trie_proofs,
-    // };
     qp.update_dag_cont(new_qp_content);
 
     Ok(sub_root_idxs)
@@ -885,10 +877,10 @@ fn process_empty_sets<K: Num>(
 
 fn parallel_process<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send>(
     empty_set: bool,
-    complete_wins: &[(TimeWin, u64)],
+    complete_wins: &[(TimeWin, u16)],
     dag1: &Graph<DagNode<K>, bool>,
     responses: &mut Vec<Result<QueryResInfo<K>>>,
-    graph_map: &mut HashMap<usize, Graph<DagNode<K>, bool>>,
+    graph_map: &mut HashMap<u8, Graph<DagNode<K>, bool>>,
     chain: &T,
     pk: &AccPublicKey,
 ) {
@@ -906,10 +898,10 @@ fn parallel_process_with_egg<
     T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send,
 >(
     empty_set: bool,
-    complete_wins: &mut Vec<(TimeWin, u64)>,
+    complete_wins: &mut Vec<(TimeWin, u16)>,
     dag1: &Graph<DagNode<K>, bool>,
     responses: &mut Vec<Result<QueryResInfo<K>>>,
-    graph_map: &mut HashMap<usize, Graph<DagNode<K>, bool>>,
+    graph_map: &mut HashMap<u8, Graph<DagNode<K>, bool>>,
     chain: &T,
     pk: &AccPublicKey,
 ) -> Result<()> {
@@ -939,13 +931,13 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
     pk: &AccPublicKey,
 ) -> Result<(
     Vec<(HashMap<ObjId, Object<K>>, VO<K>)>,
-    HashMap<usize, Graph<DagNode<K>, bool>>,
+    HashMap<u8, Graph<DagNode<K>, bool>>,
     QueryTime,
 )> {
     let chain_param = &chain.get_parameter()?;
     let chain_win_sizes = &chain_param.time_win_sizes;
     let timer = howlong::ProcessCPUTimer::new();
-    let mut graph_map = HashMap::<usize, Graph<DagNode<K>, bool>>::new();
+    let mut graph_map = HashMap::<u8, Graph<DagNode<K>, bool>>::new();
     let query_time_win = query_param.gen_time_win();
     let query_content = query_param.gen_query_content();
     let (mut complete_wins, final_win) = select_win_size(chain_win_sizes, query_time_win)?;

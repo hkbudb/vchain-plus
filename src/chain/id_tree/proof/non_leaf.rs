@@ -40,7 +40,7 @@ impl IdTreeNonLeaf {
         let mut node = IdTreeNonLeaf::default();
         for (i, child) in children.iter().enumerate() {
             node.children.push(Some(Box::new(SubProof::Hash(Box::new(
-                IdTreeSubTree::new(child_node_ids[i], *child),
+                IdTreeSubTree::new(Some(child_node_ids[i]), *child),
             )))));
         }
         node
@@ -63,11 +63,9 @@ impl IdTreeNonLeaf {
     ) -> Digest {
         let child_idx = match cur_path_rev.pop() {
             Some(idx) => idx,
-            //None => return Digest::zero(),
             None => panic!("impossible"),
         };
         match self.get_child(child_idx) {
-            //None => Digest::zero(),
             None => panic!("impossible"),
             Some(child) => child.value_hash(obj_id, cur_path_rev),
         }
@@ -77,7 +75,7 @@ impl IdTreeNonLeaf {
         &mut self,
         obj_id: IdTreeInternalId,
         cur_path_rev: &'a mut Vec<usize>,
-    ) -> Option<(*mut SubProof, IdTreeNodeId, &'a mut Vec<usize>)> {
+    ) -> Option<(*mut SubProof, Option<IdTreeNodeId>, &'a mut Vec<usize>)> {
         let child_idx = match cur_path_rev.pop() {
             Some(idx) => idx,
             None => return None,
@@ -85,6 +83,14 @@ impl IdTreeNonLeaf {
         match self.get_child_mut(child_idx) {
             Some(child) => child.search_prefix(obj_id, cur_path_rev),
             None => None,
+        }
+    }
+
+    pub(crate) fn remove_node_id(&mut self) {
+        let children = &mut self.children;
+        for sub_p in children.into_iter().flatten() {
+            let sub_proof = sub_p.as_mut();
+            sub_proof.remove_node_id();
         }
     }
 }

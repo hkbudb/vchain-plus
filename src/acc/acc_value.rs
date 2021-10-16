@@ -9,6 +9,7 @@ use core::{
     marker::PhantomData,
     ops::{Add, Sub},
 };
+use std::num::NonZeroU64;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +20,7 @@ where
     F: Fn(u64) -> G + Sync,
 {
     set.par_iter()
-        .map(|i| f(i.get()))
+        .map(|i| f(NonZeroU64::from(*i).get()))
         .fold(G::Projective::zero, |a, b| a.add_mixed(&b))
         .reduce(G::Projective::zero, |a, b| a + b)
         .into_affine()
@@ -32,7 +33,7 @@ where
     F: Fn(u64) -> Fr + Sync,
 {
     set.par_iter()
-        .map(|i| f(i.get()))
+        .map(|i| f(NonZeroU64::from(*i).get()))
         .reduce(Fr::zero, |a, b| a + b)
 }
 

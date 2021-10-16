@@ -1,16 +1,16 @@
 use crate::{
     chain::MAX_ININE_ID_FANOUT,
-    create_id_type,
+    create_id_type_by_u16, create_id_type_by_u32,
     digest::{Digest, Digestible},
 };
 use anyhow::Result;
 use hash::{id_tree_leaf_hash, id_tree_non_leaf_hash, id_tree_root_hash};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use std::num::NonZeroU64;
+use std::num::NonZeroU16;
 
-create_id_type!(IdTreeNodeId);
-create_id_type!(IdTreeInternalId);
+create_id_type_by_u32!(IdTreeNodeId);
+create_id_type_by_u16!(IdTreeInternalId);
 
 pub mod hash;
 pub mod proof;
@@ -34,7 +34,7 @@ pub mod write;
     derive_more::From,
     derive_more::Into,
 )]
-pub struct ObjId(pub NonZeroU64);
+pub struct ObjId(pub NonZeroU16);
 
 impl Digestible for ObjId {
     fn to_digest(&self) -> Digest {
@@ -48,13 +48,13 @@ impl ObjId {
     }
 
     fn from_internal_id(id: IdTreeInternalId) -> Self {
-        Self(unsafe { NonZeroU64::new_unchecked(id.0 + 1) })
+        Self(unsafe { NonZeroU16::new_unchecked(id.0 + 1) })
     }
 }
 
 impl Default for ObjId {
     fn default() -> Self {
-        Self(unsafe { NonZeroU64::new_unchecked(1) })
+        Self(unsafe { NonZeroU16::new_unchecked(1) })
     }
 }
 

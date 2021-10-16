@@ -26,7 +26,7 @@ impl Proof {
         Self { root: Some(root) }
     }
 
-    pub fn from_root_hash(root_id: TrieNodeId, nibble: &str, root_hash: Digest) -> Self {
+    pub fn from_root_hash(root_id: Option<TrieNodeId>, nibble: &str, root_hash: Digest) -> Self {
         if root_hash == Digest::zero() {
             Self::default()
         } else {
@@ -41,22 +41,28 @@ impl Proof {
         }
     }
 
-    fn value_acc(&self, keyword: &str, pk: &AccPublicKey) -> AccValue {
+    fn value_acc_hash(&self, keyword: &str, pk: &AccPublicKey) -> Digest {
         match self.root.as_ref() {
-            Some(root) => root.value_acc(keyword, pk),
+            Some(root) => root.value_acc_hash(keyword, pk),
             None => {
                 let empty_set = Set::new();
-                AccValue::from_set(&empty_set, pk)
+                AccValue::from_set(&empty_set, pk).to_digest()
             }
         }
     }
 
     pub fn verify_acc(&self, target_acc: AccValue, keyword: &str, pk: &AccPublicKey) -> Result<()> {
-        let computed_acc = self.value_acc(keyword, pk);
+        let computed_acc = self.value_acc_hash(keyword, pk);
         ensure!(
-            target_acc == computed_acc,
+            target_acc.to_digest() == computed_acc,
             "Trie verification: acc value not matched!"
         );
         Ok(())
+    }
+
+    pub(crate) fn remove_node_id(&mut self) {
+        if let Some(sub_proof) = &mut self.root {
+            sub_proof.remove_node_id();
+        }
     }
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct TrieSubTree {
-    pub(crate) node_id: TrieNodeId,
+    pub(crate) node_id: Option<TrieNodeId>,
     pub(crate) nibble: String,
     pub(crate) node_hash: Digest,
 }
@@ -18,7 +18,7 @@ impl Digestible for TrieSubTree {
 }
 
 impl TrieSubTree {
-    pub(crate) fn new(node_id: TrieNodeId, nibble: &str, node_hash: Digest) -> Self {
+    pub(crate) fn new(node_id: Option<TrieNodeId>, nibble: &str, node_hash: Digest) -> Self {
         Self {
             node_id,
             nibble: nibble.to_string(),

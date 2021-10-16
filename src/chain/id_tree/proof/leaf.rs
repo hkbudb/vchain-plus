@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct IdTreeLeaf {
     pub(crate) obj_id: IdTreeInternalId,
-    pub(crate) node_id: IdTreeNodeId,
+    pub(crate) node_id: Option<IdTreeNodeId>,
     pub(crate) node_hash: Digest,
 }
 
@@ -18,7 +18,11 @@ impl Digestible for IdTreeLeaf {
 }
 
 impl IdTreeLeaf {
-    pub(crate) fn new(obj_id: IdTreeInternalId, node_id: IdTreeNodeId, node_hash: Digest) -> Self {
+    pub(crate) fn new(
+        obj_id: IdTreeInternalId,
+        node_id: Option<IdTreeNodeId>,
+        node_hash: Digest,
+    ) -> Self {
         Self {
             obj_id,
             node_id,

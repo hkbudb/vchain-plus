@@ -15,7 +15,7 @@ use anyhow::{bail, Result};
 use rand::Rng;
 use std::collections::VecDeque;
 use std::collections::{BTreeMap, HashMap};
-use std::num::NonZeroU64;
+use std::num::NonZeroU16;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct TestBPlusTree<K: Num> {
@@ -55,9 +55,9 @@ impl<K: Num> TestBPlusTree<K> {
     }
 }
 
-const FANOUT: usize = 4;
+const FANOUT: u8 = 4;
 
-fn get_dataset() -> (Vec<u32>, Vec<NonZeroU64>) {
+fn get_dataset() -> (Vec<u32>, Vec<NonZeroU16>) {
     // 30 int from 1 to 25 with duplicates
     let keys: Vec<u32> = vec![
         9, 11, 23, 13, 4, 12, 5, 11, 10, 18, 20, 3, 24, 4, 15, 8, 7, 2, 3, 21, 1, 17, 6, 20, 14,
@@ -66,37 +66,37 @@ fn get_dataset() -> (Vec<u32>, Vec<NonZeroU64>) {
 
     // 30 ids
     unsafe {
-        let ids: Vec<NonZeroU64> = vec![
-            NonZeroU64::new_unchecked(1),
-            NonZeroU64::new_unchecked(2),
-            NonZeroU64::new_unchecked(3),
-            NonZeroU64::new_unchecked(4),
-            NonZeroU64::new_unchecked(5),
-            NonZeroU64::new_unchecked(6),
-            NonZeroU64::new_unchecked(7),
-            NonZeroU64::new_unchecked(8),
-            NonZeroU64::new_unchecked(9),
-            NonZeroU64::new_unchecked(10),
-            NonZeroU64::new_unchecked(11),
-            NonZeroU64::new_unchecked(12),
-            NonZeroU64::new_unchecked(13),
-            NonZeroU64::new_unchecked(14),
-            NonZeroU64::new_unchecked(15),
-            NonZeroU64::new_unchecked(16),
-            NonZeroU64::new_unchecked(17),
-            NonZeroU64::new_unchecked(18),
-            NonZeroU64::new_unchecked(19),
-            NonZeroU64::new_unchecked(20),
-            NonZeroU64::new_unchecked(21),
-            NonZeroU64::new_unchecked(22),
-            NonZeroU64::new_unchecked(23),
-            NonZeroU64::new_unchecked(24),
-            NonZeroU64::new_unchecked(25),
-            NonZeroU64::new_unchecked(26),
-            NonZeroU64::new_unchecked(27),
-            NonZeroU64::new_unchecked(28),
-            NonZeroU64::new_unchecked(29),
-            NonZeroU64::new_unchecked(30),
+        let ids: Vec<NonZeroU16> = vec![
+            NonZeroU16::new_unchecked(1),
+            NonZeroU16::new_unchecked(2),
+            NonZeroU16::new_unchecked(3),
+            NonZeroU16::new_unchecked(4),
+            NonZeroU16::new_unchecked(5),
+            NonZeroU16::new_unchecked(6),
+            NonZeroU16::new_unchecked(7),
+            NonZeroU16::new_unchecked(8),
+            NonZeroU16::new_unchecked(9),
+            NonZeroU16::new_unchecked(10),
+            NonZeroU16::new_unchecked(11),
+            NonZeroU16::new_unchecked(12),
+            NonZeroU16::new_unchecked(13),
+            NonZeroU16::new_unchecked(14),
+            NonZeroU16::new_unchecked(15),
+            NonZeroU16::new_unchecked(16),
+            NonZeroU16::new_unchecked(17),
+            NonZeroU16::new_unchecked(18),
+            NonZeroU16::new_unchecked(19),
+            NonZeroU16::new_unchecked(20),
+            NonZeroU16::new_unchecked(21),
+            NonZeroU16::new_unchecked(22),
+            NonZeroU16::new_unchecked(23),
+            NonZeroU16::new_unchecked(24),
+            NonZeroU16::new_unchecked(25),
+            NonZeroU16::new_unchecked(26),
+            NonZeroU16::new_unchecked(27),
+            NonZeroU16::new_unchecked(28),
+            NonZeroU16::new_unchecked(29),
+            NonZeroU16::new_unchecked(30),
         ];
         (keys, ids)
     }
@@ -114,7 +114,7 @@ fn test_read() {
     set_root_id(&mut test_b_tree_root, test_b_tree.root_id);
     let mut ctx = WriteContext::new(&mut test_b_tree, test_b_tree_root);
     let keys: Vec<u32> = get_dataset().0;
-    let ids: Vec<NonZeroU64> = get_dataset().1;
+    let ids: Vec<NonZeroU16> = get_dataset().1;
 
     for i in 0..30 {
         ctx.insert(keys[i], ObjId(ids[i]), FANOUT, &PUB_KEY)
@@ -167,7 +167,7 @@ fn test_insert_rich() {
         unsafe {
             ctx.insert(
                 v,
-                ObjId(NonZeroU64::new_unchecked(1 as u64)),
+                ObjId(NonZeroU16::new_unchecked(1 as u16)),
                 FANOUT,
                 &PUB_KEY,
             )
@@ -190,7 +190,7 @@ fn test_update_rich() {
     let mut ctx = WriteContext::new(&mut test_b_tree, test_b_tree_root);
     let mut db = BTreeMap::<u32, Vec<u32>>::new();
     let mut rng = rand::thread_rng();
-    let mut obj_id: u64 = 1;
+    let mut obj_id: u16 = 1;
     info!("creating blocks...");
     for i in 0..blk_num {
         let mut vec = Vec::<u32>::new();
@@ -214,7 +214,7 @@ fn test_update_rich() {
                 unsafe {
                     ctx.delete(
                         *key,
-                        ObjId(NonZeroU64::new_unchecked(obj_id as u64)),
+                        ObjId(NonZeroU16::new_unchecked(obj_id as u16)),
                         FANOUT,
                         &PUB_KEY,
                     )
@@ -234,7 +234,7 @@ fn test_update_rich() {
             unsafe {
                 ctx.insert(
                     *key,
-                    ObjId(NonZeroU64::new_unchecked(obj_id as u64)),
+                    ObjId(NonZeroU16::new_unchecked(obj_id as u16)),
                     FANOUT,
                     &PUB_KEY,
                 )
@@ -257,56 +257,56 @@ fn test_delete_bug() {
     unsafe {
         ctx.insert(
             1,
-            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            ObjId(NonZeroU16::new_unchecked(1 as u16)),
             FANOUT,
             &PUB_KEY,
         )
         .unwrap();
         ctx.insert(
             3,
-            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            ObjId(NonZeroU16::new_unchecked(1 as u16)),
             FANOUT,
             &PUB_KEY,
         )
         .unwrap();
         ctx.insert(
             5,
-            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            ObjId(NonZeroU16::new_unchecked(1 as u16)),
             FANOUT,
             &PUB_KEY,
         )
         .unwrap();
         ctx.insert(
             7,
-            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            ObjId(NonZeroU16::new_unchecked(1 as u16)),
             FANOUT,
             &PUB_KEY,
         )
         .unwrap();
         ctx.insert(
             9,
-            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            ObjId(NonZeroU16::new_unchecked(1 as u16)),
             FANOUT,
             &PUB_KEY,
         )
         .unwrap();
         ctx.insert(
             2,
-            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            ObjId(NonZeroU16::new_unchecked(1 as u16)),
             FANOUT,
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             9,
-            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            ObjId(NonZeroU16::new_unchecked(1 as u16)),
             FANOUT,
             &PUB_KEY,
         )
         .unwrap();
         ctx.delete(
             1,
-            ObjId(NonZeroU64::new_unchecked(1 as u64)),
+            ObjId(NonZeroU16::new_unchecked(1 as u16)),
             FANOUT,
             &PUB_KEY,
         )
