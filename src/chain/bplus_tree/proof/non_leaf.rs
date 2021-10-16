@@ -1,6 +1,6 @@
+use crate::acc::AccValue;
 use crate::digest::Digest;
 use crate::{
-    acc::AccValue,
     chain::{
         bplus_tree::{hash::bplus_tree_non_leaf_proof_hash, proof::sub_proof::SubProof},
         range::Range,

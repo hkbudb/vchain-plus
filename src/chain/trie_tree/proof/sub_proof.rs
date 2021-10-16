@@ -45,14 +45,14 @@ impl SubProof {
         Self::Leaf(Box::new(l))
     }
 
-    pub(crate) fn value_acc(&self, cur_key: &str, pk: &AccPublicKey) -> AccValue {
+    pub(crate) fn value_acc_hash(&self, cur_key: &str, pk: &AccPublicKey) -> Digest {
         match self {
             SubProof::Hash(_) => {
                 let empty_set = Set::new();
-                AccValue::from_set(&empty_set, pk)
+                AccValue::from_set(&empty_set, pk).to_digest()
             }
-            SubProof::Leaf(n) => n.value_acc(cur_key, pk),
-            SubProof::NonLeaf(n) => n.value_acc(cur_key, pk),
+            SubProof::Leaf(n) => n.value_acc_hash(cur_key, pk),
+            SubProof::NonLeaf(n) => n.value_acc_hash(cur_key, pk),
         }
     }
 

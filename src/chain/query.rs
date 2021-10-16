@@ -87,7 +87,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     time_win: &TimeWin,
     s_win_size: Option<u16>,
     e_win_size: u16,
-    graph_idx: usize,
+    graph_idx: u8,
     query_dag: &Graph<query_dag::DagNode<K>, bool>,
 ) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
     let mut vo_dag_content = HashMap::<NodeIndex, VONode<K>>::new();
@@ -672,7 +672,7 @@ fn last_sub_query_process<K: Num, T: ReadInterface<K = K>>(
     query_content: &QueryContent<K>,
     chain: &T,
     pk: &AccPublicKey,
-    graph_map: &mut HashMap<usize, Graph<DagNode<K>, bool>>,
+    graph_map: &mut HashMap<u8, Graph<DagNode<K>, bool>>,
 ) -> Result<QueryResInfo<K>> {
     let sub_timer = howlong::ProcessCPUTimer::new();
     let (dag2, mut qp2) = if trim {
@@ -880,7 +880,7 @@ fn parallel_process<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::m
     complete_wins: &[(TimeWin, u16)],
     dag1: &Graph<DagNode<K>, bool>,
     responses: &mut Vec<Result<QueryResInfo<K>>>,
-    graph_map: &mut HashMap<usize, Graph<DagNode<K>, bool>>,
+    graph_map: &mut HashMap<u8, Graph<DagNode<K>, bool>>,
     chain: &T,
     pk: &AccPublicKey,
 ) {
@@ -901,7 +901,7 @@ fn parallel_process_with_egg<
     complete_wins: &mut Vec<(TimeWin, u16)>,
     dag1: &Graph<DagNode<K>, bool>,
     responses: &mut Vec<Result<QueryResInfo<K>>>,
-    graph_map: &mut HashMap<usize, Graph<DagNode<K>, bool>>,
+    graph_map: &mut HashMap<u8, Graph<DagNode<K>, bool>>,
     chain: &T,
     pk: &AccPublicKey,
 ) -> Result<()> {
@@ -931,13 +931,13 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
     pk: &AccPublicKey,
 ) -> Result<(
     Vec<(HashMap<ObjId, Object<K>>, VO<K>)>,
-    HashMap<usize, Graph<DagNode<K>, bool>>,
+    HashMap<u8, Graph<DagNode<K>, bool>>,
     QueryTime,
 )> {
     let chain_param = &chain.get_parameter()?;
     let chain_win_sizes = &chain_param.time_win_sizes;
     let timer = howlong::ProcessCPUTimer::new();
-    let mut graph_map = HashMap::<usize, Graph<DagNode<K>, bool>>::new();
+    let mut graph_map = HashMap::<u8, Graph<DagNode<K>, bool>>::new();
     let query_time_win = query_param.gen_time_win();
     let query_content = query_param.gen_query_content();
     let (mut complete_wins, final_win) = select_win_size(chain_win_sizes, query_time_win)?;

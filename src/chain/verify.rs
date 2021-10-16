@@ -426,7 +426,7 @@ fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<VOSize> {
 pub fn verify<K: Num + Serialize, T: ReadInterface<K = K>>(
     chain: T,
     res_contents: &[(HashMap<ObjId, Object<K>>, VO<K>)],
-    res_dags: &HashMap<usize, Graph<DagNode<K>, bool>>,
+    res_dags: &HashMap<u8, Graph<DagNode<K>, bool>>,
     pk: &AccPublicKey,
 ) -> Result<VerifyInfo> {
     let timer = howlong::ProcessCPUTimer::new();
