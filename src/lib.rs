@@ -299,10 +299,12 @@ impl ScanQueryInterface for &SimChain {
         for (_key, val) in db_iter {
             let o = bincode::deserialize::<Object<u32>>(&val[..])?;
             if o.blk_height <= end_blk_height && o.blk_height >= start_blk_height {
-                let o_num_val = o.num_data.get(dim).with_context(|| {
-                    format!("Object does not have numerical value at dim {}", dim)
-                })?;
-                if query.is_in_range(*o_num_val) {
+                let o_num_val = if let Some(n) = o.num_data.get(dim) {
+                    *n
+                } else {
+                    0
+                };
+                if query.is_in_range(o_num_val) {
                     res.insert(o.to_digest());
                 }
             }
