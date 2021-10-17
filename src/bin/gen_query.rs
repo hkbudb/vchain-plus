@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     collections::{BTreeMap, HashSet},
-    fs,
+    fs::{self, File},
     iter::FromIterator,
     path::PathBuf,
 };
 use structopt::StructOpt;
-use tracing::{debug, info};
+use tracing::debug;
 use vchain_plus::{
     chain::{
         block::Height,
@@ -704,11 +704,30 @@ fn main() -> Result<()> {
     let time_win = opts.time_win;
     let mut query_for_plus = Vec::<QueryParam<u32>>::new();
     let mut query_for_vchain = Vec::<VChainQuery>::new();
-    if opts.range {
-        let (obj_num, blk_num) = (&chain).get_chain_info()?;
-        info!("obj num: {}, blk_num: {}", obj_num, blk_num);
-        for _ in 0..QUERY_NUM {
-            info!("Generating a range query...");
+
+    let plus_buffer = output_path.join("plus_buffer.json");
+    let chain_buffer = output_path.join("vchain_buffer.json");
+
+    for _ in 0..QUERY_NUM {
+        let mut plus_params: Vec<QueryParam<u32>>;
+        let mut chain_params: Vec<VChainQuery>;
+        if plus_buffer.exists() {
+            let plus_data = fs::read_to_string(plus_buffer.clone())?;
+            plus_params = serde_json::from_str(&plus_data)?;
+        } else {
+            File::create(plus_buffer.clone())?;
+            plus_params = Vec::new();
+        }
+        if chain_buffer.exists() {
+            let chain_data = fs::read_to_string(chain_buffer.clone())?;
+            chain_params = serde_json::from_str(&chain_data)?;
+        } else {
+            File::create(chain_buffer.clone())?;
+            chain_params = Vec::new();
+        }
+
+        if opts.range {
+            let (obj_num, blk_num) = (&chain).get_chain_info()?;
             let (q_for_plus, q_for_vchain) = gen_range_query(
                 time_win,
                 opts.selectivity,
@@ -720,15 +739,13 @@ fn main() -> Result<()> {
                 &opts.gaps,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
+            plus_params.push(query_param_plus.clone());
             query_for_plus.push(query_param_plus);
             let query_vchain: VChainQuery = serde_json::from_str(&q_for_vchain)?;
+            chain_params.push(query_vchain.clone());
             query_for_vchain.push(query_vchain);
-        }
-    } else if opts.keyword {
-        let (obj_num, blk_num) = (&chain).get_chain_info()?;
-        info!("obj num: {}, blk_num: {}", obj_num, blk_num);
-        for _ in 0..QUERY_NUM {
-            info!("Generating a keyword query...");
+        } else if opts.keyword {
+            let (_obj_num, blk_num) = (&chain).get_chain_info()?;
             let (q_for_plus, q_for_vchain) = gen_keyword_query(
                 time_win,
                 opts.with_not,
@@ -739,15 +756,13 @@ fn main() -> Result<()> {
                 opts.fix_pattern,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
+            plus_params.push(query_param_plus.clone());
             query_for_plus.push(query_param_plus);
             let query_vchain: VChainQuery = serde_json::from_str(&q_for_vchain)?;
+            chain_params.push(query_vchain.clone());
             query_for_vchain.push(query_vchain);
-        }
-    } else if opts.both {
-        let (obj_num, blk_num) = (&chain).get_chain_info()?;
-        info!("obj num: {}, blk_num: {}", obj_num, blk_num);
-        for _ in 0..QUERY_NUM {
-            info!("Generating a keyword range query...");
+        } else if opts.both {
+            let (obj_num, blk_num) = (&chain).get_chain_info()?;
             let (q_for_plus, q_for_vchain) = gen_keyword_range_query(
                 time_win,
                 opts.selectivity,
@@ -763,9 +778,26 @@ fn main() -> Result<()> {
                 &opts.gaps,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
+            plus_params.push(query_param_plus.clone());
             query_for_plus.push(query_param_plus);
             let query_vchain: VChainQuery = serde_json::from_str(&q_for_vchain)?;
+            chain_params.push(query_vchain.clone());
             query_for_vchain.push(query_vchain);
+        }
+        fs::write(
+            plus_buffer.clone(),
+            &serde_json::to_string_pretty(&plus_params)?,
+        )?;
+        fs::write(
+            chain_buffer.clone(),
+            &serde_json::to_string_pretty(&chain_params)?,
+        )?;
+        if plus_params.len() >= 10 && chain_params.len() >= 10 {
+            query_for_plus = plus_params;
+            query_for_vchain = chain_params;
+            fs::remove_file(plus_buffer.clone())?;
+            fs::remove_file(chain_buffer.clone())?;
+            break;
         }
     }
 
