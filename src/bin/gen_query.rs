@@ -73,7 +73,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         loop {
             let l = range.get_low();
             let h = range.get_high();
-            start_p = rng.gen_range(l..((l + h) / START_COEFFICIENT + 1));
+            start_p = rng.gen_range(l..(l + h / START_COEFFICIENT + 1));
             end_p = start_p + selected_len;
             if end_p <= range.get_high() {
                 break;
@@ -416,7 +416,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
         loop {
             let l = range.get_low();
             let h = range.get_high();
-            start_p = rng.gen_range(l..((l + h) / START_COEFFICIENT + 1));
+            start_p = rng.gen_range(l..(l + h / START_COEFFICIENT + 1));
             end_p = start_p + selected_len;
             if end_p <= range.get_high() {
                 break;
