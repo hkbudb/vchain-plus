@@ -35,7 +35,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     chain: T,
     obj_num: u32,
     blk_num: u32,
-    gap: u32,
+    gaps: &Vec<u32>,
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
     let mut start_blk_height;
@@ -112,15 +112,15 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
             let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h + gap
+            if h + gaps.get(dim).context("gap not exist")?
                 < num_scopes
                     .get(dim)
                     .context("Range does not exist")?
                     .get_high()
             {
-                new_sub_range = Range::new(l, h + gap);
+                new_sub_range = Range::new(l, h + gaps.get(dim).context("gap not exist")?);
             } else {
-                new_sub_range = Range::new(l - gap, h);
+                new_sub_range = Range::new(l - gaps.get(dim).context("gap not exist")?, h);
             }
             modified_dim = dim;
         } else {
@@ -130,8 +130,8 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
 
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h > l + gap {
-                new_sub_range = Range::new(l, h - gap);
+            if h > l + gaps.get(dim).context("gap not exist")? {
+                new_sub_range = Range::new(l, h - gaps.get(dim).context("gap not exist")?);
             } else {
                 bail!("Cannot reduce the range anymore");
             }
@@ -385,7 +385,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     not_prob: f64,
     keyword_num: usize,
     fix_pattern: u8,
-    gap: u32,
+    gaps: &Vec<u32>,
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
     let mut start_blk_height;
@@ -451,15 +451,15 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
             let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h + gap
+            if h + gaps.get(dim).context("gap not exist")?
                 < num_scopes
                     .get(dim)
                     .context("Range does not exist")?
                     .get_high()
             {
-                new_sub_range = Range::new(l, h + gap);
+                new_sub_range = Range::new(l, h + gaps.get(dim).context("gap not exist")?);
             } else {
-                new_sub_range = Range::new(l - gap, h);
+                new_sub_range = Range::new(l - gaps.get(dim).context("gap not exist")?, h);
             }
             modified_dim = dim;
         } else {
@@ -468,8 +468,8 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
 
             let l = sub_range.get_low();
             let h = sub_range.get_high();
-            if h > l + gap {
-                new_sub_range = Range::new(l, h - gap);
+            if h > l + gaps.get(dim).context("gap not exist")? {
+                new_sub_range = Range::new(l, h - gaps.get(dim).context("gap not exist")?);
             } else {
                 bail!("Cannot reduce the range anymore");
             }
@@ -667,7 +667,7 @@ struct Opt {
 
     /// gap
     #[structopt(short, long, default_value = "1000")]
-    gap: u32,
+    gaps: Vec<u32>,
 
     /// selectivity for range query
     #[structopt(short, long)]
@@ -716,7 +716,7 @@ fn main() -> Result<()> {
                 &chain,
                 obj_num,
                 blk_num,
-                opts.gap,
+                &opts.gaps,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
             query_for_plus.push(query_param_plus);
@@ -759,7 +759,7 @@ fn main() -> Result<()> {
                 opts.prob_not,
                 opts.num_keywords,
                 opts.fix_pattern,
-                opts.gap,
+                &opts.gaps,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
             query_for_plus.push(query_param_plus);
