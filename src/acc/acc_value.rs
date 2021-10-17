@@ -9,9 +9,9 @@ use core::{
     marker::PhantomData,
     ops::{Add, Sub},
 };
-use std::num::NonZeroU64;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU64;
 
 #[inline]
 pub(crate) fn cal_acc_pk<G, F>(set: &Set, f: F) -> G
