@@ -25,10 +25,6 @@ use vchain_plus::{
 const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.1;
 const START_COEFFICIENT: u32 = 1000000;
-// 0: no special requirement
-// 1: all opt should be AND
-// 2: all opt should be OR
-const FIX_OPT: u32 = 1;
 
 #[allow(clippy::too_many_arguments)]
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
@@ -242,7 +238,7 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
     keyword_num: usize,
     blk_num: u32,
     chain: T,
-    for_tx: bool,
+    fix_pattern: u8,
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
     let mut start_blk_height_num;
@@ -261,7 +257,7 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
         HashSet::from_iter(keyword_vec.choose_multiple(&mut rand::thread_rng(), keyword_num));
 
     let mut node: Node = Node::Input("init".to_string());
-    if for_tx {
+    if fix_pattern == 3 {
         let mut and_flag = true;
         let mut v_1 = Vec::<Node>::new();
         let mut v_2 = Vec::<Node>::new();
@@ -302,7 +298,7 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
         let mut lock = false;
         for keyword in keywords_selected {
             if lock {
-                if FIX_OPT == 0 {
+                if fix_pattern == 0 {
                     let idx = rng.gen_range(0..2); // 0: and, 1: or
                     if idx == 0 {
                         if with_not {
@@ -324,13 +320,13 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
                     } else {
                         node = Node::Or(Box::new(OrNode(node, Node::Input(keyword.to_string()))));
                     }
-                } else if FIX_OPT == 1 {
+                } else if fix_pattern == 1 {
                     node = Node::And(Box::new(AndNode(node, Node::Input(keyword.to_string()))));
-                } else {
+                } else if fix_pattern == 2 {
                     node = Node::Or(Box::new(OrNode(node, Node::Input(keyword.to_string()))));
                 }
             } else {
-                if FIX_OPT == 0 {
+                if fix_pattern == 0 {
                     if with_not {
                         node = gen_node_with_not(not_prob, keyword.to_string())
                     } else {
@@ -383,7 +379,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     with_not: bool,
     not_prob: f64,
     keyword_num: usize,
-    for_tx: bool,
+    fix_pattern: u8,
     gap: u32,
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
@@ -516,7 +512,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
         .collect();
 
     let mut node: Node = Node::Input("init".to_string());
-    if for_tx {
+    if fix_pattern == 3 {
         let mut and_flag = true;
         let mut v_1 = Vec::<Node>::new();
         let mut v_2 = Vec::<Node>::new();
@@ -557,7 +553,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
         let mut lock = false;
         for keyword in keywords_selected {
             if lock {
-                if FIX_OPT == 0 {
+                if fix_pattern == 0 {
                     let idx = rng.gen_range(0..2); // 0: and, 1: or
                     if idx == 0 {
                         if with_not {
@@ -579,13 +575,13 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
                     } else {
                         node = Node::Or(Box::new(OrNode(node, Node::Input(keyword.to_string()))));
                     }
-                } else if FIX_OPT == 1 {
+                } else if fix_pattern == 1 {
                     node = Node::And(Box::new(AndNode(node, Node::Input(keyword.to_string()))));
-                } else {
+                } else if fix_pattern == 2 {
                     node = Node::Or(Box::new(OrNode(node, Node::Input(keyword.to_string()))));
                 }
             } else {
-                if FIX_OPT == 0 {
+                if fix_pattern == 0 {
                     if with_not {
                         node = gen_node_with_not(not_prob, keyword.to_string())
                     } else {
@@ -640,9 +636,13 @@ struct Opt {
     #[structopt(short, long)]
     with_not: bool,
 
-    /// for tx-based db
+    /// fix keyword query pattern
+    /// 0: No pattern
+    /// 1: AND
+    /// 2: OR
+    /// 3: tx-based pattern
     #[structopt(short, long)]
-    for_tx: bool,
+    fix_pattern: u8,
 
     /// probability of not opt
     #[structopt(short, long, default_value = "0.0")]
@@ -726,7 +726,7 @@ fn main() -> Result<()> {
                 opts.num_keywords,
                 blk_num,
                 &chain,
-                opts.for_tx,
+                opts.fix_pattern,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
             query_for_plus.push(query_param_plus);
@@ -749,7 +749,7 @@ fn main() -> Result<()> {
                 opts.with_not,
                 opts.prob_not,
                 opts.num_keywords,
-                opts.for_tx,
+                opts.fix_pattern,
                 opts.gap,
             )?;
             let query_param_plus: QueryParam<u32> = serde_json::from_str(&q_for_plus)?;
