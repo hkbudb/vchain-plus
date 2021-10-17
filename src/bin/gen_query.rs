@@ -35,7 +35,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     chain: T,
     obj_num: u32,
     blk_num: u32,
-    gaps: &Vec<u32>,
+    gaps: &[u32],
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
     let mut start_blk_height;
@@ -385,7 +385,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     not_prob: f64,
     keyword_num: usize,
     fix_pattern: u8,
-    gaps: &Vec<u32>,
+    gaps: &[u32],
 ) -> Result<(String, String)> {
     let mut rng = rand::thread_rng();
     let mut start_blk_height;
@@ -437,7 +437,8 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
         sub_results.push((sub_res.len(), sub_range, dim, sub_res));
     }
 
-    while cur_res_set.len() < (obj_num_in_query_win as f64 * (selectivity * (1_f64 - err_rate))) as usize
+    while cur_res_set.len()
+        < (obj_num_in_query_win as f64 * (selectivity * (1_f64 - err_rate))) as usize
         || cur_res_set.len()
             > (obj_num_in_query_win as f64 * (selectivity * (1_f64 + err_rate))) as usize
     {
