@@ -24,7 +24,7 @@ pub(crate) fn merkle_proof_hash<'a>(
 
 #[inline]
 pub(crate) fn bplus_roots_hash<'a>(
-    hashes: impl Iterator<Item = (&'a usize, &'a Digest)>,
+    hashes: impl Iterator<Item = (&'a u8, &'a Digest)>,
 ) -> Digest {
     let mut state = blake2().to_state();
     for (_dim, hash) in hashes {
