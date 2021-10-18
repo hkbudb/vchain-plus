@@ -795,8 +795,8 @@ fn main() -> Result<()> {
         if plus_params.len() >= 10 && chain_params.len() >= 10 {
             query_for_plus = plus_params;
             query_for_vchain = chain_params;
-            fs::remove_file(plus_buffer.clone())?;
-            fs::remove_file(chain_buffer.clone())?;
+            fs::remove_file(plus_buffer)?;
+            fs::remove_file(chain_buffer)?;
             break;
         }
     }
