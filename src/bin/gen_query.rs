@@ -54,7 +54,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     let num_scopes = chain.get_range_info(start_blk_height, end_blk_height, dim_num)?;
     debug!("num scpoes: {:?}", num_scopes);
     let obj_num_per_blk = obj_num / blk_num;
-    let obj_num_in_query_win = (time_win as f64 * obj_num_per_blk as f64) as u32;
+    //let obj_num_in_query_win = (time_win as f64 * obj_num_per_blk as f64) as u32;
     let height_selectivity = (end_blk_height.0 - start_blk_height.0 + 1) as f64 / blk_num as f64;
     debug!("height_selec: {}", height_selectivity);
     let dim_selectivity = selectivity / height_selectivity;
@@ -106,7 +106,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
         let new_sub_range;
         let modified_dim;
         if cur_res_set.len()
-            < (obj_num_in_query_win as f64 * (selectivity * (1_f64 - err_rate))) as usize
+            < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
         {
             debug!("less than target");
             let (_, sub_range, dim, _) = sub_results.remove(0);
@@ -401,7 +401,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     // for range query
     let num_scopes = chain.get_range_info(start_blk_height, end_blk_height, dim_num)?;
     let obj_num_per_blk = obj_num / blk_num;
-    let obj_num_in_query_win = (time_win as f64 * obj_num_per_blk as f64) as u32;
+    //let obj_num_in_query_win = (time_win as f64 * obj_num_per_blk as f64) as u32;
     let height_selectivity = (end_blk_height.0 - start_blk_height.0 + 1) as f64 / blk_num as f64;
     let dim_selectivity = selectivity / height_selectivity;
     let sub_selectivity = dim_selectivity.powf(1_f64 / dim_num as f64);
@@ -447,7 +447,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
         let new_sub_range;
         let modified_dim;
         if cur_res_set.len()
-            < (obj_num_in_query_win as f64 * (selectivity * (1_f64 - err_rate))) as usize
+            < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
         {
             let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
