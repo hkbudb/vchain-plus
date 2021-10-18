@@ -159,15 +159,29 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                             for idx in graph.neighbors_directed(idx, Outgoing) {
                                 child_idxs.push(idx);
                             }
-                            let child_idx1 = child_idxs
-                                .get(0)
-                                .context("Cannot find the first child idx of final union")?;
+                            let mut child_idx1 = child_idxs
+                                .get(1)
+                                .context("Cannot find the first child idx of final difference")?;
+                            let child_idx2;
+                            let edge_idx = graph
+                                .find_edge(idx, *child_idx1)
+                                .context("Cannot find edge")?;
+                            let weight = graph.edge_weight(edge_idx).context("Cannot find edge")?;
+                            if !*weight {
+                                child_idx2 = child_idxs.get(0).context(
+                                    "Cannot find the second child idx of final difference",
+                                )?;
+                            } else {
+                                child_idx1 = child_idxs.get(0).context(
+                                    "Cannot find the first child idx of final difference",
+                                )?;
+                                child_idx2 = child_idxs.get(1).context(
+                                    "Cannot find the second child idx of final difference",
+                                )?;
+                            }
                             let child1 = vo_dag_content
                                 .get(child_idx1)
                                 .context("Cannot find the first child node of final union")?;
-                            let child_idx2 = child_idxs
-                                .get(1)
-                                .context("Cannot find the second child idx of final union")?;
                             let child2 = vo_dag_content
                                 .get(child_idx2)
                                 .context("Cannot find the first child node of final union")?;
@@ -232,14 +246,28 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                             for idx in graph.neighbors_directed(idx, Outgoing) {
                                 child_idxs.push(idx);
                             }
-                            let child_idx1 = child_idxs
-                                .get(0)
-                                .context("Cannot find the first child idx of final intersection")?;
+                            let mut child_idx1 = child_idxs
+                                .get(1)
+                                .context("Cannot find the first child idx of final difference")?;
+                            let child_idx2;
+                            let edge_idx = graph
+                                .find_edge(idx, *child_idx1)
+                                .context("Cannot find edge")?;
+                            let weight = graph.edge_weight(edge_idx).context("Cannot find edge")?;
+                            if !*weight {
+                                child_idx2 = child_idxs.get(0).context(
+                                    "Cannot find the second child idx of final difference",
+                                )?;
+                            } else {
+                                child_idx1 = child_idxs.get(0).context(
+                                    "Cannot find the first child idx of final difference",
+                                )?;
+                                child_idx2 = child_idxs.get(1).context(
+                                    "Cannot find the second child idx of final difference",
+                                )?;
+                            }
                             let child1 = vo_dag_content.get(child_idx1).context(
                                 "Cannot find the first child node of final intersection",
-                            )?;
-                            let child_idx2 = child_idxs.get(1).context(
-                                "Cannot find the second child idx of final intersection",
                             )?;
                             let child2 = vo_dag_content.get(child_idx2).context(
                                 "Cannot find the first child node of final intersection",
