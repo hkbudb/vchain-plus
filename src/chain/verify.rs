@@ -85,7 +85,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     let vo_dag_content = &vo_content.vo_dag_content.dag_content;
     let vo_output_sets = &vo_content.vo_dag_content.output_sets;
     let mut time_win_map = HashMap::<Height, u16>::new();
-    let mut bplus_roots = HashMap::<Height, (u16, BTreeMap<usize, Digest>)>::new();
+    let mut bplus_roots = HashMap::<Height, (u16, BTreeMap<u8, Digest>)>::new();
     let trie_proofs = &vo_content.trie_proofs;
     for idx in vo_dag_idxs {
         if let Some(content) = vo_dag_content.get(&idx) {
@@ -101,7 +101,7 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
                                     btree_map.insert(n.dim, res_digest);
                                 }
                                 None => {
-                                    let mut btree_map = BTreeMap::<usize, Digest>::new();
+                                    let mut btree_map = BTreeMap::<u8, Digest>::new();
                                     btree_map.insert(n.dim, res_digest);
                                     bplus_roots.insert(blk_height, (r_n.win_size, btree_map));
                                 }
@@ -401,13 +401,17 @@ fn inner_verify<K: Num, T: ReadInterface<K = K>>(
     // verify merkle proof, including trie and block head hash
     let merkle_proofs = &vo_content.merkle_proofs;
     for (height, time_win) in time_win_map {
-        if let Some((_win_size, bplus_hashes)) = bplus_roots.get(&height) {
-            let bplus_root_hash = bplus_roots_hash(bplus_hashes.iter());
-            let trie_proof = trie_proofs.get(&height).context("Cannot find trie proof")?;
-            let hash = ads_hash(bplus_root_hash, trie_proof.root_hash());
+        if let Some((_win_size, bplus_hashes)) = bplus_roots.get_mut(&height) {
             let merkle_proof = merkle_proofs
                 .get(&height)
                 .context("Cannot find merkle proof")?;
+            let extra_bplus_hashes = &merkle_proof.extra_bplus_rt_hashes;
+            for (d, h) in extra_bplus_hashes {
+                bplus_hashes.insert(*d, *h);
+            }
+            let bplus_root_hash = bplus_roots_hash(bplus_hashes.iter());
+            let trie_proof = trie_proofs.get(&height).context("Cannot find trie proof")?;
+            let hash = ads_hash(bplus_root_hash, trie_proof.root_hash());
             let id_root_hash = match merkle_proof.id_tree_root_hash {
                 Some(d) => d,
                 None => id_tree_root_hash,
