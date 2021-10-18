@@ -47,13 +47,13 @@ impl BlockMultiADS {
         &self.0
     }
 
-    pub(crate) fn read_bplus_root(&self, time_win: u16, dim: usize) -> Result<BPlusTreeRoot> {
+    pub(crate) fn read_bplus_root(&self, time_win: u16, dim: u8) -> Result<BPlusTreeRoot> {
         let blk_ads = self.0.get(&time_win);
         let ads =
             blk_ads.with_context(|| format!("Cannot find the ADS in time window {}", time_win))?;
         Ok(*ads
             .bplus_tree_roots
-            .get(dim)
+            .get(dim as usize)
             .with_context(|| format!("Cannot find the bplus tree root at dimension {}", dim))?)
     }
 

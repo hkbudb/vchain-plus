@@ -104,6 +104,7 @@ pub struct MerkleProof {
     pub(crate) id_tree_root_hash: Option<Digest>,
     pub(crate) id_set_root_hash: Digest,
     pub(crate) ads_hashes: BTreeMap<u16, Digest>,
+    pub(crate) extra_bplus_rt_hashes: HashMap<u8, Digest>,
 }
 
 impl MerkleProof {

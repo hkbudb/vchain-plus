@@ -109,6 +109,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     };
     qp_inputs.reverse();
 
+    let mut height_dims: Vec<(Height, u8)> = Vec::new();
     for idx in qp_inputs {
         if let Some(dag_node) = query_dag.node_weight(idx) {
             match dag_node {
@@ -117,6 +118,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                     let acc;
                     let proof;
                     if let Some(QPNode::Range(n)) = qp_dag_content.remove(&idx) {
+                        height_dims.push((n.blk_height, node.dim as u8));
                         let blk_height = n.blk_height;
                         let win_size = if blk_height.0 == time_win.get_end() {
                             e_win_size
@@ -492,9 +494,20 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
         let id_set_root_hash = obj_id_nums_hash(obj_id_nums.iter());
         let mut ads_hashes = BTreeMap::<u16, Digest>::new();
         let multi_ads = blk_content.ads;
+        let mut extra_bplus_rt_hashes = HashMap::<u8, Digest>::new();
         for (t_w, ads) in multi_ads.read_adses() {
             if *t_w != time_win {
                 ads_hashes.insert(*t_w, ads.to_digest());
+            } else {
+                let bplus_tree_roots = &ads.bplus_tree_roots;
+                for (i, rt) in bplus_tree_roots.iter().enumerate() {
+                    extra_bplus_rt_hashes.insert(i as u8, rt.to_digest());
+                }
+                for (h, d) in &height_dims {
+                    if *h == height {
+                        extra_bplus_rt_hashes.remove(d);
+                    }
+                }
             }
         }
 
@@ -507,6 +520,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
             id_tree_root_hash,
             id_set_root_hash,
             ads_hashes,
+            extra_bplus_rt_hashes,
         };
         merkle_proofs.insert(height, merkle_proof);
     }
