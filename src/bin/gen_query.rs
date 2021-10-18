@@ -97,9 +97,9 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     debug!("cur_res_set len: {}", cur_res_set.len());
 
     while cur_res_set.len()
-        < (obj_num_in_query_win as f64 * (selectivity * (1_f64 - err_rate))) as usize
+        < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
         || cur_res_set.len()
-            > (obj_num_in_query_win as f64 * (selectivity * (1_f64 + err_rate))) as usize
+            > (obj_num as f64 * (selectivity * (1_f64 + err_rate))) as usize
     {
         sub_results.sort_by(|a, b| a.0.cmp(&b.0));
         flag = true;
@@ -438,9 +438,9 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     }
 
     while cur_res_set.len()
-        < (obj_num_in_query_win as f64 * (selectivity * (1_f64 - err_rate))) as usize
+        < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
         || cur_res_set.len()
-            > (obj_num_in_query_win as f64 * (selectivity * (1_f64 + err_rate))) as usize
+            > (obj_num as f64 * (selectivity * (1_f64 + err_rate))) as usize
     {
         sub_results.sort_by(|a, b| a.0.cmp(&b.0));
         flag = true;
