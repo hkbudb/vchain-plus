@@ -97,7 +97,7 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     let mut trie_ctxes = HashMap::<Height, trie_tree::read::ReadContext<T>>::new();
     let mut trie_proofs = HashMap::<Height, trie_tree::proof::Proof>::new();
     let qp_trie_proofs = query_plan.trie_proofs;
-    let obj_map = HashMap::<ObjId, Object<K>>::new();
+    let mut obj_map = HashMap::<ObjId, Object<K>>::new();
     let mut merkle_proofs = HashMap::<Height, MerkleProof>::new();
     let mut time_win_map = HashMap::<Height, u16>::new();
 
@@ -502,7 +502,22 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
 
     let id_root = chain.read_block_content(qp_end_blk_height)?.id_tree_root;
     let cur_obj_id = id_root.get_cur_obj_id();
-    let id_tree_ctx = id_tree::read::ReadContext::new(chain, id_root.get_id_tree_root_id());
+    let mut id_tree_ctx = id_tree::read::ReadContext::new(chain, id_root.get_id_tree_root_id());
+    let param = chain.get_parameter()?;
+    let max_id_num = param.max_id_num;
+    let id_tree_fanout = param.id_tree_fanout;
+
+    for idx in outputs {
+        let set = set_map.get(&idx).context("Cannot find set in set_map")?;
+        for i in set.iter() {
+            let obj_id = ObjId(*i);
+            if let Some(obj_hash) = id_tree_ctx.query(obj_id, max_id_num, id_tree_fanout)? {
+                let obj = chain.read_object(obj_hash)?;
+                obj_map.insert(obj_id, obj);
+            }
+        }
+    }
+
     let id_tree_proof = id_tree_ctx.into_proof();
     for (height, time_win) in time_win_map {
         let blk_content = chain.read_block_content(height)?;
