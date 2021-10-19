@@ -355,7 +355,10 @@ pub fn gen_parallel_query_dag<K: Num>(
         let mut range_lock = false;
         for (i, r) in query_content.range.iter().enumerate() {
             // add range
-            let range_idx = query_dag.add_node(DagNode::Range(RangeNode { range: *r, dim: i as u8 }));
+            let range_idx = query_dag.add_node(DagNode::Range(RangeNode {
+                range: *r,
+                dim: i as u8,
+            }));
             if range_lock {
                 // add intersec
                 let intersec_idx = query_dag.add_node(DagNode::Intersec(IntersecNode {}));
@@ -825,7 +828,10 @@ pub fn gen_last_query_dag_with_cont_trimmed<K: Num, T: ReadInterface<K = K>>(
 
             if has_range_query {
                 for (i, r) in query_content.range.iter().enumerate() {
-                    let range_node = RangeNode { range: *r, dim: i as u8 };
+                    let range_node = RangeNode {
+                        range: *r,
+                        dim: i as u8,
+                    };
                     let bplus_root = chain
                         .read_block_content(start_blk_height)?
                         .ads

@@ -96,18 +96,14 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     debug!("sub_res: {:?}", sub_results);
     debug!("cur_res_set len: {}", cur_res_set.len());
 
-    while cur_res_set.len()
-        < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
-        || cur_res_set.len()
-            > (obj_num as f64 * (selectivity * (1_f64 + err_rate))) as usize
+    while cur_res_set.len() < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
+        || cur_res_set.len() > (obj_num as f64 * (selectivity * (1_f64 + err_rate))) as usize
     {
         sub_results.sort_by(|a, b| a.0.cmp(&b.0));
         flag = true;
         let new_sub_range;
         let modified_dim;
-        if cur_res_set.len()
-            < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
-        {
+        if cur_res_set.len() < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize {
             debug!("less than target");
             let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
@@ -437,18 +433,14 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
         sub_results.push((sub_res.len(), sub_range, dim, sub_res));
     }
 
-    while cur_res_set.len()
-        < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
-        || cur_res_set.len()
-            > (obj_num as f64 * (selectivity * (1_f64 + err_rate))) as usize
+    while cur_res_set.len() < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
+        || cur_res_set.len() > (obj_num as f64 * (selectivity * (1_f64 + err_rate))) as usize
     {
         sub_results.sort_by(|a, b| a.0.cmp(&b.0));
         flag = true;
         let new_sub_range;
         let modified_dim;
-        if cur_res_set.len()
-            < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize
-        {
+        if cur_res_set.len() < (obj_num as f64 * (selectivity * (1_f64 - err_rate))) as usize {
             let (_, sub_range, dim, _) = sub_results.remove(0);
             let l = sub_range.get_low();
             let h = sub_range.get_high();
