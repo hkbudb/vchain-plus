@@ -398,8 +398,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                             vo_dag_content.insert(idx, VONode::InterIntersec(vo_inter_intersec));
                             set_map.insert(idx, Set::new());
                         }
-                    } else {
-                        bail!("Intersection does not exist in qp dag content");
                     }
                 }
                 query_dag::DagNode::Diff(_) => {
