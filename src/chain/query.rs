@@ -246,18 +246,34 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                         for c_idx in query_dag.neighbors_directed(idx, Outgoing) {
                             child_idxs.push(c_idx);
                         }
-                        let qp_c_idx1 = child_idxs
-                            .get(0)
-                            .context("Cannot find the first qp child idx of union")?;
+                        let mut qp_c_idx1 = child_idxs
+                            .get(1)
+                            .context("Cannot find the first child idx of final difference")?;
+                        let qp_c_idx2;
+                        let edge_idx = query_dag
+                            .find_edge(idx, *qp_c_idx1)
+                            .context("Cannot find edge")?;
+                        let weight = query_dag
+                            .edge_weight(edge_idx)
+                            .context("Cannot find edge")?;
+                        if !*weight {
+                            qp_c_idx2 = child_idxs
+                                .get(0)
+                                .context("Cannot find the second child idx of final difference")?;
+                        } else {
+                            qp_c_idx1 = child_idxs
+                                .get(0)
+                                .context("Cannot find the first qp child idx of intersection")?;
+                            qp_c_idx2 = child_idxs
+                                .get(1)
+                                .context("Cannot find the second qp child idx of intersection")?;
+                        }
                         let vo_c1 = vo_dag_content
                             .get(qp_c_idx1)
                             .context("Cannot find the first child vo node in vo_dag_content")?;
                         let c1_set = set_map
                             .get(qp_c_idx1)
                             .context("Cannot find the set in set_map")?;
-                        let qp_c_idx2 = child_idxs
-                            .get(1)
-                            .context("Cannot find the second qp child idx of union")?;
                         let vo_c2 = vo_dag_content
                             .get(qp_c_idx2)
                             .context("Cannot find the second child vo node in vo_dag_content")?;
