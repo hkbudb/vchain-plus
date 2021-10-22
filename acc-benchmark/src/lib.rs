@@ -156,7 +156,9 @@ macro_rules! prepare_fixtures {
                     .strip_prefix("ark_")
                     .unwrap();
                 println!("prepare fixture for {}...", curve_name);
-                $crate::Fixture::new(curve_name, $q)
+                let ret = $crate::Fixture::new(curve_name, $q);
+                println!("prepare fixture for {} done", curve_name);
+                ret
             });
     };
 }
