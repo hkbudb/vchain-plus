@@ -53,8 +53,10 @@ impl<E: PairingEngine> IntersectionProof<E> {
         get_g_x_i_y_j: impl Fn(u64, u64) -> E::G1Affine + Sync + Send,
         get_g_delta_x_i_y_j: impl Fn(u64, u64) -> E::G1Affine + Sync + Send,
     ) -> Self {
-        let g_x = cal_acc_pk(set, &get_g_x_i);
-        let g_x_beta = cal_acc_pk(set, &get_g_beta_x_i);
+        let (g_x, g_x_beta) = rayon::join(
+            || cal_acc_pk(set, &get_g_x_i),
+            || cal_acc_pk(set, &get_g_beta_x_i),
+        );
         let l_x = cal_acc_pk(set, |i| if i == 1 { g } else { get_g_x_i(i - 1) });
 
         let q_poly_num_terms = q_poly.num_terms();
@@ -89,9 +91,10 @@ impl<E: PairingEngine> IntersectionProof<E> {
             scalars.set_len(q_poly_num_terms);
         }
 
-        let q_x_y = VariableBaseMSM::multi_scalar_mul(&bases[..], &scalars[..]).into_affine();
-        let q_x_y_delta =
-            VariableBaseMSM::multi_scalar_mul(&delta_bases[..], &scalars[..]).into_affine();
+        let (q_x_y, q_x_y_delta) = rayon::join(
+            || VariableBaseMSM::multi_scalar_mul(&bases[..], &scalars[..]).into_affine(),
+            || VariableBaseMSM::multi_scalar_mul(&delta_bases[..], &scalars[..]).into_affine(),
+        );
 
         Self {
             g_x,
@@ -163,28 +166,33 @@ impl<E: PairingEngine> IntermediateProof<E> {
         result_acc: &AccValue<E>,
         pk: &AccPublicKey<E>,
     ) -> Result<()> {
-        self.inner_proof_r
-            .verify(
-                lhs_acc.g_s,
-                rhs_acc.h_r_s,
-                pk.h,
-                pk.h_s_q,
-                pk.h_beta,
-                pk.h_delta,
-                pk.h_r,
-            )
-            .context("failed to verify the inner_proof_r.")?;
-        self.inner_proof_s
-            .verify(
-                lhs_acc.g_r,
-                rhs_acc.h_s_r,
-                pk.h,
-                pk.h_r_q,
-                pk.h_beta,
-                pk.h_delta,
-                pk.h_s,
-            )
-            .context("failed to verify the inner_proof_s.")?;
+        let (verify_inner_proof_r, verify_inner_proof_s) = rayon::join(
+            || {
+                self.inner_proof_r.verify(
+                    lhs_acc.g_s,
+                    rhs_acc.h_r_s,
+                    pk.h,
+                    pk.h_s_q,
+                    pk.h_beta,
+                    pk.h_delta,
+                    pk.h_r,
+                )
+            },
+            || {
+                self.inner_proof_s.verify(
+                    lhs_acc.g_r,
+                    rhs_acc.h_s_r,
+                    pk.h,
+                    pk.h_r_q,
+                    pk.h_beta,
+                    pk.h_delta,
+                    pk.h_s,
+                )
+            },
+        );
+
+        verify_inner_proof_r.context("failed to verify the inner_proof_r.")?;
+        verify_inner_proof_s.context("failed to verify the inner_proof_s.")?;
 
         match self.op {
             Op::Intersection => {
@@ -260,27 +268,33 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
     let rhs_poly: Poly<E::Fr> = poly_b(rhs_set, R, S, pk.q);
     let mut q_poly = &lhs_poly * &rhs_poly;
     q_poly.remove_intersected_term(S, pk.q, &intersection_set);
-    let inner_proof_r = IntersectionProof::<E>::new(
-        &intersection_set,
-        &q_poly,
-        R,
-        S,
-        pk.g,
-        |i| pk.get_g_r_i(i),
-        |i| pk.get_g_beta_r_i(i),
-        |i, j| pk.get_g_r_i_s_j(i, j),
-        |i, j| pk.get_g_delta_r_i_s_j(i, j),
-    );
-    let inner_proof_s = IntersectionProof::<E>::new(
-        &intersection_set,
-        &q_poly,
-        S,
-        R,
-        pk.g,
-        |i| pk.get_g_s_i(i),
-        |i| pk.get_g_beta_s_i(i),
-        |i, j| pk.get_g_r_i_s_j(i, j),
-        |i, j| pk.get_g_delta_r_i_s_j(i, j),
+    let (inner_proof_r, inner_proof_s) = rayon::join(
+        || {
+            IntersectionProof::<E>::new(
+                &intersection_set,
+                &q_poly,
+                R,
+                S,
+                pk.g,
+                |i| pk.get_g_r_i(i),
+                |i| pk.get_g_beta_r_i(i),
+                |i, j| pk.get_g_r_i_s_j(i, j),
+                |i, j| pk.get_g_delta_r_i_s_j(i, j),
+            )
+        },
+        || {
+            IntersectionProof::<E>::new(
+                &intersection_set,
+                &q_poly,
+                S,
+                R,
+                pk.g,
+                |i| pk.get_g_s_i(i),
+                |i| pk.get_g_beta_s_i(i),
+                |i, j| pk.get_g_r_i_s_j(i, j),
+                |i, j| pk.get_g_delta_r_i_s_j(i, j),
+            )
+        },
     );
 
     let result_set = match op {
@@ -308,8 +322,10 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
             cal_acc_pk(&result_set, |i| pk.get_h_r_s_i(i)),
         ),
     };
-    let result_acc_s_r_gamma = cal_acc_pk(&result_set, |i| pk.get_g_gamma_s_r_i(i));
-    let result_acc_r_s_gamma = cal_acc_pk(&result_set, |i| pk.get_g_gamma_r_s_i(i));
+    let (result_acc_s_r_gamma, result_acc_r_s_gamma) = rayon::join(
+        || cal_acc_pk(&result_set, |i| pk.get_g_gamma_s_r_i(i)),
+        || cal_acc_pk(&result_set, |i| pk.get_g_gamma_r_s_i(i)),
+    );
 
     let result_y_poly = poly_a::<E::Fr>(&result_set, R);
     let result_x_y_poly = poly_b::<E::Fr>(&result_set, R, S, pk.q);
@@ -354,8 +370,10 @@ pub fn compute_set_operation_intermediate<E: PairingEngine>(
         scalars.set_len(z_poly_num_terms);
     }
 
-    let z_s_r = VariableBaseMSM::multi_scalar_mul(&z_s_r_bases[..], &scalars[..]).into_affine();
-    let z_r_s = VariableBaseMSM::multi_scalar_mul(&z_r_s_bases[..], &scalars[..]).into_affine();
+    let (z_s_r, z_r_s) = rayon::join(
+        || VariableBaseMSM::multi_scalar_mul(&z_s_r_bases[..], &scalars[..]).into_affine(),
+        || VariableBaseMSM::multi_scalar_mul(&z_r_s_bases[..], &scalars[..]).into_affine(),
+    );
 
     let proof = IntermediateProof {
         op,

@@ -11,7 +11,6 @@ use core::{
 };
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::num::NonZeroU64;
 
 #[inline]
 pub(crate) fn cal_acc_pk<G, F>(set: &Set, f: F) -> G
@@ -20,7 +19,7 @@ where
     F: Fn(u64) -> G + Sync,
 {
     set.par_iter()
-        .map(|i| f(NonZeroU64::from(*i).get()))
+        .map(|i| f(i.get() as u64))
         .fold(G::Projective::zero, |a, b| a.add_mixed(&b))
         .reduce(G::Projective::zero, |a, b| a + b)
         .into_affine()
@@ -33,7 +32,7 @@ where
     F: Fn(u64) -> Fr + Sync,
 {
     set.par_iter()
-        .map(|i| f(NonZeroU64::from(*i).get()))
+        .map(|i| f(i.get() as u64))
         .reduce(Fr::zero, |a, b| a + b)
 }
 

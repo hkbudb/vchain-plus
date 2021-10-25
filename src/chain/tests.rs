@@ -289,34 +289,36 @@ impl ScanQueryInterface for &FakeChain {
             if o.blk_height < end_blk_height && o.blk_height > start_blk_height {
                 let o_num_vals = &o.num_data;
                 for (i, num_val) in o_num_vals.iter().enumerate() {
-                    if num_val
-                        < &num_range_scope
-                            .get(i)
-                            .with_context(|| {
-                                format!("Object does not have numerical value at dim {}", i)
-                            })?
-                            .0
-                    {
-                        num_range_scope
-                            .get_mut(i)
-                            .with_context(|| {
-                                format!("Object does not have numerical value at dim {}", i)
-                            })?
-                            .0 = *num_val;
-                    } else if num_val
-                        > &num_range_scope
-                            .get(i)
-                            .with_context(|| {
-                                format!("Object does not have numerical value at dim {}", i)
-                            })?
-                            .1
-                    {
-                        num_range_scope
-                            .get_mut(i)
-                            .with_context(|| {
-                                format!("Object does not have numerical value at dim {}", i)
-                            })?
-                            .1 = *num_val;
+                    if i < dim_num {
+                        if num_val
+                            < &num_range_scope
+                                .get(i)
+                                .with_context(|| {
+                                    format!("Object does not have numerical value at dim {}", i)
+                                })?
+                                .0
+                        {
+                            num_range_scope
+                                .get_mut(i)
+                                .with_context(|| {
+                                    format!("Object does not have numerical value at dim {}", i)
+                                })?
+                                .0 = *num_val;
+                        } else if num_val
+                            > &num_range_scope
+                                .get(i)
+                                .with_context(|| {
+                                    format!("Object does not have numerical value at dim {}", i)
+                                })?
+                                .1
+                        {
+                            num_range_scope
+                                .get_mut(i)
+                                .with_context(|| {
+                                    format!("Object does not have numerical value at dim {}", i)
+                                })?
+                                .1 = *num_val;
+                        }
                     }
                 }
             }
