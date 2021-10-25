@@ -483,7 +483,10 @@ fn cal_vo_size<K: Num + Serialize>(vo: &VO<K>) -> Result<VOSize> {
 }
 use rayon::prelude::*;
 #[allow(clippy::type_complexity)]
-pub fn verify<K: Num + Serialize, T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send,>(
+pub fn verify<
+    K: Num + Serialize,
+    T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send,
+>(
     chain: T,
     res_contents: &[(HashMap<ObjId, Object<K>>, VO<K>)],
     res_dags: &HashMap<u8, Graph<DagNode<K>, bool>>,
@@ -498,7 +501,8 @@ pub fn verify<K: Num + Serialize, T: ReadInterface<K = K> + std::marker::Sync + 
             let graph_idx = vo_content.vo_dag_content.dag_idx;
             let graph = res_dags.get(&graph_idx).context("graph does not exists")?;
             inner_verify(&chain, res_content, vo_content, graph, pk)
-        }).collect_into_vec(&mut responses);
+        })
+        .collect_into_vec(&mut responses);
     let time = Time::from(timer.elapsed());
     for (res_content, _vo_content) in res_contents {
         obj_num += res_content.len();
