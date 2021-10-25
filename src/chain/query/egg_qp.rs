@@ -13,6 +13,7 @@ use anyhow::{bail, Context, Result};
 use egg::*;
 use howlong::Duration;
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
+use std::{cmp::Ordering, collections::VecDeque};
 use std::{
     collections::HashMap,
     fmt,
@@ -112,26 +113,28 @@ pub fn egg_optimize<K: Num>(
     qp: &mut QueryPlan<K>,
 ) -> Result<Graph<DagNode<K>, bool>> {
     let dag_cont = qp.get_dag_cont();
-    let expr = create_rec_exp(dag, dag_cont)?;
+    let (expr, root_id) = create_rec_exp(dag, dag_cont)?;
 
     let rules: &[Rewrite<ELang, ()>] = &[
-        rewrite!("rule1"; "(/ (| ?a ?b) ?c)" => "(| (/ ?a ?c) (/ ?b ?c))"),
-        rewrite!("rule2"; "(/ ?a (& ?b ?c))" => "(| (/ ?a ?b) (/ ?a ?c))"),
-        rewrite!("rule3"; "(/ (& ?a ?b) ?c)" => "(& (/ ?a ?c) (/ ?b ?c))"),
-        rewrite!("rule4"; "(/ ?a (| ?b ?c))" => "(& (/ ?a ?b) (/ ?a ?c))"),
-        rewrite!("rule5"; "(& (| ?a ?b) ?c)" => "(| (& ?a ?c) (& ?b ?c))"),
-        rewrite!("rule6"; "(& (/ ?a ?b) ?c)" => "(/ (& ?a ?c) (& ?b ?c))"),
-        // rewrite!("rule7"; "(& (& ?a ?b) ?c)" => "(& (& ?a ?c) ?b)"),
-        // rewrite!("rule8"; "(& (& ?a ?b) ?c)" => "(& (& ?b ?c) ?a)"),
-        // rewrite!("rule9"; "(| (| ?a ?b) ?c)" => "(| (| ?a ?c) ?b)"),
-        // rewrite!("rule10"; "(| (| ?a ?b) ?c)" => "(| (| ?b ?c) ?a)"),
+        rewrite!("rule7"; "(& ?a ?b)" => "(& ?b ?a)"),
+        rewrite!("rule0"; "(& ?a ?b)" => "(& ?b ?a)"),
+        rewrite!("rule1"; "(| ?a ?b)" => "(| ?b ?a)"),
+        rewrite!("rule2"; "(& (& ?a ?b) ?c)" => "(& ?a (& ?b ?c))"),
+        rewrite!("rule3"; "(| (| ?a ?b) ?c)" => "(| ?a (| ?b ?c))"),
+        rewrite!("rule4"; "(/ (| ?a ?b) ?c)" => "(| (/ ?a ?c) (/ ?b ?c))"),
+        rewrite!("rule5"; "(/ ?a (& ?b ?c))" => "(| (/ ?a ?b) (/ ?a ?c))"),
+        rewrite!("rule6"; "(/ (& ?a ?b) ?c)" => "(& (/ ?a ?c) (/ ?b ?c))"),
+        rewrite!("rule7"; "(/ ?a (| ?b ?c))" => "(& (/ ?a ?b) (/ ?a ?c))"),
+        rewrite!("rule8"; "(& (| ?a ?b) ?c)" => "(| (& ?a ?c) (& ?b ?c))"),
+        rewrite!("rule9"; "(& (/ ?a ?b) ?c)" => "(/ (& ?a ?c) (& ?b ?c))"),
     ];
 
     let runner = Runner::default()
         .with_expr(&expr)
         .with_time_limit(Duration::new(2, 0))
         .run(rules);
-    let mut extractor = Extractor::new(&runner.egraph, CostFn);
+    let root_eclass_id = &runner.egraph.find(root_id);
+    let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
     let (_best_cost, best_expr) = extractor.find_best(runner.roots[0]);
 
     let new_qp = create_qp(dag, best_expr, qp)?;
@@ -142,7 +145,7 @@ pub fn egg_optimize<K: Num>(
 fn create_rec_exp<K: Num>(
     dag: &Graph<DagNode<K>, bool>,
     dag_cont: &HashMap<NodeIndex, QPNode<K>>,
-) -> Result<RecExpr<ELang>> {
+) -> Result<(RecExpr<ELang>, Id)> {
     let mut expr = RecExpr::<ELang>::default();
     let mut idx_map = HashMap::<NodeIndex, Id>::new();
 
@@ -152,27 +155,32 @@ fn create_rec_exp<K: Num>(
             bail!("Input query plan graph not valid")
         }
     };
+    let root_idx = *dag_inputs.get(0).context("empty input")?;
+    let mut root_id = Id::default();
     dag_inputs.reverse();
 
-    for idx in dag_inputs {
-        if let Some(dag_node) = dag.node_weight(idx) {
+    for idx in &dag_inputs {
+        if let Some(dag_node) = dag.node_weight(*idx) {
             match dag_node {
                 DagNode::Range(_) | DagNode::Keyword(_) | DagNode::BlkRt(_) => {
                     let set = dag_cont
-                        .get(&idx)
+                        .get(idx)
                         .context("Cannot find node in dag_cont when creating expr")?
                         .get_set()?
                         .clone();
                     let leaf = SimpleLeaf {
-                        idx,
+                        idx: *idx,
                         set: SimpleSet::from_set(set),
                     };
                     let leaf_idx = expr.add(ELang::Leaf(leaf));
-                    idx_map.insert(idx, leaf_idx);
+                    if root_idx == *idx {
+                        root_id = leaf_idx;
+                    }
+                    idx_map.insert(*idx, leaf_idx);
                 }
                 DagNode::Union(_) => {
                     let mut child_idxs = Vec::<NodeIndex>::new();
-                    for c_idx in dag.neighbors_directed(idx, Outgoing) {
+                    for c_idx in dag.neighbors_directed(*idx, Outgoing) {
                         child_idxs.push(c_idx);
                     }
                     let qp_c_idx1 = child_idxs
@@ -188,11 +196,14 @@ fn create_rec_exp<K: Num>(
                         .get(qp_c_idx2)
                         .context("Cannot find id in idx_map")?;
                     let union_idx = expr.add(ELang::Or([*exp_c_idx1, *exp_c_idx2]));
-                    idx_map.insert(idx, union_idx);
+                    if root_idx == *idx {
+                        root_id = union_idx;
+                    }
+                    idx_map.insert(*idx, union_idx);
                 }
                 DagNode::Intersec(_) => {
                     let mut child_idxs = Vec::<NodeIndex>::new();
-                    for c_idx in dag.neighbors_directed(idx, Outgoing) {
+                    for c_idx in dag.neighbors_directed(*idx, Outgoing) {
                         child_idxs.push(c_idx);
                     }
                     let qp_c_idx1 = child_idxs
@@ -208,18 +219,23 @@ fn create_rec_exp<K: Num>(
                         .get(qp_c_idx2)
                         .context("Cannot find id in idx_map")?;
                     let inter_idx = expr.add(ELang::And([*exp_c_idx1, *exp_c_idx2]));
-                    idx_map.insert(idx, inter_idx);
+                    if root_idx == *idx {
+                        root_id = inter_idx;
+                    }
+                    idx_map.insert(*idx, inter_idx);
                 }
                 DagNode::Diff(_) => {
                     let mut child_idxs = Vec::<NodeIndex>::new();
-                    for c_idx in dag.neighbors_directed(idx, Outgoing) {
+                    for c_idx in dag.neighbors_directed(*idx, Outgoing) {
                         child_idxs.push(c_idx);
                     }
                     let mut qp_c_idx1 = child_idxs
                         .get(1)
                         .context("Cannot find the first qp child idx of difference")?;
                     let qp_c_idx2;
-                    let edge_idx = dag.find_edge(idx, *qp_c_idx1).context("Cannot find edge")?;
+                    let edge_idx = dag
+                        .find_edge(*idx, *qp_c_idx1)
+                        .context("Cannot find edge")?;
                     let weight = dag.edge_weight(edge_idx).context("Cannot find edge")?;
                     if !*weight {
                         qp_c_idx2 = child_idxs
@@ -240,13 +256,16 @@ fn create_rec_exp<K: Num>(
                         .get(qp_c_idx2)
                         .context("Cannot find id in idx_map")?;
                     let dif_idx = expr.add(ELang::Dif([*exp_c_idx1, *exp_c_idx2]));
-                    idx_map.insert(idx, dif_idx);
+                    if root_idx == *idx {
+                        root_id = dif_idx;
+                    }
+                    idx_map.insert(*idx, dif_idx);
                 }
             }
         }
     }
 
-    Ok(expr)
+    Ok((expr, root_id))
 }
 
 fn create_qp<K: Num>(
@@ -362,7 +381,7 @@ fn create_qp<K: Num>(
     Ok(new_dag)
 }
 
-struct CostFn;
+pub struct CostFn;
 impl CostFunction<ELang> for CostFn {
     type Cost = TestCost;
     fn cost<C>(&mut self, enode: &ELang, mut costs: C) -> Self::Cost
@@ -377,10 +396,13 @@ impl CostFunction<ELang> for CostFn {
                 let child1_cost = costs(child1);
                 let child2_cost = costs(child2);
                 let set = &child1_cost.set & &child2_cost.set;
-                let cost = child1_cost.set.len() * child2_cost.set.len() * COST_COEFFICIENT
-                    + child1_cost.cost
-                    + child2_cost.cost;
-                TestCost { set, cost }
+                let c_cost = child1_cost.sum_cost() + child2_cost.sum_cost();
+                let op_cost = child1_cost.set.len() * child2_cost.set.len() * COST_COEFFICIENT;
+                TestCost {
+                    set,
+                    c_cost,
+                    op_cost,
+                }
             }
             ELang::Or(n) => {
                 let child1 = n[0];
@@ -388,10 +410,13 @@ impl CostFunction<ELang> for CostFn {
                 let child1_cost = costs(child1);
                 let child2_cost = costs(child2);
                 let set = &child1_cost.set | &child2_cost.set;
-                let cost = child1_cost.set.len() * child2_cost.set.len() * COST_COEFFICIENT
-                    + child1_cost.cost
-                    + child2_cost.cost;
-                TestCost { set, cost }
+                let c_cost = child1_cost.sum_cost() + child2_cost.sum_cost();
+                let op_cost = child1_cost.set.len() * child2_cost.set.len() * COST_COEFFICIENT;
+                TestCost {
+                    set,
+                    c_cost,
+                    op_cost,
+                }
             }
             ELang::Dif(n) => {
                 let child1 = n[0];
@@ -399,15 +424,21 @@ impl CostFunction<ELang> for CostFn {
                 let child1_cost = costs(child1);
                 let child2_cost = costs(child2);
                 let set = &child1_cost.set / &child2_cost.set;
-                let cost = child1_cost.set.len() * child2_cost.set.len() * COST_COEFFICIENT
-                    + child1_cost.cost
-                    + child2_cost.cost;
-                TestCost { set, cost }
+                let c_cost = child1_cost.sum_cost() + child2_cost.sum_cost();
+                let op_cost = child1_cost.set.len() * child2_cost.set.len() * COST_COEFFICIENT;
+                TestCost {
+                    set,
+                    c_cost,
+                    op_cost,
+                }
             }
             ELang::Leaf(l) => {
-                let c = 0;
                 let s = l.set.0.clone();
-                TestCost { set: s, cost: c }
+                TestCost {
+                    set: s,
+                    c_cost: 0,
+                    op_cost: 0,
+                }
             }
         }
     }
@@ -416,41 +447,268 @@ impl CostFunction<ELang> for CostFn {
 #[derive(Clone, Debug)]
 pub struct TestCost {
     set: Set,
-    cost: usize,
+    c_cost: usize,
+    op_cost: usize,
+}
+
+impl TestCost {
+    pub(crate) fn sum_cost(&self) -> usize {
+        self.c_cost + self.op_cost
+    }
+
+    pub(crate) fn become_final(&mut self) {
+        self.op_cost /= COST_COEFFICIENT;
+    }
+
+    pub(crate) fn reduced(&mut self) {
+        self.op_cost = 0;
+    }
 }
 
 impl PartialEq for TestCost {
     fn eq(&self, other: &Self) -> bool {
-        self.cost == other.cost
+        self.sum_cost() == other.sum_cost()
     }
 }
 
 impl PartialOrd for TestCost {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.cost.partial_cmp(&other.cost)
+        self.sum_cost().partial_cmp(&other.sum_cost())
     }
+}
+
+pub struct Extractor<'a, N: Analysis<ELang>> {
+    cost_function: CostFn,
+    costs: HashMap<Id, (TestCost, ELang)>,
+    egraph: &'a EGraph<ELang, N>,
+    root_eclass_id: &'a Id,
+}
+
+impl<'a, N> Extractor<'a, N>
+where
+    N: Analysis<ELang>,
+{
+    /// Create a new `Extractor` given an `EGraph` and a
+    /// `CostFunction`.
+    ///
+    /// The extraction does all the work on creation, so this function
+    /// performs the greedy search for cheapest representative of each
+    /// eclass.
+    pub fn new(
+        root_eclass_id: &'a Id,
+        egraph: &'a EGraph<ELang, N>,
+        cost_function: CostFn,
+    ) -> Self {
+        let costs = HashMap::default();
+        let mut extractor = Extractor {
+            costs,
+            egraph,
+            cost_function,
+            root_eclass_id,
+        };
+        extractor.find_costs();
+
+        extractor
+    }
+
+    /// Find the cheapest (lowest cost) represented `RecExpr` in the
+    /// given eclass.
+    pub fn find_best(&mut self, eclass: Id) -> (TestCost, RecExpr<ELang>) {
+        let mut expr = RecExpr::default();
+        let (_, cost) = self.find_best_rec(&mut expr, eclass);
+        (cost, expr)
+    }
+
+    fn find_best_rec(&mut self, expr: &mut RecExpr<ELang>, eclass: Id) -> (Id, TestCost) {
+        let id = self.egraph.find(eclass);
+        let (best_cost, best_node) = match self.costs.get(&id) {
+            Some(result) => result.clone(),
+            None => panic!("Failed to extract from eclass {}", id),
+        };
+
+        let node = best_node.map_children(|child| self.find_best_rec(expr, child).0);
+        (expr.add(node), best_cost)
+    }
+
+    /// calculate the total cost (op_cost and c_cost) of a given node based on user_defined cost function
+    fn node_total_cost(&mut self, node: &ELang) -> Option<TestCost> {
+        let eg = &self.egraph;
+        let has_cost = |&id| self.costs.contains_key(&eg.find(id));
+        if node.children().iter().all(has_cost) {
+            let costs = &self.costs;
+            let cost_f = |id| costs[&eg.find(id)].0.clone();
+            let mut calculated_cost = self.cost_function.cost(node, cost_f);
+            let egraph = self.egraph;
+            let node_eclass_id = egraph
+                .lookup(node.clone())
+                .unwrap_or_else(|| panic!("Can't find eclass id for this node"));
+
+            match node {
+                ELang::Or(_) => {
+                    if reduced_union(egraph, *self.root_eclass_id, node_eclass_id) {
+                        calculated_cost.reduced();
+                    }
+                }
+                _ => {
+                    if final_op(egraph, *self.root_eclass_id, node_eclass_id) {
+                        calculated_cost.become_final();
+                    }
+                }
+            }
+
+            Some(calculated_cost)
+        } else {
+            None
+        }
+    }
+
+    /// given an eclass, find its representative node with its cost(min cost)
+    fn make_pass(&mut self, eclass: &EClass<ELang, N::Data>) -> Option<(TestCost, ELang)> {
+        let (cost, node) = eclass
+            .iter()
+            .map(|n| (self.node_total_cost(n), n))
+            .min_by(|a, b| cmp(&a.0, &b.0))
+            .unwrap_or_else(|| panic!("Can't extract, eclass is empty: {:#?}", eclass));
+        cost.map(|c| (c, node.clone()))
+    }
+
+    fn find_costs(&mut self) {
+        let mut did_something = true;
+        while did_something {
+            did_something = false;
+
+            for class in self.egraph.classes() {
+                let pass = self.make_pass(class);
+                match (self.costs.get(&class.id), pass) {
+                    (None, Some(new)) => {
+                        self.costs.insert(class.id, new);
+                        did_something = true;
+                    }
+                    (Some(old), Some(new)) if new.0 < old.0 => {
+                        self.costs.insert(class.id, new);
+                        did_something = true;
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        for class in self.egraph.classes() {
+            if !self.costs.contains_key(&class.id) {
+                warn!(
+                    "Failed to compute cost for eclass {}: {:?}",
+                    class.id, class.nodes
+                )
+            }
+        }
+    }
+}
+
+fn cmp<T: PartialOrd>(a: &Option<T>, b: &Option<T>) -> Ordering {
+    // None is high
+    match (a, b) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+        (Some(a), Some(b)) => a.partial_cmp(b).unwrap_or_else(|| panic!("")),
+    }
+}
+
+/// either a top op or continuous union before it
+fn final_op<N: Analysis<ELang>>(
+    egraph: &EGraph<ELang, N>,
+    root_eclass_id: Id,
+    node_eclass_id: Id,
+) -> bool {
+    let mut queue = VecDeque::<Id>::new();
+    queue.push_back(root_eclass_id);
+
+    while let Some(id) = queue.pop_front() {
+        let eclass = find_eclass(egraph, id);
+        let nodes = &eclass.nodes;
+
+        if id == node_eclass_id {
+            return true;
+        }
+
+        for node in nodes {
+            if let ELang::Or(children) = node {
+                for c_id in children {
+                    queue.push_back(egraph.find(*c_id));
+                }
+            }
+        }
+    }
+    false
+}
+
+/// either a top union or continuous union
+fn reduced_union<N: Analysis<ELang>>(
+    egraph: &EGraph<ELang, N>,
+    root_eclass_id: Id,
+    node_eclass_id: Id,
+) -> bool {
+    // i) top
+    if root_eclass_id == node_eclass_id {
+        return true;
+    }
+    // ii) continuous union
+    let mut queue = VecDeque::<Id>::new();
+    queue.push_back(root_eclass_id);
+
+    while let Some(id) = queue.pop_front() {
+        let eclass = find_eclass(egraph, id);
+        let nodes = &eclass.nodes;
+        let mut has_union = false;
+        for node in nodes {
+            if let ELang::Or(children) = node {
+                has_union = true;
+                for c_id in children {
+                    queue.push_back(egraph.find(*c_id));
+                }
+            }
+        }
+        if id == node_eclass_id && has_union {
+            return true;
+        } else if !has_union {
+            return false;
+        }
+    }
+    false
+}
+
+fn find_eclass<N: Analysis<ELang>>(
+    egraph: &EGraph<ELang, N>,
+    eclass_id: Id,
+) -> &EClass<ELang, <N as egg::Analysis<ELang>>::Data> {
+    for class in egraph.classes() {
+        if class.id == eclass_id {
+            return class;
+        }
+    }
+    panic!("Cannot find eclass");
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CostFn, ELang, SimpleLeaf, SimpleSet};
+    use super::{CostFn, ELang, Extractor, SimpleLeaf, SimpleSet};
     use crate::set;
-    use egg::*;
+    use egg::{rewrite, RecExpr, Rewrite, Runner};
     use petgraph::graph::NodeIndex;
 
     #[test]
     fn test_egg() {
         let rules: &[Rewrite<ELang, ()>] = &[
-            rewrite!("rule1"; "(/ (| ?a ?b) ?c)" => "(| (/ ?a ?c) (/ ?b ?c))"),
-            rewrite!("rule2"; "(/ ?a (& ?b ?c))" => "(| (/ ?a ?b) (/ ?a ?c))"),
-            rewrite!("rule3"; "(/ (& ?a ?b) ?c)" => "(& (/ ?a ?c) (/ ?b ?c))"),
-            rewrite!("rule4"; "(/ ?a (| ?b ?c))" => "(& (/ ?a ?b) (/ ?a ?c))"),
-            rewrite!("rule5"; "(& (| ?a ?b) ?c)" => "(| (& ?a ?c) (& ?b ?c))"),
-            rewrite!("rule6"; "(& (/ ?a ?b) ?c)" => "(/ (& ?a ?c) (& ?b ?c))"),
-            rewrite!("rule7"; "(& (& ?a ?b) ?c)" => "(& (& ?a ?c) ?b)"),
-            rewrite!("rule8"; "(& (& ?a ?b) ?c)" => "(& (& ?b ?c) ?a)"),
-            rewrite!("rule9"; "(| (| ?a ?b) ?c)" => "(| (| ?a ?c) ?b)"),
-            rewrite!("rule10"; "(| (| ?a ?b) ?c)" => "(| (| ?b ?c) ?a)"),
+            rewrite!("rule0"; "(& ?a ?b)" => "(& ?b ?a)"),
+            rewrite!("rule1"; "(| ?a ?b)" => "(| ?b ?a)"),
+            rewrite!("rule2"; "(& (& ?a ?b) ?c)" => "(& ?a (& ?b ?c))"),
+            rewrite!("rule3"; "(| (| ?a ?b) ?c)" => "(| ?a (| ?b ?c))"),
+            rewrite!("rule4"; "(/ (| ?a ?b) ?c)" => "(| (/ ?a ?c) (/ ?b ?c))"),
+            rewrite!("rule5"; "(/ ?a (& ?b ?c))" => "(| (/ ?a ?b) (/ ?a ?c))"),
+            rewrite!("rule6"; "(/ (& ?a ?b) ?c)" => "(& (/ ?a ?c) (/ ?b ?c))"),
+            rewrite!("rule7"; "(/ ?a (| ?b ?c))" => "(& (/ ?a ?b) (/ ?a ?c))"),
+            rewrite!("rule8"; "(& (| ?a ?b) ?c)" => "(| (& ?a ?c) (& ?b ?c))"),
+            rewrite!("rule9"; "(& (/ ?a ?b) ?c)" => "(/ (& ?a ?c) (& ?b ?c))"),
         ];
         let leaf_a = SimpleLeaf {
             idx: NodeIndex::default(),
@@ -470,22 +728,23 @@ mod tests {
         let b = expr.add(ELang::Leaf(leaf_b.clone()));
         let union = expr.add(ELang::Or([a, b]));
         let c = expr.add(ELang::Leaf(leaf_c.clone()));
-        let _dif = expr.add(ELang::Dif([union, c]));
+        let dif = expr.add(ELang::Dif([union, c]));
 
         let runner = Runner::default().with_expr(&expr).run(rules);
-        let mut extractor = Extractor::new(&runner.egraph, CostFn);
+        let root_eclass_id = &runner.egraph.find(dif);
+        let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
         let (best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
-        assert_eq!(best_cost.cost, 3800);
+        assert_eq!(best_cost.sum_cost(), 18);
 
-        let leaf_a = SimpleLeaf {
+        let leaf_b = SimpleLeaf {
             idx: NodeIndex::default(),
             set: SimpleSet(set![1, 2, 3]),
         };
-        let leaf_b = SimpleLeaf {
+        let leaf_c = SimpleLeaf {
             idx: NodeIndex::default(),
             set: SimpleSet(set![1, 4]),
         };
-        let leaf_c = SimpleLeaf {
+        let leaf_a = SimpleLeaf {
             idx: NodeIndex::default(),
             set: SimpleSet(set![1]),
         };
@@ -494,10 +753,107 @@ mod tests {
         let b = expr.add(ELang::Leaf(leaf_b.clone()));
         let union1 = expr.add(ELang::Or([a, b]));
         let c = expr.add(ELang::Leaf(leaf_c.clone()));
-        let _union2 = expr.add(ELang::Or([union1, c]));
+        let union2 = expr.add(ELang::Or([union1, c]));
         let runner = Runner::default().with_expr(&expr).run(rules);
-        let mut extractor = Extractor::new(&runner.egraph, CostFn);
+        let root_eclass_id = &runner.egraph.find(union2);
+        let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
+        let (_best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
+        //assert_eq!(best_cost.sum_cost(), 0); // will give 400
+
+        let leaf_a = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![1]),
+        };
+        let leaf_b = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![1, 2, 3]),
+        };
+        let leaf_c = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![4, 5, 6]),
+        };
+        let mut expr = RecExpr::default();
+        let a = expr.add(ELang::Leaf(leaf_a.clone()));
+        let b = expr.add(ELang::Leaf(leaf_b.clone()));
+        let c = expr.add(ELang::Leaf(leaf_c.clone()));
+        let union = expr.add(ELang::Or([b, c]));
+        let and = expr.add(ELang::And([a, union]));
+        let runner = Runner::default().with_expr(&expr).run(rules);
+        let root_eclass_id = &runner.egraph.find(and);
+        let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
         let (best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
-        assert_eq!(best_cost.cost, 1600);
+        assert_eq!(best_cost.sum_cost(), 6);
+
+        let leaf_a = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![1, 2]),
+        };
+        let leaf_b = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![3, 4]),
+        };
+        let leaf_c = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![5, 6]),
+        };
+        let leaf_d = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![7, 8]),
+        };
+        let mut expr = RecExpr::default();
+        let a = expr.add(ELang::Leaf(leaf_a.clone()));
+        let b = expr.add(ELang::Leaf(leaf_b.clone()));
+        let c = expr.add(ELang::Leaf(leaf_c.clone()));
+        let d = expr.add(ELang::Leaf(leaf_d.clone()));
+        let union1 = expr.add(ELang::Or([b, c]));
+        let union2 = expr.add(ELang::Or([union1, d]));
+        let and = expr.add(ELang::And([a, union2]));
+        let runner = Runner::default().with_expr(&expr).run(rules);
+        let root_eclass_id = &runner.egraph.find(and);
+        let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
+        let (best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
+        assert_eq!(best_cost.sum_cost(), 12);
+
+        let leaf_a = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![1, 2]),
+        };
+        let leaf_b = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![2, 3]),
+        };
+        let leaf_c = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![2, 4]),
+        };
+        let leaf_d = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![2, 5]),
+        };
+        let leaf_e = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![2, 6]),
+        };
+        let leaf_f = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![2, 7]),
+        };
+        let mut expr = RecExpr::default();
+        let a = expr.add(ELang::Leaf(leaf_a.clone()));
+        let b = expr.add(ELang::Leaf(leaf_b.clone()));
+        let c = expr.add(ELang::Leaf(leaf_c.clone()));
+        let d = expr.add(ELang::Leaf(leaf_d.clone()));
+        let e = expr.add(ELang::Leaf(leaf_e.clone()));
+        let f = expr.add(ELang::Leaf(leaf_f.clone()));
+        let union1 = expr.add(ELang::Or([b, c]));
+        let union2 = expr.add(ELang::Or([union1, d]));
+        let union3 = expr.add(ELang::Or([union2, e]));
+        let union4 = expr.add(ELang::Or([union3, f]));
+        let and = expr.add(ELang::And([a, union4]));
+        let runner = Runner::default().with_expr(&expr).run(rules);
+        let root_eclass_id = &runner.egraph.find(and);
+        let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
+        let (_best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
+        //assert_eq!(best_cost.sum_cost(), 20);  // will give 220
     }
 }
