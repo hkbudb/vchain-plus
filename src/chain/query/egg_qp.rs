@@ -116,7 +116,6 @@ pub fn egg_optimize<K: Num>(
     let (expr, root_id) = create_rec_exp(dag, dag_cont)?;
 
     let rules: &[Rewrite<ELang, ()>] = &[
-        rewrite!("rule7"; "(& ?a ?b)" => "(& ?b ?a)"),
         rewrite!("rule0"; "(& ?a ?b)" => "(& ?b ?a)"),
         rewrite!("rule1"; "(| ?a ?b)" => "(| ?b ?a)"),
         rewrite!("rule2"; "(& (& ?a ?b) ?c)" => "(& ?a (& ?b ?c))"),
