@@ -1,9 +1,10 @@
 use core::{
     iter::FromIterator,
+    num::NonZeroU16,
     ops::{BitAnd, BitOr, Deref, DerefMut, Div},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, num::NonZeroU16};
+use std::collections::HashSet;
 
 /// A set of elements.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,6 +120,14 @@ impl FromIterator<u16> for Set {
     fn from_iter<T: IntoIterator<Item = u16>>(iter: T) -> Self {
         iter.into_iter()
             .map(|v| NonZeroU16::new(v).expect("set element cannot be zero."))
+            .collect()
+    }
+}
+
+impl FromIterator<u64> for Set {
+    fn from_iter<T: IntoIterator<Item = u64>>(iter: T) -> Self {
+        iter.into_iter()
+            .map(|v| NonZeroU16::new(v as u16).expect("set element cannot be zero."))
             .collect()
     }
 }
