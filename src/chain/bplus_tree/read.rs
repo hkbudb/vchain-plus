@@ -112,7 +112,7 @@ fn inner_range_query<K: Num>(
                     unsafe {
                         *cur_proof_ptr = SubProof::from_non_leaf(BPlusTreeNonLeaf::from_hashes(
                             n.range,
-                            n.data_set_acc,
+                            n.data_set_acc.to_digest(),
                             cur_proof_children,
                         ));
                     }
