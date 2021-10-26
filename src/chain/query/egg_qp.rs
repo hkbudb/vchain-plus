@@ -1,3 +1,7 @@
+use super::{
+    query_dag::DagNode,
+    query_plan::{QPNode, QueryPlan},
+};
 use crate::{
     acc::Set,
     chain::{
@@ -11,9 +15,12 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use egg::*;
-use howlong::Duration;
 use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
-use std::{cmp::Ordering, collections::VecDeque};
+use std::{
+    cmp::Ordering,
+    collections::{HashSet, VecDeque},
+    ops::Index,
+};
 use std::{
     collections::HashMap,
     fmt,
@@ -22,10 +29,7 @@ use std::{
     str::FromStr,
 };
 
-use super::{
-    query_dag::DagNode,
-    query_plan::{QPNode, QueryPlan},
-};
+const EGG_NODE_LIMIT: usize = 1000;
 
 #[derive(Clone, Debug, Eq)]
 pub struct SimpleSet(Set);
@@ -130,7 +134,7 @@ pub fn egg_optimize<K: Num>(
 
     let runner = Runner::default()
         .with_expr(&expr)
-        .with_time_limit(Duration::new(2, 0))
+        .with_node_limit(EGG_NODE_LIMIT)
         .run(rules);
     let root_eclass_id = &runner.egraph.find(root_id);
     let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
@@ -619,28 +623,35 @@ fn final_op<N: Analysis<ELang>>(
     root_eclass_id: Id,
     node_eclass_id: Id,
 ) -> bool {
+    // i) top
+    if root_eclass_id == node_eclass_id {
+        return true;
+    }
+
+    // ii) continuous union before it
     let mut queue = VecDeque::<Id>::new();
     queue.push_back(root_eclass_id);
 
+    let mut id_set = HashSet::<Id>::new();
+
     while let Some(id) = queue.pop_front() {
-        let eclass = find_eclass(egraph, id);
+        let eclass = egraph.index(id);
         let nodes = &eclass.nodes;
 
         if id == node_eclass_id {
             return true;
         }
 
-        let mut has_union = false;
         for node in nodes {
             if let ELang::Or(children) = node {
-                has_union = true;
                 for c_id in children {
-                    queue.push_back(egraph.find(*c_id));
+                    let class_id = egraph.find(*c_id);
+                    if !id_set.contains(&class_id) {
+                        queue.push_back(class_id);
+                        id_set.insert(class_id);
+                    }
                 }
             }
-        }
-        if !has_union {
-            return false;
         }
     }
     false
@@ -660,43 +671,36 @@ fn reduced_union<N: Analysis<ELang>>(
     let mut queue = VecDeque::<Id>::new();
     queue.push_back(root_eclass_id);
 
+    let mut id_set = HashSet::<Id>::new();
     while let Some(id) = queue.pop_front() {
-        let eclass = find_eclass(egraph, id);
+        let eclass = egraph.index(id);
         let nodes = &eclass.nodes;
         let mut has_union = false;
         for node in nodes {
             if let ELang::Or(children) = node {
                 has_union = true;
                 for c_id in children {
-                    queue.push_back(egraph.find(*c_id));
+                    let class_id = egraph.find(*c_id);
+                    if !id_set.contains(&class_id) {
+                        queue.push_back(class_id);
+                        id_set.insert(class_id);
+                    }
                 }
             }
         }
-        if id == node_eclass_id && has_union {
+        if id == node_eclass_id {
             return true;
         } else if !has_union {
-            return false;
+            continue;
         }
     }
     false
 }
 
-fn find_eclass<N: Analysis<ELang>>(
-    egraph: &EGraph<ELang, N>,
-    eclass_id: Id,
-) -> &EClass<ELang, <N as egg::Analysis<ELang>>::Data> {
-    for class in egraph.classes() {
-        if class.id == eclass_id {
-            return class;
-        }
-    }
-    panic!("Cannot find eclass");
-}
-
 #[cfg(test)]
 mod tests {
     use super::{CostFn, ELang, Extractor, SimpleLeaf, SimpleSet};
-    use crate::set;
+    use crate::{chain::query::egg_qp::EGG_NODE_LIMIT, set};
     use egg::{rewrite, RecExpr, Rewrite, Runner};
     use petgraph::graph::NodeIndex;
 
@@ -734,10 +738,14 @@ mod tests {
         let c = expr.add(ELang::Leaf(leaf_c.clone()));
         let dif = expr.add(ELang::Dif([union, c]));
 
-        let runner = Runner::default().with_expr(&expr).run(rules);
+        let runner = Runner::default()
+            .with_expr(&expr)
+            .with_node_limit(EGG_NODE_LIMIT)
+            .run(rules);
         let root_eclass_id = &runner.egraph.find(dif);
         let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
         let (best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
+        println!("{:#?}", _best_expr);
         assert_eq!(best_cost.sum_cost(), 18);
 
         let leaf_b = SimpleLeaf {
@@ -758,11 +766,15 @@ mod tests {
         let union1 = expr.add(ELang::Or([a, b]));
         let c = expr.add(ELang::Leaf(leaf_c.clone()));
         let union2 = expr.add(ELang::Or([union1, c]));
-        let runner = Runner::default().with_expr(&expr).run(rules);
+        let runner = Runner::default()
+            .with_expr(&expr)
+            .with_node_limit(EGG_NODE_LIMIT)
+            .run(rules);
         let root_eclass_id = &runner.egraph.find(union2);
         let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
-        let (_best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
-        //assert_eq!(best_cost.sum_cost(), 0); // will give 400
+        let (best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
+        println!("{:#?}", _best_expr);
+        assert_eq!(best_cost.sum_cost(), 0);
 
         let leaf_a = SimpleLeaf {
             idx: NodeIndex::default(),
@@ -782,11 +794,15 @@ mod tests {
         let c = expr.add(ELang::Leaf(leaf_c.clone()));
         let union = expr.add(ELang::Or([b, c]));
         let and = expr.add(ELang::And([a, union]));
-        let runner = Runner::default().with_expr(&expr).run(rules);
+        let runner = Runner::default()
+            .with_expr(&expr)
+            .with_node_limit(EGG_NODE_LIMIT)
+            .run(rules);
         let root_eclass_id = &runner.egraph.find(and);
         let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
-        let (_best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
-        //assert_eq!(best_cost.sum_cost(), 6);
+        let (best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
+        println!("{:#?}", _best_expr);
+        assert_eq!(best_cost.sum_cost(), 6);
 
         let leaf_a = SimpleLeaf {
             idx: NodeIndex::default(),
@@ -812,11 +828,15 @@ mod tests {
         let union1 = expr.add(ELang::Or([b, c]));
         let union2 = expr.add(ELang::Or([union1, d]));
         let and = expr.add(ELang::And([a, union2]));
-        let runner = Runner::default().with_expr(&expr).run(rules);
+        let runner = Runner::default()
+            .with_expr(&expr)
+            .with_node_limit(EGG_NODE_LIMIT)
+            .run(rules);
         let root_eclass_id = &runner.egraph.find(and);
         let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
-        let (_best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
-        //assert_eq!(best_cost.sum_cost(), 12);
+        let (best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
+        println!("{:#?}", _best_expr);
+        assert_eq!(best_cost.sum_cost(), 12);
 
         let leaf_a = SimpleLeaf {
             idx: NodeIndex::default(),
@@ -854,10 +874,14 @@ mod tests {
         let union3 = expr.add(ELang::Or([union2, e]));
         let union4 = expr.add(ELang::Or([union3, f]));
         let and = expr.add(ELang::And([a, union4]));
-        let runner = Runner::default().with_expr(&expr).run(rules);
+        let runner = Runner::default()
+            .with_expr(&expr)
+            .with_node_limit(EGG_NODE_LIMIT)
+            .run(rules);
         let root_eclass_id = &runner.egraph.find(and);
         let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
-        let (_best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
-        //assert_eq!(best_cost.sum_cost(), 20);  // will give 220
+        let (best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
+        println!("{:#?}", _best_expr);
+        assert_eq!(best_cost.sum_cost(), 20);
     }
 }
