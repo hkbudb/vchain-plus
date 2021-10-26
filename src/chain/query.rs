@@ -385,9 +385,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
                             }
                         } else {
                             // vo_c2 is empty
-                            let qp_c_idx2 = child_idxs
-                                .get(1)
-                                .context("Cannot find the second qp child idx of union")?;
                             let vo_c2 = vo_dag_content.get(qp_c_idx2).context(
                                 "Cannot find the second child vo node in vo_dag_content",
                             )?;
