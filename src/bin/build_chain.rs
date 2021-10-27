@@ -80,13 +80,9 @@ fn build_chain(
     let mut chain = SimChain::create(db_path, param.clone())?;
     chain.set_parameter(param)?;
     let mut prev_hash = Digest::zero();
-    debug!("Start loading data");
     let raw_objs: BTreeMap<Height, Vec<Object<u32>>> = load_raw_obj_from_file(data_path)?;
-    debug!("Loading data finished");
-    debug!("Start loading public key");
     let timer = howlong::ProcessCPUTimer::new();
     let pk = KeyPair::load(key_path)?.pk;
-    debug!("Loading public key finished");
     let time = timer.elapsed();
     info!("Time for loading public key: {}", time);
     let mut time_set = Vec::<BuildTime>::new();
