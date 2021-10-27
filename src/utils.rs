@@ -449,4 +449,22 @@ mod tests {
         assert_eq!(c_size, 9);
         assert_eq!(d_size, 1);
     }
+
+    #[test]
+    fn test_str_size() {
+        let a: smol_str::SmolStr = smol_str::SmolStr::from("");
+        let str_size = bincode::serialize(&a).unwrap().len();
+        assert_eq!(str_size, 8);
+        let a: String = String::from("");
+        let str_size = bincode::serialize(&a).unwrap().len();
+        assert_eq!(str_size, 8);
+        let a = String::from("53c79113311e8a8ec291d412d1572516d0356a5c3aced0b108e0ad04c440de78");
+        let str_size = bincode::serialize(&a).unwrap().len();
+        assert_eq!(str_size, 72);
+        let a = smol_str::SmolStr::from(
+            "53c79113311e8a8ec291d412d1572516d0356a5c3aced0b108e0ad04c440de78",
+        );
+        let str_size = bincode::serialize(&a).unwrap().len();
+        assert_eq!(str_size, 72);
+    }
 }
