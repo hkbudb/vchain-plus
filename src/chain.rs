@@ -11,8 +11,8 @@ pub mod traits;
 pub mod trie_tree;
 pub mod verify;
 
-pub const MAX_ININE_ID_FANOUT: usize = 4;
-pub const MAX_INLINE_BTREE_FANOUT: usize = 4;
+pub const MAX_ININE_ID_FANOUT: usize = 32;
+pub const MAX_INLINE_BTREE_FANOUT: usize = 32;
 pub const COST_COEFFICIENT: usize = 200;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
