@@ -55,9 +55,7 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     debug!("num scpoes: {:?}", num_scopes);
     let obj_num_per_blk = obj_num / blk_num;
     let obj_num_in_query_win = (time_win as f64 * obj_num_per_blk as f64) as u32;
-    let height_selectivity = (end_blk_height.0 - start_blk_height.0 + 1) as f64 / blk_num as f64;
-    debug!("height_selec: {}", height_selectivity);
-    let dim_selectivity = selectivity / height_selectivity;
+    let dim_selectivity = selectivity;
     debug!("dim_selec: {}", dim_selectivity);
     let sub_selectivity = dim_selectivity.powf(1_f64 / dim_num as f64);
     debug!("sub_selec: {}", sub_selectivity);
@@ -402,8 +400,7 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     let num_scopes = chain.get_range_info(start_blk_height, end_blk_height, dim_num)?;
     let obj_num_per_blk = obj_num / blk_num;
     let obj_num_in_query_win = (time_win as f64 * obj_num_per_blk as f64) as u32;
-    let height_selectivity = (end_blk_height.0 - start_blk_height.0 + 1) as f64 / blk_num as f64;
-    let dim_selectivity = selectivity / height_selectivity;
+    let dim_selectivity = selectivity;
     let sub_selectivity = dim_selectivity.powf(1_f64 / dim_num as f64);
     let mut sub_results = Vec::<(usize, Range<u32>, usize, HashSet<Digest>)>::new();
     let mut cur_res_set = HashSet::<Digest>::new();
