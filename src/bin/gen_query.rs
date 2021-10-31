@@ -789,7 +789,7 @@ fn main() -> Result<()> {
             chain_buffer.clone(),
             &serde_json::to_string_pretty(&chain_params)?,
         )?;
-        if plus_params.len() >= 10 && chain_params.len() >= 10 {
+        if plus_params.len() >= QUERY_NUM && chain_params.len() >= QUERY_NUM {
             query_for_plus = plus_params;
             query_for_vchain = chain_params;
             fs::remove_file(plus_buffer.clone())?;
