@@ -246,7 +246,7 @@ pub fn binary_decode<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T> {
 mod tests {
     use super::{load_query_param_from_file, KeyPair};
     use crate::{
-        acc::AccValue,
+        acc::{compute_set_operation_final, compute_set_operation_intermediate, AccValue, Op},
         chain::{
             block::Height,
             object::Object,
@@ -407,15 +407,30 @@ mod tests {
 
     #[test]
     fn test_acc_size() {
-        let key_path = Path::new("./keys/254_300");
-        let pk = KeyPair::load(key_path).unwrap().pk;
-        let set = set! {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40};
-        let acc = AccValue::from_set(&set, &pk);
+        use crate::chain::tests::PUB_KEY;
+        let set = set! {11, 12, 13, 14, 15, 16, 17, 19, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39};
+        let acc = AccValue::from_set(&set, &PUB_KEY);
         let acc_size = bincode::serialize(&acc).unwrap().len();
         let dig = acc.to_digest();
         let dig_size = bincode::serialize(&dig).unwrap().len();
         assert_eq!(dig_size, 32);
         assert_eq!(acc_size, 416);
+    }
+
+    #[test]
+    fn test_proof_size() {
+        use crate::chain::tests::PUB_KEY;
+        let set1 = set! {11, 17, 19, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30};
+        let set2 = set! {12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 33, 23, };
+        let acc1 = AccValue::from_set(&set1, &PUB_KEY);
+        let acc2 = AccValue::from_set(&set2, &PUB_KEY);
+        let (_set, _acc, inter_proof) =
+            compute_set_operation_intermediate(Op::Union, &set1, &acc1, &set2, &acc2, &PUB_KEY);
+        let (_set, final_proof) = compute_set_operation_final(Op::Union, &set1, &set2, &PUB_KEY);
+        let inter_size = bincode::serialize(&inter_proof).unwrap().len();
+        let final_size = bincode::serialize(&final_proof).unwrap().len();
+        assert_eq!(inter_size, 564);
+        assert_eq!(final_size, 204);
     }
 
     use serde::{Deserialize, Serialize};
