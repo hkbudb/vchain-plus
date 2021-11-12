@@ -1,32 +1,41 @@
+use std::collections::BTreeMap;
+
 use crate::{
     acc::{AccPublicKey, AccValue, Set},
-    chain::trie_tree::{
-        hash::trie_non_leaf_proof_hash,
-        proof::{sub_proof::SubProof, TrieNodeId},
-        split_at_common_prefix2,
-    },
+    chain::trie_tree::{hash::trie_non_leaf_root_proof_hash, split_at_common_prefix2, TrieNodeId},
     digest::{Digest, Digestible},
 };
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
-use std::collections::BTreeMap;
+
+use super::sub_proof::SubProof;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct TrieNonLeaf {
+pub(crate) struct TrieNonLeafRoot {
     pub(crate) nibble: String,
+    pub(crate) acc_hash: Digest,
     pub(crate) children: BTreeMap<char, Box<SubProof>>,
 }
 
-impl Digestible for TrieNonLeaf {
+impl Digestible for TrieNonLeafRoot {
     fn to_digest(&self) -> Digest {
-        trie_non_leaf_proof_hash(&self.nibble.to_digest(), self.children.iter())
+        trie_non_leaf_root_proof_hash(
+            &self.nibble.to_digest(),
+            &self.acc_hash,
+            self.children.iter(),
+        )
     }
 }
 
-impl TrieNonLeaf {
-    pub(crate) fn from_hashes(nibble: &str, children: BTreeMap<char, Box<SubProof>>) -> Self {
+impl TrieNonLeafRoot {
+    pub(crate) fn from_hashes(
+        nibble: &str,
+        acc_hash: &Digest,
+        children: BTreeMap<char, Box<SubProof>>,
+    ) -> Self {
         Self {
             nibble: nibble.to_string(),
+            acc_hash: *acc_hash,
             children,
         }
     }

@@ -9,6 +9,7 @@ use sub_proof::SubProof;
 
 pub(crate) mod leaf;
 pub(crate) mod non_leaf;
+pub(crate) mod non_leaf_root;
 pub(crate) mod sub_proof;
 pub(crate) mod sub_tree;
 

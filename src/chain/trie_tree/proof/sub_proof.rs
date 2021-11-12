@@ -9,11 +9,14 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 
+use super::non_leaf_root::TrieNonLeafRoot;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum SubProof {
     Hash(Box<TrieSubTree>),
     Leaf(Box<TrieLeaf>),
     NonLeaf(Box<TrieNonLeaf>),
+    NonLeafRoot(Box<TrieNonLeafRoot>),
 }
 
 impl Default for SubProof {
@@ -28,6 +31,7 @@ impl Digestible for SubProof {
             Self::Hash(n) => n.to_digest(),
             Self::Leaf(n) => n.to_digest(),
             Self::NonLeaf(n) => n.to_digest(),
+            Self::NonLeafRoot(n) => n.to_digest(),
         }
     }
 }
@@ -39,6 +43,10 @@ impl SubProof {
 
     pub(crate) fn from_non_leaf(n: TrieNonLeaf) -> Self {
         Self::NonLeaf(Box::new(n))
+    }
+
+    pub(crate) fn from_non_leaf_root(n: TrieNonLeafRoot) -> Self {
+        Self::NonLeafRoot(Box::new(n))
     }
 
     pub(crate) fn from_leaf(l: TrieLeaf) -> Self {
@@ -53,6 +61,7 @@ impl SubProof {
             }
             SubProof::Leaf(n) => n.value_acc_hash(cur_key, pk),
             SubProof::NonLeaf(n) => n.value_acc_hash(cur_key, pk),
+            SubProof::NonLeafRoot(n) => n.value_acc_hash(cur_key, pk),
         }
     }
 
@@ -74,6 +83,7 @@ impl SubProof {
                 }
             }
             SubProof::NonLeaf(n) => n.search_prefix(cur_key),
+            SubProof::NonLeafRoot(n) => n.search_prefix(cur_key),
         }
     }
 
@@ -88,6 +98,10 @@ impl SubProof {
                 leaf.node_id = None;
             }
             SubProof::NonLeaf(n) => {
+                let node = n.as_mut();
+                node.remove_node_id();
+            }
+            SubProof::NonLeafRoot(n) => {
                 let node = n.as_mut();
                 node.remove_node_id();
             }
