@@ -73,10 +73,17 @@ impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
         let depth = (max_id_num as f64).log(fanout as f64).floor() as usize;
         let mut cur_path_rev = fanout_nary_rev(internal_id.0, fanout, depth);
 
-        #[allow(clippy::large_enum_variant)]
+        struct Leaf {
+            id: IdTreeNodeId,
+            hash: Digest,
+        }
+        struct NonLeaf {
+            node: IdTreeNonLeafNode,
+            idx: usize,
+        }
         enum TempNode {
-            Leaf { id: IdTreeNodeId, hash: Digest },
-            NonLeaf { node: IdTreeNonLeafNode, idx: usize },
+            Leaf(Box<Leaf>),
+            NonLeaf(Box<NonLeaf>),
         }
 
         let mut temp_nodes: Vec<TempNode> = Vec::new();
@@ -88,23 +95,23 @@ impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
                     match cur_node.as_ref() {
                         IdTreeNode::Leaf(_n) => {
                             let (leaf_id, leaf_hash) = self.write_leaf(internal_id, obj_hash);
-                            temp_nodes.push(TempNode::Leaf {
+                            temp_nodes.push(TempNode::Leaf(Box::new(Leaf {
                                 id: leaf_id,
                                 hash: leaf_hash,
-                            });
+                            })));
                             break;
                         }
                         IdTreeNode::NonLeaf(n) => {
                             let idx = cur_path_rev
                                 .pop()
                                 .ok_or_else(|| anyhow!("Path is empty!"))?;
-                            temp_nodes.push(TempNode::NonLeaf {
+                            temp_nodes.push(TempNode::NonLeaf(Box::new(NonLeaf {
                                 node: IdTreeNonLeafNode::new(
                                     n.child_hashes.clone(),
                                     n.child_ids.clone(),
                                 ),
                                 idx,
-                            });
+                            })));
 
                             cur_id_opt = n.get_child_id(idx).cloned();
                         }
@@ -114,20 +121,20 @@ impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
                     loop {
                         if cur_path_rev.is_empty() {
                             let (leaf_id, leaf_hash) = self.write_leaf(internal_id, obj_hash);
-                            temp_nodes.push(TempNode::Leaf {
+                            temp_nodes.push(TempNode::Leaf(Box::new(Leaf {
                                 id: leaf_id,
                                 hash: leaf_hash,
-                            });
+                            })));
                             break;
                         } else {
                             let idx = cur_path_rev
                                 .pop()
                                 .ok_or_else(|| anyhow!("Path is empty!"))?;
                             let non_leaf = IdTreeNonLeafNode::new_ept();
-                            temp_nodes.push(TempNode::NonLeaf {
+                            temp_nodes.push(TempNode::NonLeaf(Box::new(NonLeaf {
                                 node: non_leaf,
                                 idx,
-                            });
+                            })));
                         }
                     }
                     break;
@@ -139,22 +146,22 @@ impl<'a, L: IdTreeNodeLoader> WriteContext<'a, L> {
         let mut new_root_hash = Digest::zero();
         for node in temp_nodes.into_iter().rev() {
             match node {
-                TempNode::Leaf { id, hash } => {
-                    new_root_id = id;
-                    new_root_hash = hash;
+                TempNode::Leaf(n) => {
+                    new_root_id = n.id;
+                    new_root_hash = n.hash;
                 }
-                TempNode::NonLeaf { mut node, idx } => {
-                    let updated_id = node.get_child_id_mut(idx);
+                TempNode::NonLeaf(mut n) => {
+                    let updated_id = n.node.get_child_id_mut(n.idx);
                     match updated_id {
                         Some(id) => *id = new_root_id,
-                        None => node.push_child_id(new_root_id),
+                        None => n.node.push_child_id(new_root_id),
                     }
-                    let updated_hash = node.get_child_hash_mut(idx);
+                    let updated_hash = n.node.get_child_hash_mut(n.idx);
                     match updated_hash {
                         Some(hash) => *hash = new_root_hash,
-                        None => node.push_child_hash(new_root_hash),
+                        None => n.node.push_child_hash(new_root_hash),
                     }
-                    let (id, hash) = self.write_non_leaf(node);
+                    let (id, hash) = self.write_non_leaf(n.node);
                     new_root_id = id;
                     new_root_hash = hash;
                 }
