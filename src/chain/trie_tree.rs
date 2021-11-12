@@ -4,7 +4,7 @@ use crate::{
     digest::{Digest, Digestible},
 };
 use anyhow::Result;
-use hash::{trie_leaf_hash, trie_non_leaf_hash};
+use hash::{trie_leaf_hash, trie_non_leaf_node_hash, trie_non_leaf_root_hash};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::collections::BTreeMap;
@@ -32,15 +32,7 @@ impl Digestible for TrieRoot {
 pub enum TrieNode {
     Leaf(TrieLeafNode),
     NonLeaf(TrieNonLeafNode),
-}
-
-impl TrieNode {
-    pub fn get_node_id(&self) -> TrieNodeId {
-        match self {
-            TrieNode::Leaf(n) => n.id,
-            TrieNode::NonLeaf(n) => n.id,
-        }
-    }
+    NonLeafRoot(TrieNonLeafRootNode),
 }
 
 impl Digestible for TrieNode {
@@ -48,6 +40,7 @@ impl Digestible for TrieNode {
         match self {
             TrieNode::Leaf(n) => n.to_digest(),
             TrieNode::NonLeaf(n) => n.to_digest(),
+            TrieNode::NonLeafRoot(n) => n.to_digest(),
         }
     }
 }
@@ -61,10 +54,15 @@ impl TrieNode {
         Self::NonLeaf(n)
     }
 
+    pub fn from_non_leaf_root(n: TrieNonLeafRootNode) -> Self {
+        Self::NonLeafRoot(n)
+    }
+
     pub fn get_id(&self) -> TrieNodeId {
         match self {
             TrieNode::Leaf(n) => n.id,
             TrieNode::NonLeaf(n) => n.id,
+            TrieNode::NonLeafRoot(n) => n.id,
         }
     }
 
@@ -72,20 +70,23 @@ impl TrieNode {
         match self {
             TrieNode::Leaf(n) => &n.rest,
             TrieNode::NonLeaf(n) => &n.nibble,
+            TrieNode::NonLeafRoot(n) => &n.nibble,
         }
     }
 
     pub fn get_set(&self) -> &Set {
         match self {
             TrieNode::Leaf(n) => &n.data_set,
-            TrieNode::NonLeaf(n) => &n.data_set,
+            TrieNode::NonLeaf(_) => panic!("Cannot read set from non-leaf node"),
+            TrieNode::NonLeafRoot(n) => &n.data_set,
         }
     }
 
     pub fn get_acc(&self) -> &AccValue {
         match self {
             TrieNode::Leaf(n) => &n.data_set_acc,
-            TrieNode::NonLeaf(n) => &n.data_set_acc,
+            TrieNode::NonLeaf(_) => panic!("Cannot read set from non-leaf node"),
+            TrieNode::NonLeafRoot(n) => &n.data_set_acc,
         }
     }
 }
@@ -119,14 +120,37 @@ impl TrieLeafNode {
 pub struct TrieNonLeafNode {
     pub id: TrieNodeId,
     pub nibble: SmolStr,
-    pub data_set: Set,
-    pub data_set_acc: AccValue,
     pub children: BTreeMap<char, (TrieNodeId, Digest)>,
 }
 
 impl Digestible for TrieNonLeafNode {
     fn to_digest(&self) -> Digest {
-        trie_non_leaf_hash(
+        trie_non_leaf_node_hash(&self.nibble.to_digest(), self.children.iter())
+    }
+}
+
+impl TrieNonLeafNode {
+    pub fn new(nibble: SmolStr, children: BTreeMap<char, (TrieNodeId, Digest)>) -> Self {
+        Self {
+            id: TrieNodeId::next_id(),
+            nibble,
+            children,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TrieNonLeafRootNode {
+    pub id: TrieNodeId,
+    pub nibble: SmolStr,
+    pub data_set: Set,
+    pub data_set_acc: AccValue,
+    pub children: BTreeMap<char, (TrieNodeId, Digest)>,
+}
+
+impl Digestible for TrieNonLeafRootNode {
+    fn to_digest(&self) -> Digest {
+        trie_non_leaf_root_hash(
             &self.nibble.to_digest(),
             &self.data_set_acc.to_digest(),
             self.children.iter(),
@@ -134,7 +158,7 @@ impl Digestible for TrieNonLeafNode {
     }
 }
 
-impl TrieNonLeafNode {
+impl TrieNonLeafRootNode {
     pub fn new(
         nibble: SmolStr,
         data_set: Set,
@@ -155,18 +179,18 @@ pub trait TrieNodeLoader {
     fn load_node(&self, id: TrieNodeId) -> Result<TrieNode>;
 }
 
-pub fn common_prefix_len(a: &str, b: &str) -> usize {
+fn common_prefix_len(a: &str, b: &str) -> usize {
     a.chars().zip(b.chars()).take_while(|(a, b)| a == b).count()
 }
 
-pub fn split_at_common_prefix<'a>(a: &'a str, b: &'a str) -> (&'a str, &'a str, &'a str) {
+fn split_at_common_prefix<'a>(a: &'a str, b: &'a str) -> (&'a str, &'a str, &'a str) {
     let prefix_len = common_prefix_len(a, b);
     let (common, remaining1) = a.split_at(prefix_len);
     let (_, remaining2) = b.split_at(prefix_len);
     (common, remaining1, remaining2)
 }
 
-pub fn split_at_common_prefix2(a: &str, b: &str) -> (String, char, String, char, String) {
+fn split_at_common_prefix2(a: &str, b: &str) -> (String, char, String, char, String) {
     let (common, remain1, remain2) = split_at_common_prefix(a, b);
     let common = common;
     let first1;
