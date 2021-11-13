@@ -272,39 +272,6 @@ mod tests {
     }
 
     #[test]
-    fn test_load_query_param() {
-        let input = Path::new("./data/query/test1.json");
-        let res = load_query_param_from_file(input).unwrap();
-        let param1_data = json!({
-            "start_blk": 1,
-            "end_blk": 3,
-            "range": [[1, 5], [2, 8]],
-            "keyword_exp": {
-                "or": [
-                    {"input": "a"},
-                    {"input": "b"}
-                ]
-            }
-        });
-        let param1: QueryParam<u32> = serde_json::from_value(param1_data).unwrap();
-        assert_eq!(param1, res[0]);
-
-        let param2_data = json!({
-            "start_blk": 2,
-            "end_blk": 4,
-            "range": [(1, 7), (2, 9)],
-            "keyword_exp": {
-                "or": [
-                    {"input": "a"},
-                    {"and": [{"input": "b"}, {"input": "c"}]},
-                ]
-            },
-        });
-        let param2: QueryParam<u32> = serde_json::from_value(param2_data).unwrap();
-        assert_eq!(param2, res[1]);
-    }
-
-    #[test]
     fn test_load_raw_obj() {
         let input = "1\t[1,2]\t{a,b}\n2 [ 3, 4 ] { c, d, }\n2\t[ 5, 6 ]\t { e }\n";
         let expect = {
