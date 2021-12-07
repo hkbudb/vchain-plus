@@ -16,7 +16,7 @@ use hash::{id_tree_root_hash, obj_hash};
 use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     ops::AddAssign,
 };
 use vo::VO;
@@ -489,25 +489,26 @@ pub fn verify<
 >(
     chain: T,
     res_contents: &[(HashMap<ObjId, Object<K>>, VO<K>)],
-    res_dags: &HashMap<u8, Graph<DagNode<K>, bool>>,
+    res_dag: &Graph<DagNode<K>, bool>,
     pk: &AccPublicKey,
 ) -> Result<VerifyInfo> {
     let timer = howlong::ProcessCPUTimer::new();
-    let mut obj_num = 0;
     let mut responses = Vec::new();
     res_contents
         .par_iter()
-        .map(|(res_content, vo_content)| {
-            let graph_idx = vo_content.vo_dag_content.dag_idx;
-            let graph = res_dags.get(&graph_idx).context("graph does not exists")?;
-            inner_verify(&chain, res_content, vo_content, graph, pk)
-        })
+        .map(|(res_content, vo_content)| inner_verify(&chain, res_content, vo_content, res_dag, pk))
         .collect_into_vec(&mut responses);
     let time = Time::from(timer.elapsed());
+    let mut res_obj_hashes = HashSet::new();
     for (res_content, _vo_content) in res_contents {
-        obj_num += res_content.len();
+        for obj in res_content.values() {
+            res_obj_hashes.insert(obj.to_digest());
+        }
     }
-    info!("Total number of result object returned: {}", obj_num);
+    info!(
+        "Total number of result object returned: {}",
+        res_obj_hashes.len()
+    );
 
     let mut total_vo_size = VOSize::new(0, 0, 0, 0, 0, 0);
     for (_, vo) in res_contents {

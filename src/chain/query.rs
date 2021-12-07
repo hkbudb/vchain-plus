@@ -16,14 +16,7 @@ use crate::{
         bplus_tree,
         id_tree::{self, ObjId},
         object::Object,
-        query::{
-            egg_qp::egg_optimize,
-            query_dag::{
-                gen_last_query_dag_with_cont_basic, gen_last_query_dag_with_cont_trimmed,
-                gen_parallel_query_dag,
-            },
-            query_plan::QPNode,
-        },
+        query::{egg_qp::egg_optimize, query_dag::gen_parallel_query_dag, query_plan::QPNode},
         range::Range,
         traits::{Num, ReadInterface},
         trie_tree,
@@ -87,7 +80,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     time_win: &TimeWin,
     s_win_size: Option<u16>,
     e_win_size: u16,
-    graph_idx: u8,
     query_dag: &Graph<query_dag::DagNode<K>, bool>,
 ) -> Result<(HashMap<ObjId, Object<K>>, VO<K>)> {
     let mut vo_dag_content = HashMap::<NodeIndex, VONode<K>>::new();
@@ -553,7 +545,6 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     let vo_dag_struct = VoDagContent {
         output_sets: set_map,
         dag_content: vo_dag_content,
-        dag_idx: graph_idx,
     };
     let vo = VO {
         vo_dag_content: vo_dag_struct,
@@ -565,48 +556,31 @@ fn query_final<K: Num, T: ReadInterface<K = K>>(
     Ok((obj_map, vo))
 }
 
-#[allow(clippy::type_complexity)]
-fn select_win_size(
-    win_sizes: &[u16],
-    query_time_win: TimeWin,
-) -> Result<(Vec<(TimeWin, u16)>, Option<(TimeWin, Option<u16>, u16)>)> {
+fn select_win_size(win_sizes: &[u16], query_time_win: TimeWin) -> Result<Vec<(TimeWin, u16)>> {
     let mut vec_res = Vec::<(TimeWin, u16)>::new();
     let mut cur_win = query_time_win;
     let max = *win_sizes.last().context("empty time win")? as u32;
+
     while cur_win.get_end() + 1 >= max + cur_win.get_start() {
         let new_time_win = TimeWin::new(cur_win.get_start(), cur_win.get_start() + max - 1);
         vec_res.push((new_time_win, max as u16));
         if cur_win.get_start() + max == cur_win.get_end() + 1 {
-            return Ok((vec_res, None));
+            return Ok(vec_res);
         } else {
             cur_win = TimeWin::new(cur_win.get_start() + max, cur_win.get_end());
         }
     }
-
-    let cur_size = cur_win.get_end() - cur_win.get_start() + 1;
-    let mut end_idx = 0;
-    for (i, win_size) in win_sizes.iter().enumerate() {
-        if cur_size <= *win_size as u32 {
-            end_idx = i;
+    let cur_size = (cur_win.get_end() - cur_win.get_start() + 1) as u16;
+    let mut last_size = 0;
+    for win_size in win_sizes {
+        if cur_size <= *win_size {
+            last_size = *win_size as u32;
             break;
         }
     }
-    let higher = *win_sizes.get(end_idx).context("cannot find size")?;
-    let last_win;
-    if cur_size == higher as u32 {
-        last_win = (cur_win, None, higher);
-    } else {
-        let mut start_idx = 0;
-        let mut lower = *win_sizes.get(start_idx).context("not time window")?;
-        while cur_win.get_start() > lower as u32
-            && cur_win.get_start() + higher as u32 > cur_win.get_end() + lower as u32
-        {
-            start_idx += 1;
-            lower = *win_sizes.get(start_idx).context("no time win")?;
-        }
-        last_win = (cur_win, Some(lower), higher);
-    }
-    Ok((vec_res, Some(last_win)))
+    let last_win = TimeWin::new(cur_win.get_end() - last_size + 1, cur_win.get_end());
+    vec_res.push((last_win, last_size as u16));
+    Ok(vec_res)
 }
 
 fn paral_sub_query_process<K: Num, T: ReadInterface<K = K>>(
@@ -634,7 +608,7 @@ fn paral_sub_query_process<K: Num, T: ReadInterface<K = K>>(
     let time3 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
     let res = query_final(
-        chain, pk, query_plan, outputs, time_win, None, e_win_size, 0, query_dag,
+        chain, pk, query_plan, outputs, time_win, None, e_win_size, query_dag,
     )?;
     let time4 = sub_timer.elapsed();
 
@@ -675,7 +649,7 @@ fn paral_first_sub_query_with_egg<K: Num, T: ReadInterface<K = K>>(
     let time3 = sub_timer.elapsed();
     let sub_timer = howlong::ProcessCPUTimer::new();
     let res = query_final(
-        chain, pk, query_plan, outputs, time_win, None, e_win_size, 0, &new_dag,
+        chain, pk, query_plan, outputs, time_win, None, e_win_size, &new_dag,
     )?;
     let time4 = sub_timer.elapsed();
 
@@ -688,90 +662,6 @@ fn paral_first_sub_query_with_egg<K: Num, T: ReadInterface<K = K>>(
     };
 
     Ok((Ok(query_res_info), new_dag))
-}
-
-#[allow(clippy::too_many_arguments)]
-fn last_sub_query_process<K: Num, T: ReadInterface<K = K>>(
-    trim: bool,
-    empty_set: bool,
-    egg_opt: bool,
-    time_win: &TimeWin,
-    s_win_size: Option<u16>,
-    e_win_size: u16,
-    query_dag: Graph<query_dag::DagNode<K>, bool>,
-    query_content: &QueryContent<K>,
-    chain: &T,
-    pk: &AccPublicKey,
-    graph_map: &mut HashMap<u8, Graph<DagNode<K>, bool>>,
-) -> Result<QueryResInfo<K>> {
-    let sub_timer = howlong::ProcessCPUTimer::new();
-    let (dag2, mut qp2) = if trim {
-        gen_last_query_dag_with_cont_trimmed(
-            time_win,
-            s_win_size,
-            e_win_size,
-            query_dag,
-            query_content,
-            chain,
-            pk,
-        )?
-    } else {
-        gen_last_query_dag_with_cont_basic(time_win, s_win_size, e_win_size, query_dag, chain, pk)?
-    };
-
-    let time1 = sub_timer.elapsed();
-    let sub_timer = howlong::ProcessCPUTimer::new();
-    let time2;
-    let time3;
-    let time4;
-    let res;
-    if egg_opt {
-        let new_dag2 = egg_optimize(&dag2, &mut qp2)?;
-        time2 = sub_timer.elapsed();
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        let mut outputs;
-        if empty_set {
-            outputs = process_empty_sets(&new_dag2, &mut qp2)?;
-        } else {
-            outputs = HashSet::new();
-            let rt = &qp2.root_idx;
-            outputs.insert(*rt);
-        }
-        time3 = sub_timer.elapsed();
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        res = query_final(
-            chain, pk, qp2, outputs, time_win, s_win_size, e_win_size, 1, &new_dag2,
-        )?;
-        time4 = sub_timer.elapsed();
-
-        graph_map.insert(1, new_dag2);
-    } else {
-        time2 = sub_timer.elapsed();
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        let mut outputs;
-        if empty_set {
-            outputs = process_empty_sets(&dag2, &mut qp2)?;
-        } else {
-            outputs = HashSet::new();
-            let rt = &qp2.root_idx;
-            outputs.insert(*rt);
-        }
-        time3 = sub_timer.elapsed();
-        let sub_timer = howlong::ProcessCPUTimer::new();
-        res = query_final(
-            chain, pk, qp2, outputs, time_win, s_win_size, e_win_size, 1, &dag2,
-        )?;
-        time4 = sub_timer.elapsed();
-        graph_map.insert(1, dag2);
-    }
-
-    Ok(QueryResInfo {
-        stage1: time1,
-        stage2: time2,
-        stage3: time3,
-        stage4: time4,
-        res,
-    })
 }
 
 fn process_empty_sets<K: Num>(
@@ -905,55 +795,44 @@ fn process_empty_sets<K: Num>(
     Ok(sub_root_idxs)
 }
 
-fn parallel_process<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send>(
+fn parallel_processing<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send>(
     empty_set: bool,
-    complete_wins: &[(TimeWin, u16)],
-    dag1: &Graph<DagNode<K>, bool>,
-    responses: &mut Vec<Result<QueryResInfo<K>>>,
-    graph_map: &mut HashMap<u8, Graph<DagNode<K>, bool>>,
-    chain: &T,
-    pk: &AccPublicKey,
-) {
-    complete_wins
-        .par_iter()
-        .map(|(time_win, e_win_size)| {
-            paral_sub_query_process(empty_set, time_win, *e_win_size, dag1, chain, pk)
-        })
-        .collect_into_vec(responses);
-    graph_map.insert(0, dag1.clone());
-}
-
-fn parallel_process_with_egg<
-    K: Num,
-    T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send,
->(
-    empty_set: bool,
+    egg_opt: bool,
     complete_wins: &mut Vec<(TimeWin, u16)>,
-    dag1: &Graph<DagNode<K>, bool>,
+    dag: &Graph<DagNode<K>, bool>,
     responses: &mut Vec<Result<QueryResInfo<K>>>,
-    graph_map: &mut HashMap<u8, Graph<DagNode<K>, bool>>,
     chain: &T,
     pk: &AccPublicKey,
-) -> Result<()> {
-    if let Some((selected_win, win_size)) = complete_wins.pop() {
-        let (q_res_info, new_dag) =
-            paral_first_sub_query_with_egg(empty_set, &selected_win, win_size, dag1, chain, pk)?;
+) -> Result<Graph<DagNode<K>, bool>> {
+    if egg_opt {
+        if let Some((selected_win, win_size)) = complete_wins.pop() {
+            let (q_res_info, new_dag) =
+                paral_first_sub_query_with_egg(empty_set, &selected_win, win_size, dag, chain, pk)?;
 
+            complete_wins
+                .par_iter()
+                .map(|(time_win, e_win_size)| {
+                    paral_sub_query_process(empty_set, time_win, *e_win_size, &new_dag, chain, pk)
+                })
+                .collect_into_vec(responses);
+            responses.push(q_res_info);
+            Ok(new_dag)
+        } else {
+            bail!("Empty complete windows");
+        }
+    } else {
         complete_wins
             .par_iter()
             .map(|(time_win, e_win_size)| {
-                paral_sub_query_process(empty_set, time_win, *e_win_size, &new_dag, chain, pk)
+                paral_sub_query_process(empty_set, time_win, *e_win_size, dag, chain, pk)
             })
             .collect_into_vec(responses);
-        responses.push(q_res_info);
-        graph_map.insert(0, new_dag);
+        Ok(dag.clone())
     }
-    Ok(())
 }
 
 #[allow(clippy::type_complexity)]
 pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::Send>(
-    trim: bool,
     empty_set: bool,
     egg_opt: bool,
     chain: T,
@@ -961,59 +840,27 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
     pk: &AccPublicKey,
 ) -> Result<(
     Vec<(HashMap<ObjId, Object<K>>, VO<K>)>,
-    HashMap<u8, Graph<DagNode<K>, bool>>,
+    Graph<DagNode<K>, bool>,
     QueryTime,
 )> {
     let chain_param = &chain.get_parameter()?;
     let chain_win_sizes = &chain_param.time_win_sizes;
     let timer = howlong::ProcessCPUTimer::new();
-    let mut graph_map = HashMap::<u8, Graph<DagNode<K>, bool>>::new();
     let query_time_win = query_param.gen_time_win();
     let query_content = query_param.gen_query_content();
-    let (mut complete_wins, final_win) = select_win_size(chain_win_sizes, query_time_win)?;
+    let mut complete_wins = select_win_size(chain_win_sizes, query_time_win)?;
     let mut responses = Vec::with_capacity(complete_wins.len());
-    let dag1 = gen_parallel_query_dag(&query_content)?;
-
-    // process dag1 parallel
-    if egg_opt {
-        parallel_process_with_egg(
-            empty_set,
-            &mut complete_wins,
-            &dag1,
-            &mut responses,
-            &mut graph_map,
-            &chain,
-            pk,
-        )?;
-    } else {
-        parallel_process(
-            empty_set,
-            &complete_wins,
-            &dag1,
-            &mut responses,
-            &mut graph_map,
-            &chain,
-            pk,
-        );
-    }
-
-    // process dag2 if exists
-    if let Some((time_win, s_win_size, e_win_size)) = final_win {
-        let last_response = last_sub_query_process(
-            trim,
-            empty_set,
-            egg_opt,
-            &time_win,
-            s_win_size,
-            e_win_size,
-            dag1,
-            &query_content,
-            &chain,
-            pk,
-            &mut graph_map,
-        );
-        responses.push(last_response);
-    }
+    let dag = gen_parallel_query_dag(&query_content)?;
+    let res_dag;
+    res_dag = parallel_processing(
+        empty_set,
+        egg_opt,
+        &mut complete_wins,
+        &dag,
+        &mut responses,
+        &chain,
+        pk,
+    )?;
     let total_query_time = Time::from(timer.elapsed());
 
     let mut stage1_time = Vec::<ProcessDuration>::new();
@@ -1029,7 +876,6 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
         stage4_time.push(a.stage4);
         result.push(a.res);
     }
-
     let mut stage1_total_time: ProcessDuration = ProcessDuration::default();
     for t in stage1_time {
         stage1_total_time += t;
@@ -1053,7 +899,7 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
         stage4: Time::from(stage4_total_time),
         total: total_query_time,
     };
-    Ok((result, graph_map, query_time))
+    Ok((result, res_dag, query_time))
 }
 
 #[cfg(test)]
@@ -1063,26 +909,21 @@ mod tests {
 
     #[test]
     fn test_select_win_size() {
+        let query_time_win = TimeWin::new(1, 10);
+        let res = select_win_size(&vec![2, 4, 8], query_time_win).unwrap();
+        let exp = vec![(TimeWin::new(1, 8), 8), (TimeWin::new(9, 10), 2)];
+        assert_eq!(res, exp);
         let query_time_win = TimeWin::new(1, 12);
         let res = select_win_size(&vec![2, 4, 8], query_time_win).unwrap();
-        let exp = (
-            vec![(TimeWin::new(1, 8), 8)],
-            Some((TimeWin::new(9, 12), None, 4)),
-        );
+        let exp = vec![(TimeWin::new(1, 8), 8), (TimeWin::new(9, 12), 4)];
         assert_eq!(res, exp);
         let query_time_win = TimeWin::new(1, 13);
         let res = select_win_size(&vec![2, 4, 8], query_time_win).unwrap();
-        let exp = (
-            vec![(TimeWin::new(1, 8), 8)],
-            Some((TimeWin::new(9, 13), Some(4), 8)),
-        );
+        let exp = vec![(TimeWin::new(1, 8), 8), (TimeWin::new(6, 13), 8)];
         assert_eq!(res, exp);
         let query_time_win = TimeWin::new(1, 14);
         let res = select_win_size(&vec![2, 4, 8], query_time_win).unwrap();
-        let exp = (
-            vec![(TimeWin::new(1, 8), 8)],
-            Some((TimeWin::new(9, 14), Some(4), 8)),
-        );
+        let exp = vec![(TimeWin::new(1, 8), 8), (TimeWin::new(7, 14), 8)];
         assert_eq!(res, exp);
     }
 }
