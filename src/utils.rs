@@ -244,24 +244,20 @@ pub fn binary_decode<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{load_query_param_from_file, KeyPair};
+    use super::KeyPair;
     use crate::{
         acc::{compute_set_operation_final, compute_set_operation_intermediate, AccValue, Op},
         chain::{
             block::Height,
             object::Object,
-            query::{
-                query_param::QueryParam,
-                query_plan::{QPKeywordNode, QPNode, QPUnion},
-            },
+            query::query_plan::{QPKeywordNode, QPNode, QPUnion},
         },
         digest::Digestible,
         set,
         utils::{binary_decode, binary_encode, load_raw_obj_from_str},
     };
     use petgraph::Graph;
-    use serde_json::json;
-    use std::{collections::BTreeMap, path::Path};
+    use std::collections::BTreeMap;
 
     #[test]
     fn test_create_id() {
@@ -269,39 +265,6 @@ mod tests {
         assert_eq!(TestId::next_id(), TestId(0));
         assert_eq!(TestId::next_id(), TestId(1));
         assert_eq!(TestId::next_id(), TestId(2));
-    }
-
-    #[test]
-    fn test_load_query_param() {
-        let input = Path::new("./data/query/test1.json");
-        let res = load_query_param_from_file(input).unwrap();
-        let param1_data = json!({
-            "start_blk": 1,
-            "end_blk": 3,
-            "range": [[1, 5], [2, 8]],
-            "keyword_exp": {
-                "or": [
-                    {"input": "a"},
-                    {"input": "b"}
-                ]
-            }
-        });
-        let param1: QueryParam<u32> = serde_json::from_value(param1_data).unwrap();
-        assert_eq!(param1, res[0]);
-
-        let param2_data = json!({
-            "start_blk": 2,
-            "end_blk": 4,
-            "range": [(1, 7), (2, 9)],
-            "keyword_exp": {
-                "or": [
-                    {"input": "a"},
-                    {"and": [{"input": "b"}, {"input": "c"}]},
-                ]
-            },
-        });
-        let param2: QueryParam<u32> = serde_json::from_value(param2_data).unwrap();
-        assert_eq!(param2, res[1]);
     }
 
     #[test]

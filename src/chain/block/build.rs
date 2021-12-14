@@ -113,8 +113,8 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
         bplus_ctxes.push((k, bplus_ctx_vec));
     }
 
-    let mut obj_hashes = Vec::<Digest>::new();
-    let mut obj_id_nums = Vec::<NonZeroU16>::new();
+    let mut obj_hashes = Vec::<Digest>::with_capacity(raw_objs.len());
+    let mut obj_id_nums = Vec::<NonZeroU16>::with_capacity(raw_objs.len());
 
     for obj in &raw_objs {
         // build id tree
@@ -134,7 +134,7 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
                 }
             }
         }
-        obj_hashes.push(obj.to_digest());
+        obj_hashes.push(obj_hash);
         obj_id_nums.push(obj_id.0);
     }
 
@@ -181,8 +181,8 @@ pub fn build_block<K: Num, T: ReadInterface<K = K> + WriteInterface<K = K>>(
     }
 
     // write objs to chain
-    for obj in raw_objs {
-        chain.write_object(obj.to_digest(), &obj)?;
+    for (obj, obj_hash) in raw_objs.iter().zip(obj_hashes.iter()) {
+        chain.write_object(*obj_hash, obj)?;
     }
 
     let obj_root_hash = obj_root_hash(obj_hashes.iter());

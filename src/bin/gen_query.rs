@@ -22,7 +22,7 @@ use vchain_plus::{
     SimChain,
 };
 
-const QUERY_NUM: usize = 5;
+const QUERY_NUM: usize = 10;
 const ERR_RATE: f64 = 0.1;
 const START_COEFFICIENT: u32 = 1000000;
 
@@ -63,7 +63,10 @@ fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     let mut cur_res_set = HashSet::<Digest>::new();
     let mut flag = true;
     for (dim, range) in num_scopes.iter().enumerate() {
-        let selected_len = (time_win as f64 * obj_num_per_blk as f64 * sub_selectivity) as u32;
+        let selected_len = (time_win as f64 * obj_num_per_blk as f64 * sub_selectivity) as u32 / 10;
+        // let l = range.get_low();
+        // let h = range.get_high();
+        // let selected_len = ((h - l) as f64 * sub_selectivity) as u32;
         debug!("selected_len for dim {} is: {}", dim, selected_len);
         let mut start_p;
         let mut end_p;
@@ -406,7 +409,10 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     let mut cur_res_set = HashSet::<Digest>::new();
     let mut flag = true;
     for (dim, range) in num_scopes.iter().enumerate() {
-        let selected_len = (time_win as f64 * obj_num_per_blk as f64 * sub_selectivity) as u32;
+        let selected_len = (time_win as f64 * obj_num_per_blk as f64 * sub_selectivity) as u32 / 10;
+        // let l = range.get_low();
+        // let h = range.get_high();
+        // let selected_len = ((h - l) as f64 * sub_selectivity) as u32;
         let mut start_p;
         let mut end_p;
         let mut counter = 0;
