@@ -1,6 +1,6 @@
 use super::{query_plan::QueryPlan, TimeWin};
 use crate::{
-    acc::{AccPublicKey},
+    acc::AccPublicKey,
     chain::{
         block::Height,
         bplus_tree,
@@ -17,12 +17,7 @@ use crate::{
     },
 };
 use anyhow::{bail, Context, Result};
-use petgraph::{
-    algo::toposort,
-    graph::NodeIndex,
-    EdgeDirection::{Outgoing},
-    Graph,
-};
+use petgraph::{algo::toposort, graph::NodeIndex, EdgeDirection::Outgoing, Graph};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use std::collections::{HashMap, VecDeque};
@@ -601,4 +596,3 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num, T: ReadInterface<K = K>>(
 
     Ok((query_dag, qp))
 }
-
