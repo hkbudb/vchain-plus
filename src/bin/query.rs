@@ -43,8 +43,8 @@ struct Opt {
 }
 
 fn main() -> Result<()> {
-    //init_tracing_subscriber("query=info,vchain_plus::chain=off")?;
-    init_tracing_subscriber("info")?;
+    init_tracing_subscriber("query=info,vchain_plus::chain=off")?;
+    //init_tracing_subscriber("info")?;
     let opts = Opt::from_args();
     let verify_thread_num = opts.verify_thread_num;
     let query_path = opts.query;
