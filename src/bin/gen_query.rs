@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     collections::{BTreeMap, HashSet},
-    fs::{self, File},
+    fs::{self},
     iter::FromIterator,
     path::PathBuf,
 };
@@ -23,10 +23,88 @@ use vchain_plus::{
 };
 
 const QUERY_NUM: usize = 10;
+#[allow(dead_code)]
 const ERR_RATE: f64 = 0.1;
+#[allow(dead_code)]
 const START_COEFFICIENT: u32 = 1000000;
 
+// selectivity as range length
+#[allow(dead_code)]
+fn gen_range_query_new<T: ScanQueryInterface<K = u32>>(
+    time_win: u32,
+    selectivity: f64,
+    dim_num: usize,
+    chain: T,
+    blk_num: u32,
+) -> Result<(String, String)> {
+    let mut rng = rand::thread_rng();
+    let mut start_blk_height;
+    let mut end_blk_height;
+    loop {
+        start_blk_height = Height(rng.gen_range(1..blk_num));
+        end_blk_height = Height(start_blk_height.0 + time_win - 1);
+        if end_blk_height.0 <= blk_num {
+            break;
+        }
+    }
+    debug!(
+        "start_blk: {}, end_blk: {}",
+        start_blk_height, end_blk_height
+    );
+    let num_scopes = chain.get_range_info(start_blk_height, end_blk_height, dim_num)?;
+    debug!("num scpoes: {:?}", num_scopes);
+    let mut ranges = BTreeMap::<usize, Range<u32>>::new();
+    for (dim, range) in num_scopes.iter().enumerate() {
+        let l = range.get_low();
+        let h = range.get_high();
+        let selected_len = ((h - l) as f64 * selectivity) as u32;
+        let mut start_p;
+        let mut end_p;
+        loop {
+            start_p = rng.gen_range(l..h);
+            end_p = start_p + selected_len;
+            if end_p <= h {
+                break;
+            }
+        }
+        ranges.insert(dim, Range::new(start_p, end_p));
+    }
+    let mut vchain_plus_range = Vec::<Vec<u32>>::new();
+    let mut vchain_range = Vec::<Vec<u32>>::new();
+    let mut vchain_range_start = Vec::<u32>::new();
+    let mut vchain_range_end = Vec::<u32>::new();
+    for (_, range) in ranges {
+        let l = range.get_low();
+        let r = range.get_high();
+        vchain_plus_range.push(vec![l, r]);
+        vchain_range_start.push(l);
+        vchain_range_end.push(r);
+    }
+    vchain_range.push(vchain_range_start);
+    vchain_range.push(vchain_range_end);
+
+    let vchain_plus_query_param_json = json!({
+        "start_blk": start_blk_height.0,
+        "end_blk": end_blk_height.0,
+        "range": vchain_plus_range,
+        "keyword_exp": null,
+    });
+    let vchain_plus_query_param = serde_json::to_string_pretty(&vchain_plus_query_param_json)?;
+
+    let vchain_query_param_json = json!({
+        "start_block": start_blk_height.0,
+        "end_block": end_blk_height.0,
+        "range": vchain_range,
+        "bool": null,
+    });
+    let vchain_query_param = serde_json::to_string_pretty(&vchain_query_param_json)?;
+
+    Ok((vchain_plus_query_param, vchain_query_param))
+}
+
+// selectivity as res num
 #[allow(clippy::too_many_arguments)]
+#[allow(dead_code)]
 fn gen_range_query<T: ScanQueryInterface<K = u32>>(
     time_win: u32,
     selectivity: f64,
@@ -227,6 +305,7 @@ fn get_exp_str(node: &Node) -> HashSet<&String> {
     res
 }
 
+#[allow(dead_code)]
 fn gen_node_with_not(not_prob: f64, keyword: String) -> Node {
     let mut rng = rand::thread_rng();
     let y: f64 = rng.gen();
@@ -237,6 +316,7 @@ fn gen_node_with_not(not_prob: f64, keyword: String) -> Node {
     }
 }
 
+#[allow(dead_code)]
 fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
     time_win: u32,
     with_not: bool,
@@ -373,7 +453,221 @@ fn gen_keyword_query<T: ScanQueryInterface<K = u32>>(
     Ok((vchain_plus_query_param, vchain_query_param))
 }
 
+struct Query {
+    vchain: String,
+    plus: String,
+}
+
+fn gen_bool_range_query<T: ScanQueryInterface<K = u32>>(
+    time_win: u32,
+    selectivity: f64,
+    dim_num: usize,
+    chain: T,
+    blk_num: u32,
+    keyword_num: usize,
+) -> Result<(Query, Query, Query, Query, Query)> {
+    let mut rng = rand::thread_rng();
+    let mut start_blk_height;
+    let mut end_blk_height;
+    loop {
+        start_blk_height = Height(rng.gen_range(1..blk_num));
+        end_blk_height = Height(start_blk_height.0 + time_win - 1);
+        if end_blk_height.0 <= blk_num {
+            break;
+        }
+    }
+    debug!(
+        "start_blk: {}, end_blk: {}",
+        start_blk_height, end_blk_height
+    );
+
+    // for range query
+    let num_scopes = chain.get_range_info(start_blk_height, end_blk_height, dim_num)?;
+    debug!("num scpoes: {:?}", num_scopes);
+    let mut ranges = BTreeMap::<usize, Range<u32>>::new();
+    for (dim, range) in num_scopes.iter().enumerate() {
+        let l = range.get_low();
+        let h = range.get_high();
+        let selected_len = ((h - l) as f64 * selectivity) as u32;
+        let mut start_p;
+        let mut end_p;
+        loop {
+            start_p = rng.gen_range(l..h);
+            end_p = start_p + selected_len;
+            if end_p <= h {
+                break;
+            }
+        }
+        ranges.insert(dim, Range::new(start_p, end_p));
+    }
+    let mut vchain_plus_range = Vec::<Range<u32>>::new();
+    let mut vchain_range = Vec::<Vec<u32>>::new();
+    let mut vchain_range_start = Vec::<u32>::new();
+    let mut vchain_range_end = Vec::<u32>::new();
+    for (_, range) in ranges {
+        let l = range.get_low();
+        let r = range.get_high();
+        vchain_plus_range.push(Range::new(l, r));
+        vchain_range_start.push(l);
+        vchain_range_end.push(r);
+    }
+    vchain_range.push(vchain_range_start);
+    vchain_range.push(vchain_range_end);
+
+    let plus_range_query_param_json = json!({
+        "start_blk": start_blk_height.0,
+        "end_blk": end_blk_height.0,
+        "range": vchain_plus_range,
+        "keyword_exp": null,
+    });
+    let plus_range_query_param = serde_json::to_string_pretty(&plus_range_query_param_json)?;
+
+    let vchain_range_query_param_json = json!({
+        "start_block": start_blk_height.0,
+        "end_block": end_blk_height.0,
+        "range": vchain_range,
+        "bool": null,
+    });
+    let vchain_range_query_param = serde_json::to_string_pretty(&vchain_range_query_param_json)?;
+    let range_query = Query {
+        vchain: vchain_range_query_param,
+        plus: plus_range_query_param,
+    };
+
+    // for keyword query
+    let keyword_domain = chain.get_keyword_info(start_blk_height, end_blk_height)?;
+    let keyword_vec = Vec::from_iter(keyword_domain);
+    let keywords_selected: Vec<&String> = keyword_vec
+        .choose_multiple(&mut rand::thread_rng(), keyword_num)
+        .collect();
+
+    let mut and_node: Node = Node::Input("init".to_string());
+    let mut or_node: Node = Node::Input("init".to_string());
+
+    let mut lock = false;
+    for keyword in keywords_selected {
+        if lock {
+            and_node = Node::And(Box::new(AndNode(
+                and_node,
+                Node::Input(keyword.to_string()),
+            )));
+            or_node = Node::Or(Box::new(OrNode(or_node, Node::Input(keyword.to_string()))));
+        } else {
+            and_node = Node::Input(keyword.to_string());
+            or_node = Node::Input(keyword.to_string());
+            lock = true;
+        }
+    }
+
+    let and_cnf_set = and_node.to_cnf_set();
+    let or_cnf_set = and_node.to_cnf_set();
+    let plus_and_keyword_query_param = QueryParam {
+        start_blk: start_blk_height.0,
+        end_blk: end_blk_height.0,
+        range: Vec::<Range<u32>>::new(),
+        keyword_exp: Some(and_node.clone()),
+    };
+    let plus_and_keyword_query = serde_json::to_string_pretty(&plus_and_keyword_query_param)?;
+    let plus_or_keyword_query_param = QueryParam {
+        start_blk: start_blk_height.0,
+        end_blk: end_blk_height.0,
+        range: Vec::<Range<u32>>::new(),
+        keyword_exp: Some(or_node.clone()),
+    };
+    let plus_or_keyword_query = serde_json::to_string_pretty(&plus_or_keyword_query_param)?;
+
+    let mut and_total_bool = vec![];
+    for n in &and_cnf_set {
+        let arr: Vec<String> = get_exp_str(n).into_iter().cloned().collect();
+        and_total_bool.push(arr);
+    }
+    let vchain_and_keyword_query_param_json = json!({
+        "start_block": start_blk_height.0,
+        "end_block": end_blk_height.0,
+        "range": null,
+        "bool": and_total_bool,
+    });
+    let vchain_and_keyword_query =
+        serde_json::to_string_pretty(&vchain_and_keyword_query_param_json)?;
+    let mut or_total_bool = vec![];
+    for n in &or_cnf_set {
+        let arr: Vec<String> = get_exp_str(n).into_iter().cloned().collect();
+        or_total_bool.push(arr);
+    }
+    let vchain_or_keyword_query_param_json = json!({
+        "start_block": start_blk_height.0,
+        "end_block": end_blk_height.0,
+        "range": null,
+        "bool": or_total_bool,
+    });
+    let vchain_or_keyword_query =
+        serde_json::to_string_pretty(&vchain_or_keyword_query_param_json)?;
+
+    let and_keyword_query = Query {
+        vchain: vchain_and_keyword_query,
+        plus: plus_and_keyword_query,
+    };
+
+    let or_keyword_query = Query {
+        vchain: vchain_or_keyword_query,
+        plus: plus_or_keyword_query,
+    };
+
+    // for boolean range query
+    let plus_and_bool_range_query_param = QueryParam {
+        start_blk: start_blk_height.0,
+        end_blk: end_blk_height.0,
+        range: vchain_plus_range.clone(),
+        keyword_exp: Some(and_node),
+    };
+    let plus_and_boolean_range_query =
+        serde_json::to_string_pretty(&plus_and_bool_range_query_param)?;
+
+    let vchain_and_bool_range_query_param_json = json!({
+        "start_block": start_blk_height.0,
+        "end_block": end_blk_height.0,
+        "range": null,
+        "bool": and_total_bool,
+    });
+    let vchain_and_boolean_range_query =
+        serde_json::to_string_pretty(&vchain_and_bool_range_query_param_json)?;
+    let and_boolean_range_query = Query {
+        vchain: vchain_and_boolean_range_query,
+        plus: plus_and_boolean_range_query,
+    };
+    let plus_or_bool_range_query_param = QueryParam {
+        start_blk: start_blk_height.0,
+        end_blk: end_blk_height.0,
+        range: vchain_plus_range,
+        keyword_exp: Some(or_node),
+    };
+    let plus_or_boolean_range_query =
+        serde_json::to_string_pretty(&plus_or_bool_range_query_param)?;
+
+    let vchain_or_bool_range_query_param_json = json!({
+        "start_block": start_blk_height.0,
+        "end_block": end_blk_height.0,
+        "range": null,
+        "bool": or_total_bool,
+    });
+    let vchain_or_boolean_range_query =
+        serde_json::to_string_pretty(&vchain_or_bool_range_query_param_json)?;
+    let or_boolean_range_query = Query {
+        vchain: vchain_or_boolean_range_query,
+        plus: plus_or_boolean_range_query,
+    };
+
+    Ok((
+        range_query,
+        and_keyword_query,
+        or_keyword_query,
+        and_boolean_range_query,
+        or_boolean_range_query,
+    ))
+}
+
 #[allow(clippy::too_many_arguments)]
+#[allow(dead_code)]
 fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
     time_win: u32,
     selectivity: f64,
@@ -633,29 +927,17 @@ fn gen_keyword_range_query<T: ScanQueryInterface<K = u32>>(
 
 #[derive(StructOpt, Debug)]
 struct Opt {
-    /// range query only
-    #[structopt(short, long)]
-    range: bool,
-
-    /// keyword query only
-    #[structopt(short, long)]
-    keyword: bool,
-
-    // keyword range query
-    #[structopt(short, long)]
-    both: bool,
-
-    /// has not
-    #[structopt(short, long)]
-    with_not: bool,
-
     /// fix keyword query pattern
     /// 0: No pattern
     /// 1: AND
     /// 2: OR
     /// 3: tx-based pattern
-    #[structopt(short, long)]
+    #[structopt(short, long, default_value = "2")]
     fix_pattern: u8,
+
+    /// has not
+    #[structopt(short, long)]
+    with_not: bool,
 
     /// probability of not opt
     #[structopt(short, long, default_value = "0.0")]
@@ -669,10 +951,6 @@ struct Opt {
     #[structopt(short, long, default_value = "1")]
     dim_num: usize,
 
-    /// gap
-    #[structopt(short, long, default_value = "1000")]
-    gaps: Vec<u32>,
-
     /// selectivity for range query
     #[structopt(short, long)]
     selectivity: f64,
@@ -680,6 +958,10 @@ struct Opt {
     /// keyword number
     #[structopt(short, long, default_value = "0")]
     num_keywords: usize,
+
+    /// output id
+    #[structopt(short, long)]
+    aimed_id: String,
 
     /// input db path, should be a directory
     #[structopt(short, long, parse(from_os_str))]
@@ -702,11 +984,140 @@ fn main() -> Result<()> {
     init_tracing_subscriber("debug")?;
     let opts = Opt::from_args();
     let output_path = opts.output;
+    let output_id = opts.aimed_id;
+    let range_path = output_path.join(output_id.clone() + "_r");
+    fs::create_dir_all(&range_path)?;
+    let and_keyword_path = output_path.join(output_id.clone() + "_k_and");
+    fs::create_dir_all(&and_keyword_path)?;
+    let or_keyword_path = output_path.join(output_id.clone() + "_k_or");
+    fs::create_dir_all(&or_keyword_path)?;
+    let and_bool_range_path = output_path.join(output_id.clone() + "_b_and");
+    fs::create_dir_all(&and_bool_range_path)?;
+    let or_bool_range_path = output_path.join(output_id + "_b_or");
+    fs::create_dir_all(&or_bool_range_path)?;
+    fs::create_dir_all(&output_path)?;
+    let chain = SimChain::open(&opts.input)?;
+    let time_win = opts.time_win;
+    let mut range_query_for_plus = Vec::<QueryParam<u32>>::new();
+    let mut range_query_for_vchain = Vec::<VChainQuery>::new();
+
+    let mut and_keyword_query_for_plus = Vec::<QueryParam<u32>>::new();
+    let mut and_keyword_query_for_vchain = Vec::<VChainQuery>::new();
+
+    let mut or_keyword_query_for_plus = Vec::<QueryParam<u32>>::new();
+    let mut or_keyword_query_for_vchain = Vec::<VChainQuery>::new();
+
+    let mut and_bool_range_query_for_plus = Vec::<QueryParam<u32>>::new();
+    let mut and_bool_range_query_for_vchain = Vec::<VChainQuery>::new();
+
+    let mut or_bool_range_query_for_plus = Vec::<QueryParam<u32>>::new();
+    let mut or_bool_range_query_for_vchain = Vec::<VChainQuery>::new();
+    for _ in 0..QUERY_NUM {
+        let (_obj_num, blk_num) = (&chain).get_chain_info()?;
+        let (range, and_keyword, or_keyword, and_bool_range, or_bool_range) = gen_bool_range_query(
+            time_win,
+            opts.selectivity,
+            opts.dim_num,
+            &chain,
+            blk_num,
+            opts.num_keywords,
+        )?;
+        let plus_range_param: QueryParam<u32> = serde_json::from_str(&range.plus)?;
+        range_query_for_plus.push(plus_range_param);
+        let vchain_range_param: VChainQuery = serde_json::from_str(&range.vchain)?;
+        range_query_for_vchain.push(vchain_range_param);
+
+        let plus_and_keyword_param: QueryParam<u32> = serde_json::from_str(&and_keyword.plus)?;
+        and_keyword_query_for_plus.push(plus_and_keyword_param);
+        let vchain_and_keyword_param: VChainQuery = serde_json::from_str(&and_keyword.vchain)?;
+        and_keyword_query_for_vchain.push(vchain_and_keyword_param);
+
+        let plus_or_keyword_param: QueryParam<u32> = serde_json::from_str(&or_keyword.plus)?;
+        or_keyword_query_for_plus.push(plus_or_keyword_param);
+        let vchain_or_keyword_param: VChainQuery = serde_json::from_str(&or_keyword.vchain)?;
+        or_keyword_query_for_vchain.push(vchain_or_keyword_param);
+
+        let plus_and_bool_range_param: QueryParam<u32> =
+            serde_json::from_str(&and_bool_range.plus)?;
+        and_bool_range_query_for_plus.push(plus_and_bool_range_param);
+        let vchain_and_bool_range_param: VChainQuery =
+            serde_json::from_str(&and_bool_range.vchain)?;
+        and_bool_range_query_for_vchain.push(vchain_and_bool_range_param);
+
+        let plus_or_bool_range_param: QueryParam<u32> = serde_json::from_str(&or_bool_range.plus)?;
+        or_bool_range_query_for_plus.push(plus_or_bool_range_param);
+        let vchain_or_bool_range_param: VChainQuery = serde_json::from_str(&or_bool_range.vchain)?;
+        or_bool_range_query_for_vchain.push(vchain_or_bool_range_param);
+    }
+    let r_output_plus = range_path.join("vchain_plus.json");
+    let r_output_vchain = range_path.join("vchain.json");
+
+    let k_and_output_plus = and_keyword_path.join("vchain_plus.json");
+    let k_and_output_vchain = and_keyword_path.join("vchain.json");
+
+    let k_or_output_plus = or_keyword_path.join("vchain_plus.json");
+    let k_or_output_vchain = or_keyword_path.join("vchain.json");
+
+    let b_and_output_plus = and_bool_range_path.join("vchain_plus.json");
+    let b_and_output_vchain = and_bool_range_path.join("vchain.json");
+
+    let b_or_output_plus = or_bool_range_path.join("vchain_plus.json");
+    let b_or_output_vchain = or_bool_range_path.join("vchain.json");
+    fs::write(
+        r_output_plus,
+        &serde_json::to_string_pretty(&range_query_for_plus)?,
+    )?;
+    fs::write(
+        r_output_vchain,
+        &serde_json::to_string_pretty(&range_query_for_vchain)?,
+    )?;
+    fs::write(
+        k_and_output_plus,
+        &serde_json::to_string_pretty(&and_keyword_query_for_plus)?,
+    )?;
+    fs::write(
+        k_and_output_vchain,
+        &serde_json::to_string_pretty(&and_keyword_query_for_vchain)?,
+    )?;
+    fs::write(
+        k_or_output_plus,
+        &serde_json::to_string_pretty(&or_keyword_query_for_plus)?,
+    )?;
+    fs::write(
+        k_or_output_vchain,
+        &serde_json::to_string_pretty(&or_keyword_query_for_vchain)?,
+    )?;
+    fs::write(
+        b_and_output_plus,
+        &serde_json::to_string_pretty(&and_bool_range_query_for_plus)?,
+    )?;
+    fs::write(
+        b_and_output_vchain,
+        &serde_json::to_string_pretty(&and_bool_range_query_for_vchain)?,
+    )?;
+    fs::write(
+        b_or_output_plus,
+        &serde_json::to_string_pretty(&or_bool_range_query_for_plus)?,
+    )?;
+    fs::write(
+        b_or_output_vchain,
+        &serde_json::to_string_pretty(&or_bool_range_query_for_vchain)?,
+    )?;
+
+    Ok(())
+}
+
+/*
+fn main() -> Result<()> {
+    init_tracing_subscriber("debug")?;
+    let opts = Opt::from_args();
+    let output_path = opts.output;
     fs::create_dir_all(&output_path)?;
     let chain = SimChain::open(&opts.input)?;
     let time_win = opts.time_win;
     let mut query_for_plus = Vec::<QueryParam<u32>>::new();
     let mut query_for_vchain = Vec::<VChainQuery>::new();
+
 
     let plus_buffer = output_path.join("plus_buffer.json");
     let chain_buffer = output_path.join("vchain_buffer.json");
@@ -820,3 +1231,4 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+*/
