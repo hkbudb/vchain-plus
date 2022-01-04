@@ -851,8 +851,7 @@ pub fn query<K: Num, T: ReadInterface<K = K> + std::marker::Sync + std::marker::
     let mut complete_wins = select_win_size(chain_win_sizes, query_time_win)?;
     let mut responses = Vec::with_capacity(complete_wins.len());
     let dag = gen_parallel_query_dag(&query_content)?;
-    let res_dag;
-    res_dag = parallel_processing(
+    let res_dag = parallel_processing(
         empty_set,
         egg_opt,
         &mut complete_wins,

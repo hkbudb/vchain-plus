@@ -115,13 +115,10 @@ pub fn query_id_tree(
     obj_id: IdTreeInternalId,
     fanout: u8,
 ) -> Result<(Option<Digest>, Proof)> {
-    let id_tree_root_id: IdTreeNodeId;
-    match root_id {
-        Some(id) => {
-            id_tree_root_id = id;
-        }
+    let id_tree_root_id = match root_id {
+        Some(id) => id,
         None => bail!("The id tree is empty"),
-    }
+    };
     let root_node = node_loader.load_node(id_tree_root_id)?;
     let depth = (max_id_num as f64).log(fanout as f64).floor() as usize;
     let mut cur_path_rev = fanout_nary_rev(obj_id.0, fanout, depth);

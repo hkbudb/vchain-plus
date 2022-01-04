@@ -16,13 +16,10 @@ pub fn query_trie(
     keyword: &SmolStr,
     pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, Proof)> {
-    let trie_root_id: TrieNodeId;
-    match root_id {
-        Some(id) => {
-            trie_root_id = id;
-        }
+    let trie_root_id = match root_id {
+        Some(id) => id,
         None => bail!("The id tree is empty"),
-    }
+    };
 
     let root_node = node_loader.load_node(trie_root_id)?;
     let (res, acc, p) = inner_query_trie(node_loader, trie_root_id, root_node, keyword, pk)?;

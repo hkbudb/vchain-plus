@@ -390,7 +390,6 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num, T: ReadInterface<K = K>>(
 ) -> Result<(Graph<DagNode<K>, bool>, QueryPlan<K>)> {
     let end_blk_height = Height(time_win.end_blk);
     let mut dag_content = HashMap::<NodeIndex, QPNode<K>>::new();
-    let mut root_idx;
     let mut trie_ctxes = HashMap::<Height, trie_tree::read::ReadContext<T>>::new();
 
     // process end sub_dag
@@ -402,7 +401,7 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num, T: ReadInterface<K = K>>(
     };
     end_q_inputs.reverse();
     let end_sub_root_idx = end_q_inputs.last().context("empty dag")?;
-    root_idx = *end_sub_root_idx;
+    let mut root_idx = *end_sub_root_idx;
 
     for idx in &end_q_inputs {
         if let Some(dag_node) = query_dag.node_weight(*idx) {
@@ -422,7 +421,7 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num, T: ReadInterface<K = K>>(
                         blk_height: end_blk_height,
                         set: Some((s, a, p)),
                     };
-                    dag_content.insert(*idx, QPNode::Range(qp_range_node));
+                    dag_content.insert(*idx, QPNode::Range(Box::new(qp_range_node)));
                 }
                 DagNode::Keyword(node) => {
                     let set;
@@ -450,16 +449,14 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num, T: ReadInterface<K = K>>(
                     dag_content.insert(*idx, QPNode::Keyword(Box::new(qp_keyword_node)));
                 }
                 DagNode::BlkRt(_) => {
-                    let set;
-                    let acc;
                     let blk_content = chain.read_block_content(end_blk_height)?;
                     let bplus_root = blk_content.ads.read_bplus_root(e_win_size, 0)?;
                     let bplus_root_id =
                         bplus_root.bplus_tree_root_id.context("Empty bplus root")?;
                     let bplus_root_node =
                         bplus_tree::BPlusTreeNodeLoader::load_node(chain, bplus_root_id)?;
-                    set = bplus_root_node.get_set().clone();
-                    acc = bplus_root_node.get_node_acc();
+                    let set = bplus_root_node.get_set().clone();
+                    let acc = bplus_root_node.get_node_acc();
                     let qp_rt_node = QPBlkRtNode {
                         blk_height: end_blk_height,
                         set: Some((set, acc)),
@@ -560,14 +557,12 @@ pub fn gen_last_query_dag_with_cont_basic<K: Num, T: ReadInterface<K = K>>(
     // process start sub_dag
     if s_win_size.is_some() && time_win.start_blk > 1 {
         let start_blk_height = Height(time_win.start_blk - 1);
-        let set;
-        let acc;
         let blk_content = chain.read_block_content(start_blk_height)?;
         let bplus_root = blk_content.ads.read_bplus_root(e_win_size, 0)?;
         let bplus_root_id = bplus_root.bplus_tree_root_id.context("Empty bplus root")?;
         let bplus_root_node = bplus_tree::BPlusTreeNodeLoader::load_node(chain, bplus_root_id)?;
-        set = bplus_root_node.get_set().clone();
-        acc = bplus_root_node.get_node_acc();
+        let set = bplus_root_node.get_set().clone();
+        let acc = bplus_root_node.get_node_acc();
         let qp_rt_node = QPBlkRtNode {
             blk_height: start_blk_height,
             set: Some((set, acc)),

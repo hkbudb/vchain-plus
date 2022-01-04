@@ -106,20 +106,17 @@ impl<'a, K: Num, L: BPlusTreeNodeLoader<K>> WriteContext<'a, K, L> {
                             let old_num = n.num;
                             let old_data_set = n.data_set.clone();
                             let old_acc = n.data_set_acc;
-
-                            let new_range: Range<K>;
                             let set_union = &n.data_set | &set;
-
                             if old_num == key {
                                 let (id, hash) = self.write_leaf(key, set_union, old_acc + new_acc);
                                 temp_nodes.push(TempNode::Leaf { id, hash });
                                 break;
                             }
-                            if old_num < key {
-                                new_range = Range::new(old_num, key);
+                            let new_range = if old_num < key {
+                                Range::new(old_num, key)
                             } else {
-                                new_range = Range::new(key, old_num);
-                            }
+                                Range::new(key, old_num)
+                            };
 
                             let non_leaf = BPlusTreeNonLeafNode::new(
                                 new_range,

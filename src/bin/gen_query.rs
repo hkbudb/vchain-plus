@@ -932,14 +932,17 @@ struct Opt {
     /// 1: AND
     /// 2: OR
     /// 3: tx-based pattern
+    #[allow(dead_code)]
     #[structopt(short, long, default_value = "2")]
     fix_pattern: u8,
 
     /// has not
+    #[allow(dead_code)]
     #[structopt(short, long)]
     with_not: bool,
 
     /// probability of not opt
+    #[allow(dead_code)]
     #[structopt(short, long, default_value = "0.0")]
     prob_not: f64,
 
@@ -985,9 +988,9 @@ fn main() -> Result<()> {
     let opts = Opt::from_args();
     let output_path = opts.output;
     let output_id = opts.aimed_id;
-    let range_path = output_path.join("r_".to_owned()+&output_id);
+    let range_path = output_path.join("r_".to_owned() + &output_id);
     fs::create_dir_all(&range_path)?;
-    let and_keyword_path = output_path.join("k_and_".to_owned()+&output_id);
+    let and_keyword_path = output_path.join("k_and_".to_owned() + &output_id);
     fs::create_dir_all(&and_keyword_path)?;
     let or_keyword_path = output_path.join("k_or_".to_owned() + &output_id);
     fs::create_dir_all(&or_keyword_path)?;

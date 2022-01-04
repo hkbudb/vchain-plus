@@ -178,7 +178,7 @@ pub fn param_to_qp<K: Num, T: ReadInterface<K = K>>(
                         blk_height: end_blk_height,
                         set: Some((s, a, p)),
                     };
-                    dag_content.insert(*idx, QPNode::Range(qp_range_node));
+                    dag_content.insert(*idx, QPNode::Range(Box::new(qp_range_node)));
                 }
                 DagNode::Keyword(n) => {
                     let set;
@@ -206,16 +206,14 @@ pub fn param_to_qp<K: Num, T: ReadInterface<K = K>>(
                     dag_content.insert(*idx, QPNode::Keyword(Box::new(qp_keyword_node)));
                 }
                 DagNode::BlkRt(_) => {
-                    let set;
-                    let acc;
                     let blk_content = chain.read_block_content(end_blk_height)?;
                     let bplus_root = blk_content.ads.read_bplus_root(e_win_size, 0)?;
                     let bplus_root_id =
                         bplus_root.bplus_tree_root_id.context("Empty bplus root")?;
                     let bplus_root_node =
                         bplus_tree::BPlusTreeNodeLoader::load_node(chain, bplus_root_id)?;
-                    set = bplus_root_node.get_set().clone();
-                    acc = bplus_root_node.get_node_acc();
+                    let set = bplus_root_node.get_set().clone();
+                    let acc = bplus_root_node.get_node_acc();
                     let qp_blk_rt_node = QPBlkRtNode {
                         blk_height: end_blk_height,
                         set: Some((set, acc)),
