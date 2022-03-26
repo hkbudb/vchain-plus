@@ -5,14 +5,13 @@
 If you find the code here useful, please consider to cite the following papers:
 
 ```bibtex
-@inproceedings{SIGMOD19:vchain,
-  author = {Wang, Haixin, and Xu, Cheng, and Zhang, Ce, and Peng, Zhe, and Pei, Jian},
-  title = {vChain+: Optimizing Verifiable Blockchain Boolean Range Queries},
-  booktitle = {in Proceedings of the 38th IEEE International Conference on Data Engineering (ICDE'22)},
+@inproceedings{ICDE22:vchain-plus,
+  author = {Wang, Haixin and Xu, Cheng and Zhang, Ce and Xu, Jianliang and Peng, Zhe and Pei, Jian},
+  title = {{vChain+}: Optimizing Verifiable Blockchain Boolean Range Queries},
+  booktitle = {Proceedings of the 38th IEEE International Conference on Data Engineering},
   year = {2022},
-  month = May,
-  address = {Kuala Lumpur, Malaysia},
-  pages = {141--158}
+  month = may,
+  address = {Kuala Lumpur, Malaysia}
 }
 ```
 ## Build
