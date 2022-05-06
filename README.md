@@ -66,13 +66,13 @@ Run `build_chain` to build blockchain. You need to specify the sliding window si
 For example:
 
 ```
-./target/release/build_chain -t 4 -t 8 -t 16 -t 32 --id-fanout 4 -b 4 -m 4095 -d 1 -k /path/to/pk -i /path/to/dataset.dat -r /path/to/res/build_time.json -o /path/to/output/db
+./target/release/build_chain -t 2 -t 4 -t 8 -t 16 -t 32 --id-fanout 4 -b 4 -m 4095 -d 1 -k /path/to/pk -i /path/to/dataset.dat -r /path/to/res/build_time.json -o /path/to/output/db
 ```
 Run `./target/release/build_chain --help` for more info.
 
 ## Query Processing & Verification
 
-Encode query parameter as a JSON object. The following example specifies the time window as [1, 50] and range as [10, 20], [5, 15] for 2 dimensional objects, and bool expression as "A" AND "B".
+Encode query parameter as a JSON object. The following example specifies the time window as [1, 50] and range as [10, 20], [5, 15] for 2 dimensional objects, and bool expression as "a" AND "b".
 
 ```json
   {
@@ -91,10 +91,10 @@ Encode query parameter as a JSON object. The following example specifies the tim
     "keyword_exp": {
       "and": [
         {
-          "input": "'A'"
+          "input": "'a'"
         },
         {
-          "input": "'B'"
+          "input": "'b'"
         }
       ]
     }
