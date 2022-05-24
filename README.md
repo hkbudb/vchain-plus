@@ -11,7 +11,10 @@ If you find the code here useful, please consider to cite the following papers:
   booktitle = {Proceedings of the 38th IEEE International Conference on Data Engineering},
   year = {2022},
   month = may,
-  address = {Kuala Lumpur, Malaysia}
+  address = {Kuala Lumpur, Malaysia},
+  pages = {1928--1941},
+  issn = {2375-026X},
+  doi = {10.1109/ICDE53745.2022.00190}
 }
 ```
 ## Build
