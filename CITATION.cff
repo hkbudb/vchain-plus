@@ -22,7 +22,7 @@ authors:
 title: "vChain+: Optimizing Verifiable Blockchain Boolean Range Queries"
 url: https://github.com/hkbudb/vchain-plus
 preferred-citation:
-  type: article
+  type: conference-paper
   authors:
     - family-names: Wang
       given-names: Haixin
@@ -43,7 +43,7 @@ preferred-citation:
       given-names: Jian
       affiliation: "Simon Fraser University"
   title: "vChain+: Optimizing Verifiable Blockchain Boolean Range Queries"
-  journal: Proceedings of the ICDE Endowment
+  collection-title: "Proceedings of the 38th IEEE International Conference on Data Engineering"
   year: 2022
   month: 5
   start: 1928
