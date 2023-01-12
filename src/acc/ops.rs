@@ -123,15 +123,15 @@ impl<E: PairingEngine> IntersectionProof<E> {
                     (self.g_x.into(), h_y_q.into()),
                     (self.q_x_y.into(), h.into())
                 ]),
-            "e(A, B) != e(I, h^{y^q}) * e(Q_{x,y}, h)"
+            "e(A, B) != e(I, h^{{y^q}}) * e(Q_{{x,y}}, h)"
         );
         ensure!(
             E::pairing(self.g_x, h_beta) == E::pairing(self.g_x_beta, h),
-            "e(I, h^{beta}) != e(I_{beta}, h)"
+            "e(I, h^{{beta}}) != e(I_{{beta}}, h)"
         );
         ensure!(
             E::pairing(self.q_x_y, h_delta) == E::pairing(self.q_x_y_delta, h),
-            "e(Q_{x,y}, h^{delta}) != e(Q_{x,y,delta}, h)"
+            "e(Q_{{x,y}}, h^{{delta}}) != e(Q_{{x,y,delta}}, h)"
         );
         ensure!(
             E::pairing(self.g_x, h) == E::pairing(self.l_x, h_x),
@@ -229,11 +229,11 @@ impl<E: PairingEngine> IntermediateProof<E> {
 
         ensure!(
             E::pairing(pk.g_gamma, result_acc.h_r_s) == E::pairing(self.result_acc_r_s_gamma, pk.h),
-            "e(g^{gamma}, R_{r,s}) != e(R_{r,s,gamma}, h)"
+            "e(g^{{gamma}}, R_{{r,s}}) != e(R_{{r,s,gamma}}, h)"
         );
         ensure!(
             E::pairing(pk.g_gamma, result_acc.h_s_r) == E::pairing(self.result_acc_s_r_gamma, pk.h),
-            "e(g^{gamma}, R_{s,r}) != e(R_{s,r,gamma}, h)"
+            "e(g^{{gamma}}, R_{{s,r}}) != e(R_{{s,r,gamma}}, h)"
         );
 
         ensure!(
@@ -241,14 +241,14 @@ impl<E: PairingEngine> IntermediateProof<E> {
                 (result_acc.g_r.into(), pk.h.into()),
                 (pk.g.into(), (-result_acc.h_r_s).into())
             ]) == E::pairing(self.z_s_r, pk.h_s + (-pk.h)),
-            "e(R_{r}, h) * e(g, 1/R_{r,s}) != e(Z_{s,r}, h^{s-1})"
+            "e(R_{{r}}, h) * e(g, 1/R_{{r,s}}) != e(Z_{{s,r}}, h^{{s-1}})"
         );
         ensure!(
             E::product_of_pairings(&[
                 (result_acc.g_s.into(), pk.h.into()),
                 (pk.g.into(), (-result_acc.h_s_r).into())
             ]) == E::pairing(self.z_r_s, pk.h_r + (-pk.h)),
-            "e(R_{s}, h) * e(g, 1/R_{s,r}) != e(Z_{r,s}, h^{r-1})"
+            "e(R_{{s}}, h) * e(g, 1/R_{{s,r}}) != e(Z_{{r,s}}, h^{{r-1}})"
         );
 
         Ok(())
