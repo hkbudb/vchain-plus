@@ -25,6 +25,7 @@ impl Set {
         set
     }
 
+    #[must_use]
     pub fn set_intersection(&self, rhs: &Self) -> Self {
         let (mut to_mutate, to_check) = if self.len() < rhs.len() {
             (self.clone(), rhs)
@@ -36,6 +37,7 @@ impl Set {
         to_mutate
     }
 
+    #[must_use]
     pub fn set_union(&self, rhs: &Self) -> Self {
         let (mut to_mutate, to_consume) = if self.len() > rhs.len() {
             (self.clone(), rhs)
@@ -47,6 +49,7 @@ impl Set {
         to_mutate
     }
 
+    #[must_use]
     pub fn set_difference(&self, rhs: &Self) -> Self {
         in_place_set_difference(self.clone(), rhs)
     }

@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum QPNode<K: Num> {
-    Range(QPRangeNode<K>),
+    Range(Box<QPRangeNode<K>>),
     Keyword(Box<QPKeywordNode>),
     BlkRt(Box<QPBlkRtNode>),
     Union(QPUnion),

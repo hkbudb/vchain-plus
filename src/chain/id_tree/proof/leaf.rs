@@ -33,7 +33,7 @@ impl IdTreeLeaf {
     pub(crate) fn value_hash(
         &self,
         obj_id: IdTreeInternalId,
-        _cur_path_rev: &mut Vec<usize>,
+        _cur_path_rev: &mut [usize],
     ) -> Digest {
         if obj_id == self.obj_id {
             self.node_hash

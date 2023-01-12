@@ -21,13 +21,10 @@ pub fn range_query<K: Num>(
     range: Range<K>,
     pk: &AccPublicKey,
 ) -> Result<(Set, AccValue, Proof<K>)> {
-    let bplus_tree_root_id: BPlusTreeNodeId;
-    match root_id {
-        Some(id) => {
-            bplus_tree_root_id = id;
-        }
+    let bplus_tree_root_id = match root_id {
+        Some(id) => id,
         None => bail!("The BPlus tree is empty"),
-    }
+    };
     let (res, acc, p) = inner_range_query(node_loader, bplus_tree_root_id, range, pk)?;
     Ok((res, acc, Proof::from_subproof(p)))
 }

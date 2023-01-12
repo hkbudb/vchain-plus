@@ -1,0 +1,51 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Wang
+    given-names: Haixin
+    affiliation: "Hong Kong Baptist University"
+  - family-names: Xu
+    given-names: Cheng
+    affiliation: "Simon Fraser University"
+  - family-names: Zhang
+    given-names: Ce
+    affiliation: "Hong Kong Baptist University"
+  - family-names: Xu
+    given-names: Jianliang
+    affiliation: "Hong Kong Baptist University"
+  - family-names: Peng
+    given-names: Zhe
+    affiliation: "Hong Kong Baptist University"
+  - family-names: Pei
+    given-names: Jian
+    affiliation: "Simon Fraser University"
+title: "vChain+: Optimizing Verifiable Blockchain Boolean Range Queries"
+url: https://github.com/hkbudb/vchain-plus
+preferred-citation:
+  type: conference-paper
+  authors:
+    - family-names: Wang
+      given-names: Haixin
+      affiliation: "Hong Kong Baptist University"
+    - family-names: Xu
+      given-names: Cheng
+      affiliation: "Simon Fraser University"
+    - family-names: Zhang
+      given-names: Ce
+      affiliation: "Hong Kong Baptist University"
+    - family-names: Xu
+      given-names: Jianliang
+      affiliation: "Hong Kong Baptist University"
+    - family-names: Peng
+      given-names: Zhe
+      affiliation: "Hong Kong Baptist University"
+    - family-names: Pei
+      given-names: Jian
+      affiliation: "Simon Fraser University"
+  title: "vChain+: Optimizing Verifiable Blockchain Boolean Range Queries"
+  collection-title: "Proceedings of the 38th IEEE International Conference on Data Engineering"
+  year: 2022
+  month: 5
+  start: 1928
+  end: 1941
+  doi: 10.1109/ICDE53745.2022.00190

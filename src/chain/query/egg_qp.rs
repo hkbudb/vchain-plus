@@ -840,6 +840,40 @@ mod tests {
 
         let leaf_a = SimpleLeaf {
             idx: NodeIndex::default(),
+            set: SimpleSet(set![1]),
+        };
+        let leaf_b = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![1]),
+        };
+        let leaf_c = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![2, 3]),
+        };
+        let leaf_d = SimpleLeaf {
+            idx: NodeIndex::default(),
+            set: SimpleSet(set![4, 5]),
+        };
+        let mut expr = RecExpr::default();
+        let a = expr.add(ELang::Leaf(leaf_a.clone()));
+        let b = expr.add(ELang::Leaf(leaf_b.clone()));
+        let c = expr.add(ELang::Leaf(leaf_c.clone()));
+        let d = expr.add(ELang::Leaf(leaf_d.clone()));
+        let and1 = expr.add(ELang::And([a, b]));
+        let union = expr.add(ELang::Or([c, d]));
+        let _and2 = expr.add(ELang::And([and1, union]));
+        let runner = Runner::default()
+            .with_expr(&expr)
+            .with_node_limit(EGG_NODE_LIMIT)
+            .run(rules);
+        let root_eclass_id = &runner.egraph.find(and);
+        let mut extractor = Extractor::new(root_eclass_id, &runner.egraph, CostFn);
+        let (best_cost, _best_expr) = extractor.find_best(runner.roots[0]);
+        println!("{:#?}", _best_expr);
+        assert_eq!(best_cost.sum_cost(), 404);
+
+        let leaf_a = SimpleLeaf {
+            idx: NodeIndex::default(),
             set: SimpleSet(set![1, 2]),
         };
         let leaf_b = SimpleLeaf {

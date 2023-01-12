@@ -13,10 +13,6 @@ use vchain_plus::{
 
 #[derive(StructOpt, Debug)]
 struct Opt {
-    // set trimming
-    #[structopt(short, long)]
-    trim: bool,
-
     // empty set process
     #[structopt(short, long)]
     null_set: bool,
@@ -48,6 +44,7 @@ struct Opt {
 
 fn main() -> Result<()> {
     init_tracing_subscriber("query=info,vchain_plus::chain=off")?;
+    //init_tracing_subscriber("info")?;
     let opts = Opt::from_args();
     let verify_thread_num = opts.verify_thread_num;
     let query_path = opts.query;
@@ -62,8 +59,7 @@ fn main() -> Result<()> {
         .build()?;
     for (i, q) in query_params.into_iter().enumerate() {
         info!("Processing query {}...", i);
-        let (results, res_dags, time) =
-            query(opts.trim, opts.null_set, opts.egg_opt, &chain, q, &pk)?;
+        let (results, res_dags, time) = query(opts.null_set, opts.egg_opt, &chain, q, &pk)?;
         info!("Query time elapsed: {:?}", time);
 
         info!("Verifying query {}...", i);
