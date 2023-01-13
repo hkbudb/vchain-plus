@@ -20,7 +20,6 @@ If you find the code here useful, please consider to cite the following papers:
 ## Build
 
 * Install Rust from <https://rustup.rs>.
-* Run `rustup update nightly` to install Rust Nightly
 * Run `cargo test` for unit test.
 * Run `cargo build --release` to build the binaries, which will be located at `target/release/` folder.
 
