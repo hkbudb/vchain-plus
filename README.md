@@ -74,33 +74,35 @@ Run `./target/release/build_chain --help` for more info.
 
 ## Query Processing & Verification
 
-Encode query parameter as a JSON object. The following example specifies the time window as [1, 50] and range as [10, 20], [5, 15] for 2 dimensional objects, and bool expression as "a" AND "b".
+Encode query parameter as a JSON object. The following example specifies the query json file containing a query with the time window as [1, 50] and range as [10, 20], [5, 15] for 2 dimensional objects, and bool expression as "a" AND "b".
 
 ```json
-  {
-    "start_blk": 1,
-    "end_blk": 50,
-    "range": [
-      [
-        10,
-        20
+  [
+    {
+      "start_blk": 1,
+      "end_blk": 50,
+      "range": [
+        [
+          10,
+          20
+        ],
+        [
+          5,
+          15
+        ]
       ],
-      [
-        5,
-        15
-      ]
-    ],
-    "keyword_exp": {
-      "and": [
-        {
-          "input": "'a'"
-        },
-        {
-          "input": "'b'"
-        }
-      ]
+      "keyword_exp": {
+        "and": [
+          {
+            "input": "'a'"
+          },
+          {
+            "input": "'b'"
+          }
+        ]
+      }
     }
-  }
+  ]
 ```
 
 Run `query` to process queries & verify results. You need to specify the optimization(s) applied. Specifically:
